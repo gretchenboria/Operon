@@ -394,6 +394,155 @@
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
     }
 
+    /* Rich AOV & Scene Hover Inspector */
+    .aov-explain-banner {
+      position: absolute;
+      top: 56px;
+      left: 12px;
+      right: 12px;
+      background: rgba(16, 19, 30, 0.92);
+      border: 1px solid var(--border-hi);
+      border-left: 3px solid var(--purple);
+      backdrop-filter: blur(12px);
+      border-radius: 10px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      z-index: 4;
+      pointer-events: auto;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      transition: all 0.16s ease;
+    }
+    .aov-explain-main {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .aov-explain-title {
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--surface-grey);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .aov-explain-desc {
+      font-size: 11px;
+      color: var(--ink-2);
+      line-height: 1.35;
+    }
+    .aov-legend {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-2);
+      flex-shrink: 0;
+    }
+    .swatch {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #0d1018;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 6px;
+    }
+    .swatch i {
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    /* Live 3D Raycast Hover Probe HUD */
+    .scene-hover-probe {
+      position: fixed;
+      pointer-events: none;
+      z-index: 90;
+      background: rgba(13, 16, 25, 0.95);
+      border: 1px solid var(--purple-hi);
+      border-radius: 10px;
+      padding: 9px 11px;
+      width: 280px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 11px;
+      transition: opacity 0.08s ease;
+    }
+    .scene-hover-probe.hide {
+      opacity: 0;
+      visibility: hidden;
+    }
+    .probe-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 700;
+      color: var(--surface-grey);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 4px;
+    }
+    .probe-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 2px 8px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-2);
+    }
+    .probe-grid span:nth-child(odd) {
+      color: var(--ink-3);
+    }
+
+    /* Global Rich Hover Tooltip Card */
+    .ui-hover-card {
+      position: fixed;
+      pointer-events: none;
+      z-index: 95;
+      background: rgba(15, 18, 28, 0.96);
+      border: 1px solid var(--blue-hi);
+      border-radius: 10px;
+      padding: 9px 12px;
+      max-width: 310px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ui-hover-card.hide {
+      opacity: 0;
+      visibility: hidden;
+    }
+    .ui-hover-title {
+      font-weight: 700;
+      font-size: 11.5px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ui-hover-body {
+      font-size: 11px;
+      color: var(--ink-2);
+      line-height: 1.4;
+    }
+    .ui-hover-tag {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: var(--purple-hi);
+      text-transform: uppercase;
+    }
+
     /* Arm Status Overlay Pills at Bottom of Viewport */
     .vp-dock-bottom {
       position: absolute;
@@ -729,21 +878,21 @@
           <!-- COLLAPSIBLE: MANUAL POSE SLIDERS -->
           <details class="drawer" open>
             <summary>
-              <span class="row" style="gap:6px">
+              <span class="row" style="gap:6px" title="Direct 6-DOF Cartesian position (X, Y, Z in meters) and Euler orientation (Yaw, Pitch, Roll in degrees) control">
                 <svg class="ico sm" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
                 <span>Manual 6-DOF Gripper Pose</span>
               </span>
               <span class="mono" id="cmd-src" style="font-size:10px;color:var(--purple-hi)">Direct 60Hz</span>
             </summary>
             <div class="drawer-body" id="pose-sliders">
-              <div class="help-line">Drag sliders to steer tool position (x,y,z) and wrist orientation (yaw,pitch,roll).</div>
+              <div class="help-line">Hover any axis to highlight its 3D gizmo ring/arrow on the gripper. Drag to steer immediately.</div>
               <div class="pose-grid">
-                <div class="slider-row"><span>yaw</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
-                <div class="slider-row"><span>x (m)</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
-                <div class="slider-row"><span>pitch</span><input type="range" data-p="pitch" min="-90" max="90" step="1" value="0"><span data-pv="pitch">0°</span></div>
-                <div class="slider-row"><span>y (m)</span><input type="range" data-p="y" min="-0.15" max="0.15" step="0.002" value="0.000"><span data-pv="y">0.000</span></div>
-                <div class="slider-row"><span>roll</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
-                <div class="slider-row"><span>z (m)</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
+                <div class="slider-row" data-axis-hover="yaw" title="Yaw (Heading around vertical Z-axis): Rotates the gripper &amp; arm left (+) or right (-) in the horizontal plane"><span style="color:#60a5fa;font-weight:700">yaw</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
+                <div class="slider-row" data-axis-hover="x" title="X Reach (Forward/Back in meters): Moves the gripper away from the base (+) or closer to the base (-)"><span style="color:#f43f5e;font-weight:700">x (m)</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
+                <div class="slider-row" data-axis-hover="pitch" title="Pitch (Elevation tilt): Tilts the gripper nose up (+) or down (-) relative to vertical top-down grasp"><span style="color:#34d399;font-weight:700">pitch</span><input type="range" data-p="pitch" min="-90" max="90" step="1" value="0"><span data-pv="pitch">0°</span></div>
+                <div class="slider-row" data-axis-hover="y" title="Y Lateral (Left/Right in meters): Moves the gripper left (+) or right (-) across the workbench"><span style="color:#34d399;font-weight:700">y (m)</span><input type="range" data-p="y" min="-0.15" max="0.15" step="0.002" value="0.000"><span data-pv="y">0.000</span></div>
+                <div class="slider-row" data-axis-hover="roll" title="Roll (Wrist twist): Twists the gripper jaws clockwise/counter-clockwise around the tool axis (6-DOF tracks this; 4-DOF lacks wrist roll)"><span style="color:#c084fc;font-weight:700">roll</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
+                <div class="slider-row" data-axis-hover="z" title="Z Height (Up/Down in meters): Raises (+) or lowers (-) the gripper above the workbench"><span style="color:#60a5fa;font-weight:700">z (m)</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
               </div>
             </div>
           </details>
@@ -751,7 +900,7 @@
           <!-- COLLAPSIBLE: OMNIVERSE DOMAIN RANDOMIZATION -->
           <details class="drawer" open>
             <summary>
-              <span class="row" style="gap:6px">
+              <span class="row" style="gap:6px" title="Synthetic data variation engine: randomizes lighting, surface roughness, and object pose to train robust Sim-to-Real vision policies">
                 <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
                 <span>Omniverse Domain Randomization</span>
               </span>
@@ -759,14 +908,14 @@
             <div class="drawer-body">
               <div class="row between">
                 <span class="sub-label">RTX Lighting &amp; PBR Roughness</span>
-                <button class="btn sm nv" id="btn-dr-rand">Randomize</button>
+                <button class="btn sm nv" id="btn-dr-rand" title="Randomize key-light intensity, sun angle, colour temperature, and metallic roughness">Randomize</button>
               </div>
-              <div class="slider-row"><span>Light</span><input type="range" id="dr-light" min="0.3" max="4.5" step="0.1" value="2.8"><span id="drv-light">2.8x</span></div>
-              <div class="slider-row"><span>Sun°</span><input type="range" id="dr-azi" min="-180" max="180" step="5" value="35"><span id="drv-azi">35°</span></div>
-              <div class="slider-row"><span>Rough</span><input type="range" id="dr-rough" min="0.05" max="0.95" step="0.05" value="0.22"><span id="drv-rough">0.22</span></div>
+              <div class="slider-row" title="Key directional light intensity multiplier (0.3x dim to 4.5x studio bright)"><span>Light</span><input type="range" id="dr-light" min="0.3" max="4.5" step="0.1" value="2.8"><span id="drv-light">2.8x</span></div>
+              <div class="slider-row" title="Directional sun azimuth angle around the workbench (-180° to +180°)"><span>Sun°</span><input type="range" id="dr-azi" min="-180" max="180" step="5" value="35"><span id="drv-azi">35°</span></div>
+              <div class="slider-row" title="Microfacet surface roughness (0.05 mirror-like to 0.95 matte)"><span>Rough</span><input type="range" id="dr-rough" min="0.05" max="0.95" step="0.05" value="0.22"><span id="drv-rough">0.22</span></div>
               <div class="row between" style="margin-top:4px">
                 <button class="btn sm" id="btn-dr-pose" title="Randomly jitter target object position on workbench">Perturb Pose</button>
-                <button class="btn sm" id="btn-bboxes" title="Overlay 2D/3D Replicator bounding boxes">2D/3D BBoxes: OFF</button>
+                <button class="btn sm" id="btn-bboxes" title="Overlay 2D/3D Replicator ground-truth bounding boxes with class IDs and depth in meters">2D/3D BBoxes: OFF</button>
               </div>
             </div>
           </details>
@@ -780,18 +929,37 @@
           <!-- Floating Top Toolbar: AOV Passes & Camera -->
           <div class="vp-dock-top">
             <div class="glass-bar">
-              <span class="sub-label" style="padding:0 6px">Replicator AOV</span>
+              <span class="sub-label" style="padding:0 6px" title="Arbitrary Output Variables (AOVs): Switch between photorealistic rendering and ground-truth perception buffers used to train robot vision models">Perception AOVs</span>
               <div class="seg nv" id="aov-bar">
-                <button class="sel" data-aov="rtx">RTX Lit</button>
-                <button data-aov="depth">Depth Z</button>
-                <button data-aov="normal">Normals</button>
-                <button data-aov="semantic">Semantic</button>
-                <button data-aov="instance">Instance</button>
+                <button class="sel" data-aov="rtx" title="RTX Lit (Photorealistic PBR): Physically-based clearcoat &amp; metallic shaders with soft shadows and image-based lighting">RTX Lit</button>
+                <button data-aov="depth" title="Depth Z (Distance-to-Camera): Encodes metric distance (meters) from the camera lens to each pixel (brighter = closer, darker = farther) for 3D point-cloud reconstruction">Depth Z</button>
+                <button data-aov="normal" title="Surface Normals (XYZ Orientation): RGB colors encode which 3D direction each surface faces (Red = Left/Right X, Green = Up/Down Y, Blue = Toward Camera Z) to compute grasp contact angles">Normals</button>
+                <button data-aov="semantic" title="Semantic Segmentation (Class IDs): Colors every pixel by object category (Class 1 = 4-DOF Arm, Class 2 = 6-DOF Arm, Class 3 = Power Cell, Class 4 = Charger, Class 5 = Valve)">Semantic</button>
+                <button data-aov="instance" title="Instance Segmentation (Unique Object IDs): Separates individual objects of the same class (e.g. Power Cell #30 vs Power Cell #31) with distinct IDs">Instance</button>
               </div>
             </div>
             <div class="glass-bar">
-              <button class="btn sm" id="btn-cam-reset" title="Reset 3D camera orbit">Reset Camera</button>
-              <button class="btn sm" id="btn-snap-png" title="Save current AOV pass as PNG">Snapshot PNG</button>
+              <button class="btn sm on" id="btn-gizmo-toggle" title="Toggle 3D Coordinate Frame &amp; Yaw/Pitch/Roll Gizmo Rings on the grippers">3D Axes: ON</button>
+              <button class="btn sm" id="btn-cam-reset" title="Reset 3D camera orbit to default front-isometric view">Reset Camera</button>
+              <button class="btn sm" id="btn-snap-png" title="Download current AOV viewport pass as a high-resolution PNG">Snapshot PNG</button>
+            </div>
+          </div>
+
+          <!-- Live AOV Explanation & Legend Banner (updates on click or hover of any AOV button) -->
+          <div class="aov-explain-banner" id="aov-explain-banner">
+            <div class="aov-explain-main">
+              <div class="aov-explain-title" id="aov-banner-title">
+                <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <span>RTX Lit Pass · Photorealistic PBR + 3D Yaw/Pitch/Roll Gizmo</span>
+              </div>
+              <div class="aov-explain-desc" id="aov-banner-desc">
+                Hover over any 3D robot link, joint, watch sensor, or object in the scene to inspect its live Semantic Class, Instance ID, Surface Normal vector, and Metric Depth.
+              </div>
+            </div>
+            <div class="aov-legend" id="aov-banner-legend">
+              <span class="swatch" title="Yaw rotates horizontally around Z"><i style="background:#60a5fa"></i>Yaw (Z-Turn)</span>
+              <span class="swatch" title="Pitch tilts nose up/down"><i style="background:#34d399"></i>Pitch (Tilt)</span>
+              <span class="swatch" title="Roll twists wrist around approach axis"><i style="background:#c084fc"></i>Roll (Twist)</span>
             </div>
           </div>
 
@@ -941,6 +1109,29 @@
       </section>
 
     </div>
+  </div>
+
+  <!-- LIVE 3D SCENE RAYCAST HOVER PROBE (INSPECT SEMANTIC CLASS, INSTANCE ID, SURFACE NORMAL, DEPTH Z & POSE) -->
+  <div class="scene-hover-probe hide" id="scene-hover-probe">
+    <div class="probe-hdr">
+      <span id="probe-name">UR5e Link</span>
+      <span class="pill ok" id="probe-class" style="font-size:9.5px;padding:1px 6px">Class 2</span>
+    </div>
+    <div class="probe-grid">
+      <span>Semantic ID:</span><b id="probe-sem">robot_arm_6dof (Class 2)</b>
+      <span>Instance Prim:</span><b id="probe-inst">/World/ur5e_6dof#20</b>
+      <span>Surface Normal:</span><b id="probe-norm">N = (0.00, 1.00, 0.00)</b>
+      <span>Metric Depth Z:</span><b id="probe-depth">0.742 m from lens</b>
+      <span>World XYZ (m):</span><b id="probe-xyz">(0.150, 0.000, 0.120)</b>
+    </div>
+    <div id="probe-desc" style="font-size:10px;color:var(--ink-3);border-top:1px solid var(--border);padding-top:3px;line-height:1.3"></div>
+  </div>
+
+  <!-- RICH UI HOVER INSPECTOR TOOLTIP -->
+  <div class="ui-hover-card hide" id="ui-hover-card">
+    <span class="ui-hover-tag" id="ui-hover-tag">Inspector</span>
+    <div class="ui-hover-title" id="ui-hover-title"></div>
+    <div class="ui-hover-body" id="ui-hover-body"></div>
   </div>
 
   <!-- COMMERCIAL LICENSE ACTIVATION MODAL -->

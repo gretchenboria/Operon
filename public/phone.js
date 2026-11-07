@@ -253,7 +253,8 @@ function onMotion(e) {
     const gesture = Math.abs(pose.gx) > 2.5
       ? (pose.g ? "🔄 Wrist Flick → GRAB" : "🔄 Wrist Flick → RELEASE")
       : (pose.g ? "✊ Clench Impulse → GRAB" : "✋ Tendon Release → OPEN");
-    send({ t: "pose", v: { vx: -jy, vy: jx, vz, g: pose.g, grabToggle: 1, gesture, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: 1 } });
+    // Right-handed joystick mapping: Drag Up (-jy) = Reach Forward (+vx), Drag Left (-jx) = Move Left (+vy), Drag Right (+jx) = Move Right (-vy)
+    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, gesture, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: 1 } });
     if (navigator.vibrate) navigator.vibrate([40, 30, 50]);
   }
 }
@@ -262,9 +263,13 @@ function onOrient(e) {
   if (e.alpha == null && e.beta == null) return;
   lastO = { a: e.alpha || 0, b: e.beta || 0, g: e.gamma || 0 };
   if (!zero) zero = { ...lastO };
-  let yaw = -(lastO.a - zero.a); while (yaw > 180) yaw -= 360; while (yaw < -180) yaw += 360;
+  // Right-handed ergonomic mapping:
+  // - Turning phone/wrist Left (+alpha) -> +Yaw (rotates arm Left / CCW)
+  // - Tilting phone nose Up (+beta) -> +Pitch (tilts gripper nose Up)
+  // - Rolling phone Right (+gamma) -> +Roll (twists gripper wrist CW)
+  let yaw = lastO.a - zero.a; while (yaw > 180) yaw -= 360; while (yaw < -180) yaw += 360;
   pose.yaw = Math.round(yaw);
-  pose.pitch = Math.round(Math.max(-90, Math.min(90, -(lastO.b - zero.b))));
+  pose.pitch = Math.round(Math.max(-90, Math.min(90, lastO.b - zero.b)));
   pose.roll = Math.round(Math.max(-90, Math.min(90, lastO.g - zero.g)));
   readout();
 }
@@ -284,6 +289,10 @@ $("enable-tilt").addEventListener("click", async () => {
     window.addEventListener("deviceorientation", onOrient);
     window.addEventListener("devicemotion", onMotion);
     tiltOn = true; zero = null;
+    // Automatically switch aim mode from "auto" to "tilt" so wrist/phone yaw, pitch, and roll immediately steer the arm!
+    aim = "tilt";
+    $("aim")?.querySelectorAll("button").forEach(x => x.classList.toggle("sel", x.dataset.v === "tilt"));
+    $("tilt-box")?.classList.remove("hide");
     $("enable-tilt").textContent = T("Tilt on ✓", "Inclinación activa ✓");
     $("enable-tilt").classList.add("light");
     setTimeout(() => { if (!lastO) { $("enable-tilt").textContent = T("No tilt sensor: use sliders", "Sin sensor: usa deslizadores"); openManual(); } }, 1500);
@@ -305,7 +314,7 @@ $("grab").addEventListener("click", () => {
   touched = true;
   pose.g = pose.g ? 0 : 1;
   paintGrab();
-  send({ t: "pose", v: { vx: -jy, vy: jx, vz, g: pose.g, grabToggle: 1, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll } });
+  send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll } });
   if (navigator.vibrate) navigator.vibrate(30);
 });
 if ($("snap")) {
@@ -342,10 +351,10 @@ $("aim").querySelectorAll("button").forEach(b => b.addEventListener("click", () 
 setInterval(() => {
   if (slide === "teleop" && mode === "pose" && (tiltOn || manualOn || touched)) {
     const tMs = Date.now();
-    send({ t: "pose", v: { vx: -jy, vy: jx, vz, g: pose.g, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
+    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
     pose.tap = 0;
   }
-}, 90);
+}, 50);
 
 // ---------- joints ----------
 const jointVals = {};

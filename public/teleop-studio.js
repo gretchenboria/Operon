@@ -130,6 +130,8 @@ const st = {
   openVis: 1,
   aov: "rtx",
   showBBoxes: false,
+  showGizmos: true,
+  highlightAxis: null,
   schemaTab: "lerobot",
   imuChartMode: "fused",
   utcOffsetMs: 0.0,
@@ -308,18 +310,74 @@ const MAT = {
 const normalMat = new THREE.MeshNormalMaterial();
 const depthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.BasicDepthPacking });
 
-// Tag every mesh with semantic & instance colors for Omniverse Replicator AOV passes
+// Tag every mesh with semantic & instance colors + rich hover metadata for Omniverse Replicator AOV passes
 const trackedObjects = []; // { label, semClass, instId, obj3d, color }
-function tagSemantic(rootObj, semHex, instHex) {
+function tagSemantic(rootObj, semHex, instHex, meta = null) {
   const semMat = new THREE.MeshBasicMaterial({ color: semHex });
   const instMat = new THREE.MeshBasicMaterial({ color: instHex });
+  if (meta) rootObj.userData.hoverMeta = meta;
   rootObj.traverse(o => {
     if (o.isMesh && !o.userData.isHelper) {
       if (!o.userData.rtxMat) o.userData.rtxMat = o.material;
       o.userData.semMat = semMat;
       o.userData.instMat = instMat;
+      if (meta && !o.userData.hoverMeta) o.userData.hoverMeta = meta;
     }
   });
+}
+
+// Build an interactive 3D Coordinate & Yaw/Pitch/Roll Orientation Gizmo attached to each gripper
+function makeOrientationGizmo(dof) {
+  const grp = new THREE.Group();
+  grp.userData.isHelper = true;
+
+  const makeMat = (hex, op = 0.72) => new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: op, depthWrite: false });
+  const yawMat = makeMat(0x60a5fa, 0.72);   // Cobalt Blue = Yaw (rotation around vertical Z)
+  const pitchMat = makeMat(0x34d399, 0.72); // Emerald Green = Pitch (nose tilt up/down)
+  const rollMat = makeMat(0xc084fc, 0.78);  // Metallic Purple = Roll (wrist twist around tool approach axis)
+  const xMat = makeMat(0xf43f5e, 0.75);     // Red = X Reach
+
+  // Yaw Horizontal Ring (in XY world / XZ Three.js plane around gripper)
+  const yawRing = new THREE.Mesh(new THREE.TorusGeometry(0.044, 0.0014, 12, 48), yawMat);
+  yawRing.rotation.x = Math.PI / 2;
+  yawRing.userData.isHelper = true;
+
+  // Pitch Tilt Arc (vertical plane)
+  const pitchRing = new THREE.Mesh(new THREE.TorusGeometry(0.039, 0.0014, 12, 48), pitchMat);
+  pitchRing.userData.isHelper = true;
+
+  // Roll Wrist-Twist Ring (perpendicular to tool approach Z axis)
+  const rollRing = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.0016, 12, 48), rollMat);
+  rollRing.position.z = -0.015;
+  rollRing.userData.isHelper = true;
+
+  // Forward Tool Approach Arrow (+Z tool axis)
+  const approachShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0014, 0.0014, 0.048, 12), rollMat);
+  approachShaft.rotation.x = Math.PI / 2;
+  approachShaft.position.z = 0.024;
+  approachShaft.userData.isHelper = true;
+  const approachCone = new THREE.Mesh(new THREE.ConeGeometry(0.0042, 0.011, 14), rollMat);
+  approachCone.rotation.x = Math.PI / 2;
+  approachCone.position.z = 0.050;
+  approachCone.userData.isHelper = true;
+
+  // Lateral Jaw-Closing Axis (+X tool axis)
+  const xShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0012, 0.0012, 0.042, 10), xMat);
+  xShaft.rotation.z = -Math.PI / 2;
+  xShaft.position.x = 0.021;
+  xShaft.userData.isHelper = true;
+
+  grp.add(yawRing, pitchRing, rollRing, approachShaft, approachCone, xShaft);
+  grp.userData.setHighlight = (axis) => {
+    yawMat.opacity = axis === "yaw" || axis === "z" ? 1.0 : 0.48;
+    yawRing.scale.setScalar(axis === "yaw" ? 1.18 : 1.0);
+    pitchMat.opacity = axis === "pitch" || axis === "y" ? 1.0 : 0.48;
+    pitchRing.scale.setScalar(axis === "pitch" ? 1.18 : 1.0);
+    rollMat.opacity = axis === "roll" ? 1.0 : 0.56;
+    rollRing.scale.setScalar(axis === "roll" ? 1.22 : 1.0);
+    xMat.opacity = axis === "x" ? 1.0 : 0.50;
+  };
+  return grp;
 }
 
 const shadow = (m) => { m.castShadow = true; m.receiveShadow = true; return m; };
@@ -327,7 +385,12 @@ const mesh = (geo, mat) => shadow(new THREE.Mesh(geo, mat));
 
 const bench = mesh(new THREE.BoxGeometry(1.2, 0.03, 1.6), MAT.bench);
 bench.position.set(0.12, -0.015, 0);
-tagSemantic(bench, 0x1b2230, 0x1b2230);
+tagSemantic(bench, 0x1b2230, 0x1b2230, {
+  title: "Optical Calibration Workbench",
+  sem: "workbench_surface (Class 0)",
+  inst: "/World/Workbench#01",
+  desc: "Precision anodized optical table ground plane (Z = 0.000 m) with 50 mm metric calibration grid."
+});
 scene.add(bench);
 
 const gridHelper = new THREE.GridHelper(1.5, 30, 0x3b486b, 0x1e2538);
@@ -353,7 +416,12 @@ scene.add(gridHelper);
   box.add(chassis, trim, topCap, screen, estopBase, estopBtn);
   box.position.copy(T3([-0.15, 0.0, 0]));
   box.rotation.y = Math.PI / 2;
-  tagSemantic(box, 0x9d72ff, 0xb99aff);
+  tagSemantic(box, 0x9d72ff, 0xb99aff, {
+    title: "UR5e Control Cabinet & E-Stop Dock",
+    sem: "ur5e_controller (Class 6)",
+    inst: "/World/UR5e_ControlBox#60",
+    desc: "Real-time 500 Hz safety controller, IEEE-1588 PTP clock master, and hardware E-stop console."
+  });
   scene.add(box);
   trackedObjects.push({ label: "ur5e_controller#60", clsId: 6, obj: box, color: "#9d72ff" });
 }
@@ -463,6 +531,15 @@ function makeRig(dof, offsetY, accentHex) {
     armGroup.add(bolt);
   }
 
+  const armMeta = {
+    title: dof === 4 ? "4-DOF Planar UR5e Arm" : "6-DOF Spherical-Wrist UR5e Arm",
+    sem: dof === 4 ? "robot_arm_4dof (Class 1)" : "robot_arm_6dof (Class 2)",
+    inst: `/World/UR5e_${dof}DOF#${dof === 4 ? 10 : 20}`,
+    desc: dof === 4
+      ? "4-DOF configuration (Yaw, Shoulder, Elbow, Wrist Pitch): constrained to a vertical radial plane without wrist roll."
+      : "Full 6-DOF spherical wrist configuration (Yaw, Shoulder, Elbow, Wrist 1, Wrist 2, Wrist 3): tracks arbitrary 3D orientation & roll."
+  };
+
   // Official Universal Robots UR5e Base CAD Mesh (base.stl)
   stlLoader.load("./models/ur5e/base.stl", (geo) => {
     geo.computeVertexNormals();
@@ -470,7 +547,7 @@ function makeRig(dof, offsetY, accentHex) {
     cadBase.scale.set(0.52, 0.52, 0.52);
     cadBase.rotation.x = -Math.PI / 2;
     cadBase.position.y = 0.012;
-    tagSemantic(cadBase, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa);
+    tagSemantic(cadBase, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa, armMeta);
     armGroup.add(cadBase);
   });
 
@@ -489,11 +566,20 @@ function makeRig(dof, offsetY, accentHex) {
 
   // UR5e Modular Harmonic-Drive Joint Actuators with authentic UR5e CAD shells (shoulder.stl, wrist1.stl, wrist2.stl, wrist3.stl) + metallic blue/purple caps
   const jointStls = ["shoulder.stl", "shoulder.stl", "wrist1.stl", "wrist2.stl", "wrist2.stl", "wrist3.stl"];
+  const jointNames = dof === 4
+    ? ["J1 Base Yaw", "J2 Shoulder Pitch", "J3 Elbow Pitch", "J4 Wrist Pitch"]
+    : ["J1 Base Yaw", "J2 Shoulder Pitch", "J3 Elbow Pitch", "J4 Wrist 1 Roll", "J5 Wrist 2 Pitch", "J6 Tool Flange Roll"];
   const housings = Array.from({ length: dof }, (_, i) => {
     const g = new THREE.Group();
     const big = i < 3;
     const rad = big ? 0.022 : 0.0165;
     const len = big ? 0.050 : 0.038;
+    const jMeta = {
+      title: `${dof}-DOF · ${jointNames[i]}`,
+      sem: armMeta.sem,
+      inst: `/World/UR5e_${dof}DOF/Joint_${i + 1}`,
+      desc: `Zero-backlash harmonic drive actuator with optical encoder & metallic ${dof === 4 ? "purple" : "cobalt blue"} dust cap.`
+    };
     // UR5e silver actuator body
     const body = mesh(new THREE.CylinderGeometry(rad, rad, len * 0.82, 40), MAT.urSilver);
     g.add(body);
@@ -511,6 +597,7 @@ function makeRig(dof, offsetY, accentHex) {
       cap.position.y = s * (len * 0.45);
       g.add(cap);
     }
+    tagSemantic(g, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa, jMeta);
     // Attach real UR5e joint CAD shell
     const stlName = jointStls[i];
     if (stlName) {
@@ -520,7 +607,7 @@ function makeRig(dof, offsetY, accentHex) {
         const cadJ = mesh(geo, MAT.urSilver);
         const sc = big ? 0.34 : 0.28;
         cadJ.scale.set(sc, sc, sc);
-        tagSemantic(cadJ, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa);
+        tagSemantic(cadJ, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa, jMeta);
         g.add(cadJ);
       });
     }
@@ -529,7 +616,16 @@ function makeRig(dof, offsetY, accentHex) {
   });
 
   const grip = makeGripper(false);
+  tagSemantic(grip, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa, {
+    title: `${dof}-DOF Robotiq 2F-85 Servo Gripper`,
+    sem: armMeta.sem,
+    inst: `/World/UR5e_${dof}DOF/Robotiq_2F85`,
+    desc: "Parallel-jaw servo gripper with ATI 6-axis force/torque sensor ring and optical rangefinder."
+  });
   armGroup.add(grip);
+
+  const gizmo = makeOrientationGizmo(dof);
+  rig.add(gizmo);
 
   // Detailed Apple Watch Ultra 2 Forearm Mount on the 4-DOF UR5e
   let watchSensor = null;
@@ -551,8 +647,15 @@ function makeRig(dof, offsetY, accentHex) {
     armGroup.add(watchSensor);
   }
 
-  tagSemantic(armGroup, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa);
-  if (watchSensor) tagSemantic(watchSensor, 0xe879f9, 0xf0abfc);
+  tagSemantic(armGroup, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa, armMeta);
+  if (watchSensor) {
+    tagSemantic(watchSensor, 0xe879f9, 0xf0abfc, {
+      title: "Apple Watch Ultra 2 Forearm IMU Site",
+      sem: "forearm_watch_imu (Sensor Site)",
+      inst: "/World/UR5e_4DOF/forearm_imu#15",
+      desc: "Streams 6-axis proper acceleration (a = R^T(a_world + g)) and angular velocity (ω) for Wahba/SVD Sim-to-Real calibration."
+    });
+  }
 
   const ghost = makeGripper(true); rig.add(ghost);
   const guideMat = new THREE.MeshBasicMaterial({ color: accentHex, transparent: true, opacity: 0.50 });
@@ -582,8 +685,18 @@ function makeRig(dof, offsetY, accentHex) {
   dropRing.rotation.x = Math.PI / 2; dropRing.position.y = 0.0026;
   dropPad.add(dropBase, dropSurface, dropRing);
   dropPad.position.copy(T3([0.15, 0.075, 0.0022])); rig.add(dropPad);
-  tagSemantic(pickPad, 0x37474f, 0x455a64);
-  tagSemantic(dropPad, 0x2563eb, 0x60a5fa);
+  tagSemantic(pickPad, 0x37474f, 0x455a64, {
+    title: "CNC Pick Fixture Pedestal",
+    sem: "fixture_pick_pad (Station 1)",
+    inst: `/World/PickPad_${dof}D`,
+    desc: "Source cradle at (x=0.150m, y=-0.075m) where the 21700 cell starts before Pick & Place."
+  });
+  tagSemantic(dropPad, 0x2563eb, 0x60a5fa, {
+    title: "CNC Target Place Pedestal",
+    sem: "fixture_place_pad (Station 1)",
+    inst: `/World/PlacePad_${dof}D`,
+    desc: "Destination target pad at (x=0.150m, y=+0.075m) with cobalt alignment reticle."
+  });
 
   // High-Detail 21700 Industrial Lithium Power Cell (Brushed Cobalt Jacket + Crimp Groove + Cathode Cap + Insulator Ring)
   const battery = new THREE.Group();
@@ -598,7 +711,12 @@ function makeRig(dof, offsetY, accentHex) {
   const tip = mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.006, 24), MAT.steel);
   tip.rotation.z = Math.PI / 2; tip.position.x = 0.0285; battery.add(tip);
   rig.add(battery);
-  tagSemantic(battery, 0x38bdf8, dof === 4 ? 0x7dd3fc : 0x0284c7);
+  tagSemantic(battery, 0x38bdf8, dof === 4 ? 0x7dd3fc : 0x0284c7, {
+    title: "21700 Cylindrical Lithium Power Cell",
+    sem: "battery_cell (Class 3)",
+    inst: `/World/power_cell#${dof === 4 ? 30 : 31}`,
+    desc: "Graspable manipulation target (Ø24 mm × 54 mm). Click 'Grasp' or 'Pick & Place' to manipulate."
+  });
 
   // Industrial Charger Dock Station
   const charger = new THREE.Group(); rig.add(charger);
@@ -608,8 +726,14 @@ function makeRig(dof, offsetY, accentHex) {
   const ledMat = new THREE.MeshStandardMaterial({ color: 0x9d72ff, emissive: 0x9d72ff, emissiveIntensity: 0.9 });
   const led = mesh(new THREE.SphereGeometry(0.005, 16, 12), ledMat); led.position.set(0.042, 0.038, 0.010); charger.add(led);
   const stand = mesh(new THREE.CylinderGeometry(0.006, 0.007, 1, 20), MAT.steel); rig.add(stand);
-  tagSemantic(charger, 0x60a5fa, dof === 4 ? 0x3b82f6 : 0x2563eb);
-  tagSemantic(stand, 0x60a5fa, 0x1d4ed8);
+  const chargerMeta = {
+    title: "Tilted Side-Charger Insertion Dock",
+    sem: "charger_dock (Class 4)",
+    inst: `/World/charger_dock#${dof === 4 ? 40 : 41}`,
+    desc: "Compound-angle slot requiring oblique approach & roll alignment (demonstrates 4-DOF planar lock vs 6-DOF spherical wrist)."
+  };
+  tagSemantic(charger, 0x60a5fa, dof === 4 ? 0x3b82f6 : 0x2563eb, chargerMeta);
+  tagSemantic(stand, 0x60a5fa, 0x1d4ed8, chargerMeta);
 
   // Precision Industrial Process Valve Wheel
   const post = mesh(new THREE.CylinderGeometry(0.0075, 0.0085, 1, 20), MAT.steel); rig.add(post);
@@ -622,15 +746,21 @@ function makeRig(dof, offsetY, accentHex) {
   }
   const hub = mesh(new THREE.CylinderGeometry(0.0095, 0.0095, 0.014, 24), MAT.urSilver);
   hub.rotation.x = Math.PI / 2; valve.add(hub);
-  tagSemantic(valve, 0x9d72ff, dof === 4 ? 0xc084fc : 0x7c3aed);
-  tagSemantic(post, 0x9d72ff, 0x6d28d9);
+  const valveMeta = {
+    title: "Industrial Process Valve Handwheel",
+    sem: "valve_wheel (Class 5)",
+    inst: `/World/valve_wheel#${dof === 4 ? 50 : 51}`,
+    desc: "Requires horizontal approach (+X) followed by 90° continuous J6 tool-flange roll rotation."
+  };
+  tagSemantic(valve, 0x9d72ff, dof === 4 ? 0xc084fc : 0x7c3aed, valveMeta);
+  tagSemantic(post, 0x9d72ff, 0x6d28d9, valveMeta);
 
   trackedObjects.push(
     { label: `ur5e_arm_${dof}dof#${dof === 4 ? 10 : 20}`, clsId: dof === 4 ? 1 : 2, obj: armGroup, color: dof === 4 ? "#9d72ff" : "#60a5fa" },
     { label: `power_cell#${dof === 4 ? 30 : 31}`, clsId: 3, obj: battery, color: "#38bdf8" }
   );
 
-  return { rig, armGroup, links, housings, grip, watchSensor, ghost, guideLine, guideMat, plane, pickPad, dropPad, battery, charger, ledMat, stand, post, valve };
+  return { rig, armGroup, links, housings, grip, gizmo, watchSensor, ghost, guideLine, guideMat, plane, pickPad, dropPad, battery, charger, ledMat, stand, post, valve };
 }
 
 const rigs = {
@@ -648,6 +778,11 @@ function updateRig(dof, fk, props) {
   fk.joints.forEach((j, i) => { const h = r.housings[i]; h.position.copy(T3(j.p)); h.quaternion.setFromUnitVectors(UP, T3(j.axis).normalize()); });
   poseObj(r.grip, fk.tip, fk.R);
   r.grip.userData.setOpen(props.open);
+  if (r.gizmo) {
+    r.gizmo.visible = st.showGizmos && st.aov === "rtx";
+    poseObj(r.gizmo, fk.tip, fk.R);
+    r.gizmo.userData.setHighlight(st.highlightAxis);
+  }
 
   if (r.watchSensor && props.watchSite) {
     poseObj(r.watchSensor, props.watchSite.p, props.watchSite.R);
@@ -687,6 +822,66 @@ function updateRig(dof, fk, props) {
   placeBetween(r.post, [v.p[0] + 0.03, v.p[1], 0], [v.p[0] + 0.03, v.p[1], v.p[2]]); r.post.scale.x = r.post.scale.z = 1;
 }
 
+const AOV_EXPLAIN = {
+  rtx: {
+    title: "RTX Lit Pass · Photorealistic PBR + 3D Yaw/Pitch/Roll Gizmo",
+    desc: "Physically-based clearcoat & brushed metallic UR5e shaders with soft shadows. Hover any 3D object to inspect its live Semantic Class, Instance ID, Surface Normal, and Metric Depth.",
+    legend: `
+      <span class="swatch" title="Yaw rotates horizontally around Z"><i style="background:#60a5fa"></i>Yaw (Z-Turn)</span>
+      <span class="swatch" title="Pitch tilts nose up/down"><i style="background:#34d399"></i>Pitch (Tilt)</span>
+      <span class="swatch" title="Roll twists wrist around approach axis"><i style="background:#c084fc"></i>Roll (Twist)</span>
+    `
+  },
+  depth: {
+    title: "Depth Z Pass · Metric Distance-to-Camera Buffer",
+    desc: "Encodes exact metric distance Z (in meters) from the camera pinhole to every surface pixel. Used by depth-conditioned imitation policies and 3D point-cloud back-projection.",
+    legend: `
+      <span class="swatch"><i style="background:#f8fafc"></i>Near (0.35 m)</span>
+      <span class="swatch"><i style="background:#64748b"></i>Mid (0.85 m)</span>
+      <span class="swatch"><i style="background:#0f172a"></i>Far (>1.60 m)</span>
+    `
+  },
+  normal: {
+    title: "Surface Normals Pass · View-Space XYZ Unit Vectors",
+    desc: "Maps 3D surface orientation vectors N = (Nx, Ny, Nz) into RGB channels so grasp planners know the exact perpendicular contact angle of every curved surface.",
+    legend: `
+      <span class="swatch"><i style="background:#f43f5e"></i>Red = +X (Right)</span>
+      <span class="swatch"><i style="background:#34d399"></i>Green = +Y (Up)</span>
+      <span class="swatch"><i style="background:#60a5fa"></i>Blue = +Z (Toward Lens)</span>
+    `
+  },
+  semantic: {
+    title: "Semantic Segmentation Pass · Per-Pixel Category Class IDs (1..6)",
+    desc: "Assigns a deterministic class color to every pixel by object category so vision transformers and segmentation masks separate robot links from manipulation targets.",
+    legend: `
+      <span class="swatch"><i style="background:#9d72ff"></i>1: 4-DOF Arm</span>
+      <span class="swatch"><i style="background:#3b82f6"></i>2: 6-DOF Arm</span>
+      <span class="swatch"><i style="background:#38bdf8"></i>3: Power Cell</span>
+      <span class="swatch"><i style="background:#60a5fa"></i>4: Charger</span>
+      <span class="swatch"><i style="background:#c084fc"></i>5: Valve</span>
+    `
+  },
+  instance: {
+    title: "Instance Segmentation Pass · Unique OpenUSD Prim IDs",
+    desc: "Assigns a unique color hash to each individual object instance (e.g., separating Power Cell #30 on the 4-DOF bench from Power Cell #31 on the 6-DOF bench).",
+    legend: `
+      <span class="swatch"><i style="background:#b99aff"></i>#10: UR5e_4D</span>
+      <span class="swatch"><i style="background:#60a5fa"></i>#20: UR5e_6D</span>
+      <span class="swatch"><i style="background:#f0abfc"></i>#15: Watch_IMU</span>
+      <span class="swatch"><i style="background:#7dd3fc"></i>#30/#31: Cells</span>
+    `
+  }
+};
+
+function renderAOVBanner(mode) {
+  const info = AOV_EXPLAIN[mode] || AOV_EXPLAIN.rtx;
+  if ($("aov-banner-title")) {
+    $("aov-banner-title").innerHTML = `<svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span>${info.title}</span>`;
+  }
+  if ($("aov-banner-desc")) $("aov-banner-desc").textContent = info.desc;
+  if ($("aov-banner-legend")) $("aov-banner-legend").innerHTML = info.legend;
+}
+
 function applyAOVPass(mode) {
   st.aov = mode;
   gridHelper.visible = (mode === "rtx");
@@ -710,6 +905,7 @@ function applyAOVPass(mode) {
     instance: "Pass: Omniverse Replicator Instance Segmentation (Unique Prim IDs)"
   };
   $("aov-desc").textContent = descMap[mode] || descMap.rtx;
+  renderAOVBanner(mode);
 }
 
 // ── 6. 2D/3D Replicator Bounding Box Projection ──
@@ -1214,12 +1410,26 @@ document.querySelectorAll("[data-p]").forEach(inp => inp.addEventListener("input
   st.cmd[inp.dataset.p] = parseFloat(inp.value);
   st.tween = null; st.quinticPlan = null;
   st.holdCrowd = performance.now() + 1200;
-  // Instant zero-latency kinematic solve on slider drag
+  // Instant zero-latency kinematic solve on slider drag with continuous wrist unwrapping
   const R = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
   st.q4 = ik4(p, R).q;
-  st.q6 = ik6(p, R).q;
+  st.q6 = ik6(p, R, st.q6).q;
   showCmd(st.cmd);
 }));
+
+// Highlight the corresponding 3D Yaw / Pitch / Roll / X / Y / Z gizmo ring when hovering or dragging any pose slider
+document.querySelectorAll("[data-axis-hover]").forEach(row => {
+  row.addEventListener("mouseenter", () => { st.highlightAxis = row.dataset.axisHover; });
+  row.addEventListener("mouseleave", () => { st.highlightAxis = null; });
+});
+
+if ($("btn-gizmo-toggle")) {
+  $("btn-gizmo-toggle").onclick = () => {
+    st.showGizmos = !st.showGizmos;
+    $("btn-gizmo-toggle").textContent = `3D Axes: ${st.showGizmos ? "ON" : "OFF"}`;
+    $("btn-gizmo-toggle").classList.toggle("on", st.showGizmos);
+  };
+}
 
 $("drive-mode").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
   $("drive-mode").querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
@@ -1267,11 +1477,93 @@ $("btn-bboxes").onclick = () => {
   $("btn-bboxes").classList.toggle("on", st.showBBoxes);
 };
 
-// AOV Pass Bar
-$("aov-bar").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-  $("aov-bar").querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
-  applyAOVPass(b.dataset.aov);
-}));
+// AOV Pass Bar (Click to switch pass, Hover to preview explanation & legend in the viewport banner)
+$("aov-bar").querySelectorAll("button").forEach(b => {
+  b.addEventListener("click", () => {
+    $("aov-bar").querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
+    applyAOVPass(b.dataset.aov);
+  });
+  b.addEventListener("mouseenter", () => renderAOVBanner(b.dataset.aov));
+  b.addEventListener("mouseleave", () => renderAOVBanner(st.aov));
+});
+
+// ── Live 3D Scene Raycast Hover Probe (Semantic ID, Instance Prim, Surface Normal, Metric Depth Z) ──
+const raycaster = new THREE.Raycaster();
+const pointerNDC = new THREE.Vector2();
+const probeEl = $("scene-hover-probe");
+
+cv.addEventListener("pointermove", (e) => {
+  if (!probeEl) return;
+  if (e.buttons) { probeEl.classList.add("hide"); return; } // hide while orbiting
+  const rect = cv.getBoundingClientRect();
+  pointerNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  pointerNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointerNDC, camera);
+
+  const hits = raycaster.intersectObjects(scene.children, true);
+  const hit = hits.find(h => h.object && h.object.isMesh && !h.object.userData.isHelper && h.object.visible);
+  if (!hit) {
+    probeEl.classList.add("hide");
+    return;
+  }
+
+  // Walk up parent chain to find hoverMeta
+  let cur = hit.object, meta = null;
+  while (cur && !meta) {
+    if (cur.userData && cur.userData.hoverMeta) meta = cur.userData.hoverMeta;
+    cur = cur.parent;
+  }
+  if (!meta) {
+    probeEl.classList.add("hide");
+    return;
+  }
+
+  // Compute world-space surface normal N and metric distance Z from camera
+  const worldNormal = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize() : new THREE.Vector3(0, 1, 0);
+  // Convert Three.js (x, y_up, z_right) back to Robotics World Frame (X_forward, Y_left, Z_up)
+  const robPt = [hit.point.x, -hit.point.z, hit.point.y];
+  const robNorm = [worldNormal.x, -worldNormal.z, worldNormal.y];
+
+  $("probe-name").textContent = meta.title;
+  $("probe-class").textContent = st.aov.toUpperCase();
+  $("probe-sem").textContent = meta.sem;
+  $("probe-inst").textContent = meta.inst;
+  $("probe-norm").textContent = `N = (${robNorm.map(v => (v >= 0 ? "+" : "") + v.toFixed(2)).join(", ")})`;
+  $("probe-depth").textContent = `${hit.distance.toFixed(3)} m from lens`;
+  $("probe-xyz").textContent = `(${robPt.map(v => v.toFixed(3)).join(", ")}) m`;
+  $("probe-desc").textContent = meta.desc;
+
+  const px = Math.min(window.innerWidth - 295, e.clientX + 16);
+  const py = Math.min(window.innerHeight - 175, Math.max(12, e.clientY + 14));
+  probeEl.style.left = `${px}px`;
+  probeEl.style.top = `${py}px`;
+  probeEl.classList.remove("hide");
+});
+cv.addEventListener("pointerleave", () => probeEl?.classList.add("hide"));
+
+// ── Global Rich UI Hover Card for Controls, Metrics & AOV Buttons ──
+const uiHoverCard = $("ui-hover-card");
+document.querySelectorAll("[title]").forEach(el => {
+  const rawTitle = el.getAttribute("title");
+  if (!rawTitle) return;
+  el.dataset.hoverDoc = rawTitle;
+  el.removeAttribute("title"); // prevent slow native browser tooltip; use instant rich studio hover card
+  el.addEventListener("mouseenter", (e) => {
+    if (!uiHoverCard) return;
+    const parts = rawTitle.split(":");
+    const hasHeading = parts.length > 1 && parts[0].length < 48;
+    $("ui-hover-tag").textContent = el.closest("#aov-bar") ? "Omniverse Replicator AOV" : el.closest("#pose-sliders") ? "6-DOF Kinematic Frame" : "Operon Studio Inspector";
+    $("ui-hover-title").textContent = hasHeading ? parts[0].trim() : (el.textContent.trim().slice(0, 42) || "Control Info");
+    $("ui-hover-body").textContent = hasHeading ? parts.slice(1).join(":").trim() : rawTitle;
+    const r = el.getBoundingClientRect();
+    const left = Math.min(window.innerWidth - 320, Math.max(10, r.left));
+    const top = r.bottom + 8 + 110 > window.innerHeight ? Math.max(10, r.top - 95) : r.bottom + 8;
+    uiHoverCard.style.left = `${left}px`;
+    uiHoverCard.style.top = `${top}px`;
+    uiHoverCard.classList.remove("hide");
+  });
+  el.addEventListener("mouseleave", () => uiHoverCard?.classList.add("hide"));
+});
 $("btn-cam-reset").onclick = () => {
   camera.position.set(0.88, 0.56, 0.0);
   controls.target.set(0.08, 0.11, 0);
@@ -1658,32 +1950,36 @@ function tick(now) {
       $("cmd-src").textContent = "Command: Auto Trajectory";
     } else if (c) {
       const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-      const yLim = st.station === 0 ? 0.085 : 0.15;
-      st.cmd.x = cl(st.cmd.x + c.vx * SPEED * dt, 0.04, 0.22);
-      st.cmd.y = cl(st.cmd.y + c.vy * SPEED * dt, -yLim, yLim);
-      st.cmd.z = cl(st.cmd.z + c.vz * SPEED * dt, 0.0, 0.25);
-      if (st.station === 0 && Math.abs(c.vx) < 0.2) st.cmd.x = cl(st.cmd.x + (0.15 - st.cmd.x) * Math.min(1, dt * 4.5), 0.04, 0.22);
-      if (Math.hypot(c.vx, c.vy) > 0.06 && Math.abs(c.vz) < 0.01) st.cmd.z = cl(st.cmd.z + (activeT.p[2] - st.cmd.z) * Math.min(1, dt * 4.5), 0.0, 0.25);
+      // 1:1 Direct Cartesian velocity + Optional Wrist Tilt-to-Position mapping:
+      // No hidden X/Z spring-back forces! When you push Forward (+vx), arm moves Forward (+X); Left/Right (vy) moves Left/Right (Y); Up/Down (vz) moves Up/Down (Z).
+      let vxCmd = c.vx, vyCmd = c.vy, vzCmd = c.vz;
+      // If user is tilting their wrist/phone in "tilt" mode without touching the 2D pad, let gentle wrist pitch/roll also steer XY reach intuitively
+      if (c.aim === "tilt" && Math.hypot(c.vx, c.vy) < 0.04) {
+        vxCmd = cl(c.pitch / 42, -0.85, 0.85);
+        vyCmd = cl(-c.roll / 42, -0.85, 0.85);
+      }
+      st.cmd.x = cl(st.cmd.x + vxCmd * SPEED * dt, 0.05, 0.22);
+      st.cmd.y = cl(st.cmd.y + vyCmd * SPEED * dt, -0.14, 0.14);
+      st.cmd.z = cl(st.cmd.z + vzCmd * SPEED * dt, 0.01, 0.25);
+
       const want = c.aim === "tilt" ? [c.yaw, c.pitch, c.roll] : activeT.ypr;
-      const k = Math.min(1, dt * 5);
+      const k = c.aim === "tilt" ? Math.min(1, dt * 16) : Math.min(1, dt * 6);
       for (const [i, key] of ["yaw", "pitch", "roll"].entries()) {
         let d = want[i] - st.cmd[key];
         if (key === "yaw") { while (d > 180) d -= 360; while (d < -180) d += 360; }
         st.cmd[key] += d * k;
       }
-      const dx = activeT.p[0] - st.cmd.x, dy = activeT.p[1] - st.cmd.y, dz = activeT.p[2] - st.cmd.z, d = Math.hypot(dx, dy, dz);
-      if (d < ASSIST_R && (c.vx * dx + c.vy * dy > 0.0005)) {
-        const a = Math.min(1, dt * 4.5);
-        st.cmd.x += dx * a; st.cmd.y += dy * a; st.cmd.z += dz * a;
-      }
-      $("cmd-src").textContent = st.drive === "pilot" ? "Live Pilot Phone" : `Crowd Average (${c.n})`;
+      $("cmd-src").textContent = st.drive === "pilot" ? "Live Pilot (1:1 Frame)" : `Crowd Average (${c.n})`;
     } else {
       $("cmd-src").textContent = "Studio Sliders (60Hz)";
     }
     showCmd(st.cmd);
     const R = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
-    st.q4 = smooth(st.q4, ik4(p, R).q, 0.72);
-    st.q6 = smooth(st.q6, ik6(p, R).q, 0.72);
+    // Continuous shortest-path joint unwrapping so 6-DOF spherical wrist never flips 180° or winds up to -782°
+    const raw4 = ik4(p, R).q;
+    const raw6 = ik6(p, R, st.q6).q;
+    st.q4 = smooth(st.q4, raw4, 0.82);
+    st.q6 = smooth(st.q6, raw6, 0.82);
   } else {
     for (const team of [4, 6]) {
       const qv = team === 4 ? st.q4 : st.q6, tgt = qv.slice();

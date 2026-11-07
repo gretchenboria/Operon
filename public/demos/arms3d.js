@@ -73,20 +73,48 @@ export function fk6(q) {
   return { pts: [[0, 0, 0], sh, el, wr, tip], R, tip, joints, yaw: t1 };
 }
 
-export function ik6(p, R) {
+const wrapPi = (a) => {
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return a;
+};
+const angDist = (a, b) => Math.abs(wrapPi(a - b));
+
+export function ik6(p, R, prevQ = null) {
   const z = M.col(R, 2);
   const w = [p[0] - G.L3 * z[0], p[1] - G.L3 * z[1], p[2] - G.L3 * z[2]];
   const t1 = Math.atan2(w[1], w[0]);
   const { t2, t3, reach } = planar(Math.hypot(w[0], w[1]), w[2] - G.h0);
   const R03 = M.mul(M.Rz(t1), M.Ry(t2 + t3));
   const R36 = M.mul(M.T(R03), R);
-  // ZYZ decomposition of R36 = Rz(t4) Ry(t5) Rz(t6)
+  // ZYZ decomposition of R36 = Rz(t4) Ry(t5) Rz(t6) with dual-branch wrist singularity resolution
   const r13 = R36[2], r23 = R36[5], r33 = R36[8], r31 = R36[6], r32 = R36[7];
   const s5 = Math.hypot(r13, r23);
   let t4, t5, t6;
-  if (s5 < 1e-6) { t4 = 0; t5 = r33 > 0 ? 0 : Math.PI; t6 = r33 > 0 ? Math.atan2(R36[3], R36[0]) : Math.atan2(R36[3], -R36[0]); }
-  else { t5 = Math.atan2(s5, r33); t4 = Math.atan2(r23, r13); t6 = Math.atan2(r32, -r31); }
-  return { q: [t1, t2, t3, t4, t5, t6], reach };
+  if (s5 < 1e-4) {
+    t4 = prevQ ? wrapPi(prevQ[3]) : 0;
+    t5 = r33 >= 0 ? 0 : Math.PI;
+    const totalRoll = r33 >= 0 ? Math.atan2(R36[3], R36[0]) : Math.atan2(-R36[3], -R36[0]);
+    t6 = wrapPi(totalRoll - (r33 >= 0 ? t4 : -t4));
+  } else {
+    // Branch A: t5 >= 0
+    const t5a = Math.atan2(s5, r33);
+    const t4a = Math.atan2(r23, r13);
+    const t6a = Math.atan2(r32, -r31);
+    // Branch B (equivalent orientation, flipped wrist): (-t5a, t4a + PI, t6a + PI)
+    const t5b = -t5a;
+    const t4b = wrapPi(t4a + Math.PI);
+    const t6b = wrapPi(t6a + Math.PI);
+    if (prevQ) {
+      const costA = angDist(t4a, prevQ[3]) + angDist(t5a, prevQ[4]) + angDist(t6a, prevQ[5]);
+      const costB = angDist(t4b, prevQ[3]) + angDist(t5b, prevQ[4]) + angDist(t6b, prevQ[5]);
+      if (costB < costA) { t4 = t4b; t5 = t5b; t6 = t6b; }
+      else { t4 = t4a; t5 = t5a; t6 = t6a; }
+    } else {
+      t4 = t4a; t5 = t5a; t6 = t6a;
+    }
+  }
+  return { q: [wrapPi(t1), wrapPi(t2), wrapPi(t3), wrapPi(t4), wrapPi(t5), wrapPi(t6)], reach };
 }
 
 // ---------------- 4-DOF ----------------
