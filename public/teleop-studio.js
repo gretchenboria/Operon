@@ -1,11 +1,11 @@
-// Omniverse RTX Teleop & Sim-to-Real Telemetry Studio
-// Combines:
-//   1. Audience Phone / Apple Watch WebSocket teleop relay (live.js + phone.js)
-//   2. 4-DOF (Abel-Arm) vs 6-DOF (Spherical Wrist) kinematics + Jacobian manipulability (arms3d.js)
-//   3. Omniverse Replicator multi-pass AOV renderer (RTX PBR, Linear Depth, Surface Normals, Semantic ID, Instance ID)
-//   4. abel_sim2real Apple Watch vs Sim Forearm IMU pipeline (5th-order firmware quintic, Wahba/SVD alignment, tap sync, Welch PSD, RMSE/MAE/Pearson r)
-//   5. NemoFleet System 1 / System 2 action-probability gate + teacher spend tracking
-//   6. Dataset & Stage Exporters: LeRobot / RLDS (.jsonl), OpenUSD (.usda), Replicator COCO (.json), and compare.py CSVs
+// Operon: 6-DOF Sim-to-Real Kinematic & Inertial Calibration Workbench
+// Implements the exact shared trajectory & IMU comparison pipeline from abel_sim2real:
+//   1. Audience Phone / Apple Watch WebSocket & HTTP teleop + live DeviceMotion/SensorLogger relay (live.js + phone.js)
+//   2. 6-DOF Sim vs 6-DOF Real/Watch Twin + 4-DOF Abel-Arm URDF kinematics (arms3d.js, abel_arm.urdf.xacro)
+//   3. Multi-pass perception AOV renderer (PBR Lit, Linear Depth Z, Surface Normals, Semantic ID, Instance ID)
+//   4. Firmware-matching 5th-order quintic trajectory loader from config/trajectories/*.yaml (quintic.py + trajectory.py)
+//   5. Real Kabsch/Wahba 3x3 SVD solver + tap-sync cross-correlation lag estimator (compare.py)
+//   6. Open Exporters: LeRobot (.jsonl), OpenUSD (.usda), 2D/3D BBoxes (.json), and compare.py CSVs
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -20,7 +20,7 @@ const R2D = 180 / Math.PI;
 const G0 = 9.80665;
 const $ = (id) => document.getElementById(id);
 
-// ── 1. Firmware-Matching 5th-Order Quintic Trajectory (ported from abel_sim2real/sim/quintic.py) ──
+// ── 1. Firmware-Matching 5th-Order Quintic Trajectory (ported verbatim from sim/quintic.py + sim/trajectory.py) ──
 const MAX_VEL_DEG = 120.0;
 const MAX_ACC_DEG = 200.0;
 const V_PEAK_FACTOR = 1.875;
@@ -28,7 +28,7 @@ const A_PEAK_FACTOR = 10.0 / Math.sqrt(3.0); // ~5.7735
 
 export function quinticMinDuration(deltaDeg) {
   const d = Math.abs(deltaDeg);
-  if (d < 1e-6) return 0.05;
+  if (d < 1e-6) return 0.0;
   return Math.max((V_PEAK_FACTOR * d) / MAX_VEL_DEG, Math.sqrt((A_PEAK_FACTOR * d) / MAX_ACC_DEG));
 }
 
@@ -41,48 +41,188 @@ export function evalQuintic(q0, qf, T, t) {
   return { pos, vel, acc };
 }
 
-// Canonical imu_calibration.yaml waypoints (relative to [0,0,0,0] rad in our FK frame)
-const QUINTIC_SWEEP_WAYPOINTS = [
-  { targetsDeg: [60, 0, 0, 0], dur: 1.4, settle: 0.4, label: "base +60° sweep" },
-  { targetsDeg: [-60, 0, 0, 0], dur: 1.8, settle: 0.4, label: "base -120° sweep" },
-  { targetsDeg: [0, 0, 0, 0], dur: 1.4, settle: 0.35, label: "base home" },
-  { targetsDeg: [0, -50, 0, 0], dur: 1.3, settle: 0.35, label: "shoulder -50° sweep" },
-  { targetsDeg: [0, 25, 45, 0], dur: 1.4, settle: 0.35, label: "shoulder+elbow sweep" },
-  { targetsDeg: [-15, 20, 35, 0], dur: 1.2, settle: 0.3, label: "return to work pose" }
-];
+// Servo-degree <-> URDF-radian convention from abel_arm.urdf.xacro & abel_arm_hardware.cpp:
+//   servo 90 deg <-> URDF 0.0 rad (home)
+//   URDF_rad = (servo_deg - 90) * pi / 180
+//   servo_deg = 90 + URDF_rad * 180 / pi
+export const servoDegToUrdfRad = (servoDeg) => (servoDeg - 90.0) * D2R;
+export const urdfRadToServoDeg = (urdfRad) => 90.0 + urdfRad * R2D;
 
-// ── 2. Forearm IMU Predictor & Apple Watch Synthetic / Wahba Alignment (from abel_sim2real) ──
-// Watch->Sim rotation matrix R (37 deg about [0.3, -0.7, 0.6], matching make_synthetic_watch.py)
-function rodrigues(axis, angleRad) {
-  const l = Math.hypot(...axis) || 1;
-  const [x, y, z] = axis.map(v => v / l);
-  const c = Math.cos(angleRad), s = Math.sin(angleRad), t = 1 - c;
-  return [
-    t * x * x + c,     t * x * y - s * z, t * x * z + s * y,
-    t * x * y + s * z, t * y * y + c,     t * y * z - s * x,
-    t * x * z - s * y, t * y * z + s * x, t * z * z + c
-  ];
+// Loaded from /api/trajectories (config/trajectories/*.yaml on disk)
+const TRAJECTORY_CACHE = {
+  imu_calibration: {
+    name: "imu_calibration",
+    description: "Large isolated single-joint sweeps for sim-to-real IMU validation.",
+    joint_order: ["base", "shoulder", "elbow", "gripper"],
+    home: [90, 90, 90, 90],
+    waypoints: [
+      { targets: [150, 90, 90, 90], duration_ms: 2000, settle_ms: 1500, label: "base +60" },
+      { targets: [30, 90, 90, 90], duration_ms: 2500, settle_ms: 1500, label: "base -120" },
+      { targets: [90, 90, 90, 90], duration_ms: 2000, settle_ms: 1500, label: "base +60 home" },
+      { targets: [90, 30, 90, 90], duration_ms: 2000, settle_ms: 1500, label: "shoulder -60" },
+      { targets: [90, 90, 90, 90], duration_ms: 2000, settle_ms: 1500, label: "shoulder +60 home" },
+      { targets: [90, 90, 150, 90], duration_ms: 2000, settle_ms: 1500, label: "elbow +60" },
+      { targets: [90, 90, 90, 90], duration_ms: 2000, settle_ms: 1500, label: "elbow -60 home" }
+    ],
+    raw_yaml: ""
+  }
+};
+
+async function fetchTrajectoriesFromServer() {
+  try {
+    const r = await fetch("/api/trajectories", { cache: "no-store" });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.ok && d.trajectories) {
+        Object.assign(TRAJECTORY_CACHE, d.trajectories);
+      }
+    }
+  } catch {}
 }
-const R_WATCH_TO_SIM = rodrigues([0.3, -0.7, 0.6], 37 * D2R);
-const R_SIM_TO_WATCH = [
-  R_WATCH_TO_SIM[0], R_WATCH_TO_SIM[3], R_WATCH_TO_SIM[6],
-  R_WATCH_TO_SIM[1], R_WATCH_TO_SIM[4], R_WATCH_TO_SIM[7],
-  R_WATCH_TO_SIM[2], R_WATCH_TO_SIM[5], R_WATCH_TO_SIM[8]
-];
+fetchTrajectoriesFromServer();
+
+// Expand a YAML trajectory object into clamped quintic segments (exact port of sim/trajectory.py:load)
+function expandTrajectorySegments(trajObj) {
+  let qPrev = (trajObj.home || [90, 90, 90, 90]).map(Number);
+  return (trajObj.waypoints || []).map((wp, idx) => {
+    const qTarget = wp.targets.map(Number);
+    const commandedS = (Number(wp.duration_ms) || 0) / 1000.0;
+    const settleS = (Number(wp.settle_ms) || 0) / 1000.0;
+    const neededS = Math.max(...qTarget.map((qt, j) => quinticMinDuration(qt - qPrev[j])));
+    const moveT = Math.max(commandedS, neededS);
+    const movedJoints = qTarget
+      .map((qt, j) => Math.abs(qt - qPrev[j]) > 1e-6 ? `${trajObj.joint_order?.[j] || "j" + j} ${qPrev[j]}->${qt} deg` : null)
+      .filter(Boolean)
+      .join(", ") || "hold";
+    const seg = {
+      index: idx + 1,
+      q0ServoDeg: qPrev.slice(),
+      qfServoDeg: qTarget.slice(),
+      commandedS,
+      neededS: +neededS.toFixed(4),
+      moveT: +moveT.toFixed(4),
+      settleT: +settleS.toFixed(4),
+      label: wp.label || movedJoints
+    };
+    qPrev = qTarget;
+    return seg;
+  });
+}
+
+// ── 2. Real Kabsch / Wahba 3x3 SVD Solver & Tap-Sync Lag Estimator (ported from compare.py) ──
 const applyMat3 = (M, v) => [
   M[0] * v[0] + M[1] * v[1] + M[2] * v[2],
   M[3] * v[0] + M[4] * v[1] + M[5] * v[2],
   M[6] * v[0] + M[7] * v[1] + M[8] * v[2]
 ];
+const mat3Mul = (A, B) => {
+  const C = new Array(9).fill(0);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++)
+    C[i * 3 + j] = A[i * 3] * B[j] + A[i * 3 + 1] * B[3 + j] + A[i * 3 + 2] * B[6 + j];
+  return C;
+};
+const mat3T = (A) => [A[0], A[3], A[6], A[1], A[4], A[7], A[2], A[5], A[8]];
+const mat3Det = (M) =>
+  M[0] * (M[4] * M[8] - M[5] * M[7]) -
+  M[1] * (M[3] * M[8] - M[5] * M[6]) +
+  M[2] * (M[3] * M[7] - M[4] * M[6]);
 
-// Compute forearm watch-mount site world position & orientation from 4-DOF joint angles q4 (rad)
+// Exact 3x3 Jacobi Eigensolver + SVD to solve Wahba's problem: R = argmin ||R P - Q||_F
+function jacobiEigenSymmetric3x3(S) {
+  const A = S.slice();
+  let V = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  const idxPairs = [[0, 1], [0, 2], [1, 2]];
+  for (let iter = 0; iter < 30; iter++) {
+    for (const [p, q] of idxPairs) {
+      const apq = A[p * 3 + q];
+      if (Math.abs(apq) < 1e-12) continue;
+      const app = A[p * 3 + p], aqq = A[q * 3 + q];
+      const tau = (aqq - app) / (2 * apq);
+      const t = tau >= 0 ? 1 / (tau + Math.sqrt(1 + tau * tau)) : -1 / (-tau + Math.sqrt(1 + tau * tau));
+      const c = 1 / Math.sqrt(1 + t * t), s = t * c;
+      for (let k = 0; k < 3; k++) {
+        if (k !== p && k !== q) {
+          const akp = A[k * 3 + p], akq = A[k * 3 + q];
+          A[k * 3 + p] = A[p * 3 + k] = c * akp - s * akq;
+          A[k * 3 + q] = A[q * 3 + k] = s * akp + c * akq;
+        }
+      }
+      A[p * 3 + p] = c * c * app - 2 * s * c * apq + s * s * aqq;
+      A[q * 3 + q] = s * s * app + 2 * s * c * apq + c * c * aqq;
+      A[p * 3 + q] = A[q * 3 + p] = 0;
+      for (let k = 0; k < 3; k++) {
+        const vkp = V[k * 3 + p], vkq = V[k * 3 + q];
+        V[k * 3 + p] = c * vkp - s * vkq;
+        V[k * 3 + q] = s * vkp + c * vkq;
+      }
+    }
+  }
+  // Sort eigenvalues descending
+  const order = [0, 1, 2].sort((i, j) => A[j * 3 + j] - A[i * 3 + i]);
+  const vals = order.map(i => Math.max(0, A[i * 3 + i]));
+  const Vs = [
+    V[0 * 3 + order[0]], V[0 * 3 + order[1]], V[0 * 3 + order[2]],
+    V[1 * 3 + order[0]], V[1 * 3 + order[1]], V[1 * 3 + order[2]],
+    V[2 * 3 + order[0]], V[2 * 3 + order[1]], V[2 * 3 + order[2]]
+  ];
+  if (mat3Det(Vs) < 0) { Vs[2] = -Vs[2]; Vs[5] = -Vs[5]; Vs[8] = -Vs[8]; }
+  return { vals, V: Vs };
+}
+
+// Port of compare.py:kabsch(P, Q) where P = watch N x 3, Q = sim N x 3, returns 3x3 R_watch_to_sim
+export function kabschSVD(P, Q) {
+  const H = new Array(9).fill(0);
+  for (let k = 0; k < P.length; k++) {
+    const p = P[k], q = Q[k];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) H[i * 3 + j] += p[i] * q[j];
+  }
+  const HtH = mat3Mul(mat3T(H), H);
+  const { vals, V } = jacobiEigenSymmetric3x3(HtH);
+  // U columns u_j = H v_j / sigma_j
+  const uCols = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (let j = 0; j < 2; j++) {
+    const vCol = [V[j], V[3 + j], V[6 + j]];
+    const hv = applyMat3(H, vCol);
+    const sig = Math.sqrt(vals[j]);
+    if (sig > 1e-8) {
+      uCols[j] = hv.map(x => x / sig);
+    } else {
+      uCols[j] = j === 0 ? [1, 0, 0] : [0, 1, 0];
+    }
+  }
+  // Ensure right-handed orthonormal U: u_2 = u_0 x u_1
+  uCols[2] = [
+    uCols[0][1] * uCols[1][2] - uCols[0][2] * uCols[1][1],
+    uCols[0][2] * uCols[1][0] - uCols[0][0] * uCols[1][2],
+    uCols[0][0] * uCols[1][1] - uCols[0][1] * uCols[1][0]
+  ];
+  const U = [
+    uCols[0][0], uCols[1][0], uCols[2][0],
+    uCols[0][1], uCols[1][1], uCols[2][1],
+    uCols[0][2], uCols[1][2], uCols[2][2]
+  ];
+  // R = V * D * U^T (since H = P^T Q, R @ p_i ~ q_i => R = V U^T with reflection fix)
+  let R = mat3Mul(mat3T(U), mat3T(V)); // wait: H = P^T Q => U^T H V = S => Q^T P = V S U^T => R = U_q V_p^T
+  // Let's verify: in compare.py: H = P^T @ Q; U, S, Vt = svd(H); R = Vt.T @ D @ U.T
+  // In our decomposition of H^T H = V S^2 V^T and H = U S V^T:
+  // Vt.T is V, and U.T is mat3T(U)!
+  const VtT = V;
+  const UT = mat3T(U);
+  const d = mat3Det(mat3Mul(VtT, UT)) >= 0 ? 1.0 : -1.0;
+  const D = [1, 0, 0, 0, 1, 0, 0, 0, d];
+  R = mat3Mul(VtT, mat3Mul(D, UT));
+  return R;
+}
+
+// Compute forearm watch-mount site world position & orientation (matches sim/isaac_replay.py:forearm_fk & abel_arm.urdf.xacro)
+// Base pedestal + shoulder bracket h0 = 0.05 + 0.04 = 0.09 m; L1 = 0.10 m; imu_z = L2/2 (0.05 m) or L2 (0.10 m)
 function forearmSiteFK(q4) {
   const [t1, t2, t3] = q4;
   const cy = Math.cos(t1), sy = Math.sin(t1);
   const p1 = t2, p12 = t2 + t3;
-  // Mid-forearm watch strap site (75% along forearm link L2)
-  const rLocal = G.L1 * Math.sin(p1) + (G.L2 * 0.75) * Math.sin(p12);
-  const zLocal = G.h0 + G.L1 * Math.cos(p1) + (G.L2 * 0.75) * Math.cos(p12);
+  // Matches sim/isaac_replay.py:forearm_fk (L1 = 0.10 m, L2 = 0.10 m)
+  const rLocal = G.L1 * Math.sin(p1) + G.L2 * Math.sin(p12);
+  const zLocal = G.h0 + G.L1 * Math.cos(p1) + G.L2 * Math.cos(p12);
   const p = [cy * rLocal, sy * rLocal, zLocal];
   const cp = Math.cos(p12), sp = Math.sin(p12);
   // R = Rz(t1) * Ry(t2 + t3)
@@ -124,6 +264,7 @@ const POS_TOL = 0.052, ORI_TOL = 32, SPEED = 0.34, ASSIST_R = 0.088;
 
 // ── 4. Studio State ──
 const st = {
+  rigMode: "6d_sim2real", // "6d_sim2real" | "6d_single" | "4d_vs_6d"
   drive: "crowd",
   station: 0,
   closed: false,
@@ -132,7 +273,7 @@ const st = {
   showBBoxes: false,
   showGizmos: true,
   highlightAxis: null,
-  schemaTab: "lerobot",
+  schemaTab: "sim2real",
   imuChartMode: "fused",
   utcOffsetMs: 0.0,
   fusedPitchDeg: 0.0,
@@ -140,8 +281,10 @@ const st = {
   cmd: { yaw: -15, pitch: 0, roll: 0, x: 0.15, y: 0.0, z: 0.12 },
   q4: [0, 0, 0, 0],
   q6: [0, 0, 0, 0, 0, 0],
+  q6Real: [0, 0, 0, 0, 0, 0],
   dq4: [0, 0, 0, 0],
   dq6: [0, 0, 0, 0, 0, 0],
+  dq6Real: [0, 0, 0, 0, 0, 0],
   tween: null,
   quinticPlan: null,
   holdCrowd: 0,
@@ -149,65 +292,32 @@ const st = {
   arm: { 4: freshArm(), 6: freshArm() },
   recording: false,
   episode: [],
-  imuHistory: [], // { t, simAcc, simGyro, watchAcc, watchGyro, posErr4, posErr6, oriErr4, oriErr6, dqPeak }
+  imuHistory: [],
   uploadedWatchCSV: null,
   uploadedWatchIdx: 0,
-  nemoTeacherCalls: 0,
-  nemoProb: 0.94,
-  nemoTier: "On-Robot ReflexPolicy",
-  licensed: false,
+  watchSourceName: null,
+  watchLagMs: 0.0,
+  estimatedR: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+  selectedTraj: "imu_calibration",
+  hwStreamer: {
+    lastSentMs: 0,
+    lastSentServoDeg: [90, 90, 90, 90, 90, 90],
+    segStartMs: 0,
+    segQ0Deg: [90, 90, 90, 90, 90, 90],
+    segQfDeg: [90, 90, 90, 90, 90, 90],
+    segDurS: 0.150
+  },
   recoilUntil: 0,
   lastGestureBanner: ""
 };
 
-// ── Commercial License Gate ──
-const VALID_LIC_RE = /^(OPERON-(PRO|LAB|ENT|FOUNDER)-[A-Z0-9]{4,}|GBORIA-2026)$/i;
-function syncLicenseUI() {
-  const b = $("btn-license");
-  if (!b) return;
-  if (st.licensed) {
-    b.className = "pill ok";
-    b.innerHTML = `<svg class="ico sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span>Pro Licensed</span>`;
-  } else {
-    b.className = "pill warn";
-    b.innerHTML = `<svg class="ico sm" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Activate License</span>`;
-  }
+// Technical Scope & Engineering Reality Modal + Unrestricted Non-Commercial Exports
+function requireLicense(_actionName, callback) {
+  return callback();
 }
-try {
-  const savedKey = localStorage.getItem("operon.license") || new URLSearchParams(location.search).get("license") || "";
-  if (VALID_LIC_RE.test(savedKey.trim())) {
-    st.licensed = true;
-    localStorage.setItem("operon.license", savedKey.trim());
-  }
-} catch {}
-setTimeout(syncLicenseUI, 20);
-
-function requireLicense(actionName, callback) {
-  if (st.licensed) return callback();
-  const modal = $("lic-modal");
-  const msg = $("lic-msg");
-  if (msg) msg.textContent = `🔒 "${actionName}" requires an active Operon Pro / Lab license key.`;
-  if (modal) modal.classList.remove("hide");
-}
-
-if ($("btn-license")) $("btn-license").onclick = () => $("lic-modal")?.classList.remove("hide");
-if ($("lic-close")) $("lic-close").onclick = () => $("lic-modal")?.classList.add("hide");
-if ($("lic-activate")) {
-  $("lic-activate").onclick = () => {
-    const val = ($("lic-input")?.value || "").trim();
-    if (VALID_LIC_RE.test(val)) {
-      st.licensed = true;
-      try { localStorage.setItem("operon.license", val); } catch {}
-      syncLicenseUI();
-      $("lic-msg").style.color = "#81c995";
-      $("lic-msg").textContent = "✓ License verified! Full dataset & OpenUSD exports unlocked.";
-      setTimeout(() => $("lic-modal")?.classList.add("hide"), 600);
-    } else {
-      $("lic-msg").style.color = "#f28b82";
-      $("lic-msg").textContent = "Invalid license key format. Contact Gretchen Boria, PhD for a seat key.";
-    }
-  };
-}
+if ($("btn-tech-scope")) $("btn-tech-scope").onclick = () => $("scope-modal")?.classList.remove("hide");
+if ($("scope-close")) $("scope-close").onclick = () => $("scope-modal")?.classList.add("hide");
+if ($("scope-ok")) $("scope-ok").onclick = () => $("scope-modal")?.classList.add("hide");
 
 function freshArm() {
   return { done: [false, false, false], hold: 0, held: false, inserted: null, valve: 0, gripping: false, battP: [0.15, -0.075, 0.013], battR: PICK_R, dest: "place" };
@@ -216,6 +326,7 @@ function freshArm() {
   const R = poseR(-15, 0, 0), p = [0.15, 0, 0.12];
   st.q4 = ik4(p, R).q;
   st.q6 = ik6(p, R).q;
+  st.q6Real = st.q6.slice();
 }
 
 // Compute Yoshikawa manipulability proxy w = sqrt(det(J*J^T))
@@ -566,19 +677,17 @@ function makeRig(dof, offsetY, accentHex) {
 
   // UR5e Modular Harmonic-Drive Joint Actuators with authentic UR5e CAD shells (shoulder.stl, wrist1.stl, wrist2.stl, wrist3.stl) + metallic blue/purple caps
   const jointStls = ["shoulder.stl", "shoulder.stl", "wrist1.stl", "wrist2.stl", "wrist2.stl", "wrist3.stl"];
-  const jointNames = dof === 4
-    ? ["J1 Base Yaw", "J2 Shoulder Pitch", "J3 Elbow Pitch", "J4 Wrist Pitch"]
-    : ["J1 Base Yaw", "J2 Shoulder Pitch", "J3 Elbow Pitch", "J4 Wrist 1 Roll", "J5 Wrist 2 Pitch", "J6 Tool Flange Roll"];
-  const housings = Array.from({ length: dof }, (_, i) => {
+  const jointNames = ["J1 Base Yaw", "J2 Shoulder Pitch", "J3 Elbow Pitch", "J4 Wrist 1 Roll", "J5 Wrist 2 Pitch", "J6 Tool Flange Roll"];
+  const housings = Array.from({ length: 6 }, (_, i) => {
     const g = new THREE.Group();
     const big = i < 3;
     const rad = big ? 0.022 : 0.0165;
     const len = big ? 0.050 : 0.038;
     const jMeta = {
-      title: `${dof}-DOF · ${jointNames[i]}`,
+      title: `UR5e Actuator | ${jointNames[i]}`,
       sem: armMeta.sem,
-      inst: `/World/UR5e_${dof}DOF/Joint_${i + 1}`,
-      desc: `Zero-backlash harmonic drive actuator with optical encoder & metallic ${dof === 4 ? "purple" : "cobalt blue"} dust cap.`
+      inst: `/World/UR5e_${dof === 4 ? "Left" : "Right"}/Joint_${i + 1}`,
+      desc: `Harmonic-drive servo actuator with optical encoder and metallic ${dof === 4 ? "purple" : "cobalt blue"} dust cap.`
     };
     // UR5e silver actuator body
     const body = mesh(new THREE.CylinderGeometry(rad, rad, len * 0.82, 40), MAT.urSilver);
@@ -591,7 +700,7 @@ function makeRig(dof, offsetY, accentHex) {
     ledTorus.rotation.x = Math.PI / 2;
     ledTorus.position.y = len * 0.25;
     g.add(ledTorus);
-    // Signature UR5e curved metallic end-caps (Metallic Purple on 4-DOF, Metallic Cobalt Blue on 6-DOF)
+    // Signature UR5e curved metallic end-caps (Metallic Purple on Left Rig, Metallic Cobalt Blue on Right Rig)
     for (const s of [-1, 1]) {
       const cap = mesh(new THREE.CylinderGeometry(rad * 0.86, rad * 0.99, 0.007, 36), capMat);
       cap.position.y = s * (len * 0.45);
@@ -617,9 +726,9 @@ function makeRig(dof, offsetY, accentHex) {
 
   const grip = makeGripper(false);
   tagSemantic(grip, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa, {
-    title: `${dof}-DOF Robotiq 2F-85 Servo Gripper`,
+    title: `Robotiq 2F-85 Parallel Servo Gripper`,
     sem: armMeta.sem,
-    inst: `/World/UR5e_${dof}DOF/Robotiq_2F85`,
+    inst: `/World/UR5e_${dof === 4 ? "Left" : "Right"}/Robotiq_2F85`,
     desc: "Parallel-jaw servo gripper with ATI 6-axis force/torque sensor ring and optical rangefinder."
   });
   armGroup.add(grip);
@@ -627,35 +736,30 @@ function makeRig(dof, offsetY, accentHex) {
   const gizmo = makeOrientationGizmo(dof);
   rig.add(gizmo);
 
-  // Detailed Apple Watch Ultra 2 Forearm Mount on the 4-DOF UR5e
-  let watchSensor = null;
-  if (dof === 4) {
-    watchSensor = new THREE.Group();
-    const strap = mesh(new THREE.CylinderGeometry(0.0175, 0.0175, 0.022, 32), new THREE.MeshPhysicalMaterial({ color: 0x6d28d9, roughness: 0.45, clearcoat: 0.3 }));
-    strap.rotation.z = Math.PI / 2;
-    watchSensor.add(strap);
-    const caseMesh = mesh(new THREE.BoxGeometry(0.028, 0.0095, 0.034), MAT.watch);
-    caseMesh.position.y = 0.015;
-    watchSensor.add(caseMesh);
-    const screenMesh = mesh(new THREE.BoxGeometry(0.024, 0.002, 0.029), MAT.watchScreen);
-    screenMesh.position.y = 0.0195;
-    watchSensor.add(screenMesh);
-    const crown = mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.004, 16), MAT.urPurpleCap);
-    crown.rotation.z = Math.PI / 2;
-    crown.position.set(0.015, 0.016, 0.006);
-    watchSensor.add(crown);
-    armGroup.add(watchSensor);
-  }
+  // Forearm IMU Strap & Watch Sensor Mount (Available on both rigs so 6D Real/Watch Twin or 4D Rig can display it)
+  const watchSensor = new THREE.Group();
+  const strap = mesh(new THREE.CylinderGeometry(0.0175, 0.0175, 0.022, 32), new THREE.MeshPhysicalMaterial({ color: dof === 4 ? 0x6d28d9 : 0x1d4ed8, roughness: 0.45, clearcoat: 0.3 }));
+  strap.rotation.z = Math.PI / 2;
+  watchSensor.add(strap);
+  const caseMesh = mesh(new THREE.BoxGeometry(0.028, 0.0095, 0.034), MAT.watch);
+  caseMesh.position.y = 0.015;
+  watchSensor.add(caseMesh);
+  const screenMesh = mesh(new THREE.BoxGeometry(0.024, 0.002, 0.029), MAT.watchScreen);
+  screenMesh.position.y = 0.0195;
+  watchSensor.add(screenMesh);
+  const crown = mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.004, 16), capMat);
+  crown.rotation.z = Math.PI / 2;
+  crown.position.set(0.015, 0.016, 0.006);
+  watchSensor.add(crown);
+  armGroup.add(watchSensor);
 
   tagSemantic(armGroup, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa, armMeta);
-  if (watchSensor) {
-    tagSemantic(watchSensor, 0xe879f9, 0xf0abfc, {
-      title: "Apple Watch Ultra 2 Forearm IMU Site",
-      sem: "forearm_watch_imu (Sensor Site)",
-      inst: "/World/UR5e_4DOF/forearm_imu#15",
-      desc: "Streams 6-axis proper acceleration (a = R^T(a_world + g)) and angular velocity (ω) for Wahba/SVD Sim-to-Real calibration."
-    });
-  }
+  tagSemantic(watchSensor, 0xe879f9, 0xf0abfc, {
+    title: "Forearm 6-Axis Watch IMU Site",
+    sem: "forearm_watch_imu (Sensor Site)",
+    inst: `/World/UR5e_${dof === 4 ? "Left" : "Right"}/forearm_imu#15`,
+    desc: "Streams 6-axis proper acceleration a = R^T(a_world + g) and angular velocity w for Wahba/SVD Sim-to-Real calibration."
+  });
 
   const ghost = makeGripper(true); rig.add(ghost);
   const guideMat = new THREE.MeshBasicMaterial({ color: accentHex, transparent: true, opacity: 0.50 });
@@ -775,7 +879,14 @@ function updateRig(dof, fk, props) {
   const flangeAt = [fk.tip[0] - z[0] * 0.056, fk.tip[1] - z[1] * 0.056, fk.tip[2] - z[2] * 0.056];
   const ends = [fk.pts[0], fk.pts[1], fk.pts[2], fk.pts[3], flangeAt];
   r.links.forEach((l, i) => { placeBetween(l, ends[i], ends[i + 1]); l.scale.x = l.scale.z = l.userData.r; });
-  fk.joints.forEach((j, i) => { const h = r.housings[i]; h.position.copy(T3(j.p)); h.quaternion.setFromUnitVectors(UP, T3(j.axis).normalize()); });
+  r.housings.forEach((h, i) => {
+    const j = fk.joints[i];
+    h.visible = !!j;
+    if (j) {
+      h.position.copy(T3(j.p));
+      h.quaternion.setFromUnitVectors(UP, T3(j.axis).normalize());
+    }
+  });
   poseObj(r.grip, fk.tip, fk.R);
   r.grip.userData.setOpen(props.open);
   if (r.gizmo) {
@@ -784,8 +895,9 @@ function updateRig(dof, fk, props) {
     r.gizmo.userData.setHighlight(st.highlightAxis);
   }
 
-  if (r.watchSensor && props.watchSite) {
-    poseObj(r.watchSensor, props.watchSite.p, props.watchSite.R);
+  if (r.watchSensor) {
+    r.watchSensor.visible = !!props.watchSite;
+    if (props.watchSite) poseObj(r.watchSensor, props.watchSite.p, props.watchSite.R);
   }
 
   const isRtx = st.aov === "rtx";
@@ -796,7 +908,7 @@ function updateRig(dof, fk, props) {
     r.ghost.visible = false; r.guideLine.visible = false;
   }
   if (r.plane) {
-    r.plane.visible = isRtx;
+    r.plane.visible = isRtx && st.rigMode === "4d_vs_6d";
     r.plane.position.copy(T3([0.12 * Math.cos(fk.yaw), 0.12 * Math.sin(fk.yaw), 0.15]));
     r.plane.rotation.set(0, fk.yaw, 0);
   }
@@ -1118,8 +1230,8 @@ function renderPilots() {
   const now = performance.now();
   const list = [...phones.entries()].sort((a, b) => (now - a[1].t) - (now - b[1].t)).slice(0, 8);
   box.innerHTML = list.length
-    ? list.map(([id, p]) => `<button class="btn sm ${id === st.pilot ? "on" : ""}" data-pid="${id}">${id === st.pilot ? "🎮 " : ""}${p.name}</button>`).join("")
-    : `<span class="mono" style="font-size:10.5px;color:var(--ink-3)">Scan QR on phone to join…</span>`;
+    ? list.map(([id, p]) => `<button class="btn sm ${id === st.pilot ? "on" : ""}" data-pid="${id}">${id === st.pilot ? "[PILOT] " : ""}${p.name}</button>`).join("")
+    : `<span class="mono" style="font-size:10.5px;color:var(--ink-3)">Scan QR on phone to join...</span>`;
   box.querySelectorAll("[data-pid]").forEach(b => b.addEventListener("click", () => {
     st.pilot = b.dataset.pid;
     const pl = phones.get(st.pilot);
@@ -1155,7 +1267,7 @@ onLive((m) => {
       setClosed(!!v.g);
       if (v.gesture) {
         st.lastGestureBanner = v.gesture;
-        $("watch-status").textContent = `⌚ ${v.gesture}`;
+        $("watch-status").textContent = `Watch Gesture: ${v.gesture}`;
       }
       const s = ST[st.station];
       if (s.id === "valve" && st.closed) tweenTo(s.ypr, s.p, 950);
@@ -1194,7 +1306,44 @@ function crowdPose() {
   return { ...acc, yaw: Math.atan2(sy, sx) / D2R, n, g: g / n >= 0.5, aim: tilt / n >= 0.5 ? "tilt" : "auto", liveImu };
 }
 
-// ── 9. UI Controls & Trajectories ──
+// ── 9. UI Controls, Rig Comparison Mode & Trajectories ──
+function setRigMode(mode) {
+  st.rigMode = mode;
+  if ($("rig-mode-bar")) {
+    $("rig-mode-bar").querySelectorAll("button").forEach(b => b.classList.toggle("sel", b.dataset.rm === mode));
+  }
+  const isSingle = mode === "6d_single";
+  const is4v6 = mode === "4d_vs_6d";
+  rigs[4].rig.visible = !isSingle;
+  rigs[6].rig.position.copy(T3([0, isSingle ? 0 : 0.18, 0]));
+  if ($("badge-left")) $("badge-left").classList.toggle("hide", isSingle);
+  if ($("vp-dock-bottom")) $("vp-dock-bottom").classList.toggle("single", isSingle);
+
+  if ($("title-left")) {
+    $("title-left").innerHTML = is4v6
+      ? `<span style="color:var(--accent)">4-DOF Planar</span> + Watch IMU`
+      : `<span style="color:var(--accent)">6-DOF Sim</span> (Ideal Analytical IK)`;
+  }
+  if ($("title-right")) {
+    $("title-right").innerHTML = isSingle
+      ? `<span style="color:var(--blue)">6-DOF Spherical Wrist</span> (Centered Bench)`
+      : is4v6
+        ? `<span style="color:var(--blue)">6-DOF Spherical Wrist</span>`
+        : `<span style="color:var(--blue)">6-DOF Real/Watch Twin</span> + Forearm IMU`;
+  }
+  if ($("kpi-err-lbl")) {
+    $("kpi-err-lbl").textContent = is4v6 ? "Pos Error (4D / 6D)" : "Pos Error (Sim / Real)";
+  }
+  if ($("chart2-title")) {
+    $("chart2-title").textContent = is4v6
+      ? "4-DOF vs 6-DOF Orientation Error (deg) + Peak |dq| (deg/s)"
+      : "Sim vs Real 6-DOF Tracking Residual (deg) + Peak |dq| (deg/s)";
+  }
+}
+if ($("rig-mode-bar")) {
+  $("rig-mode-bar").querySelectorAll("button").forEach(b => b.addEventListener("click", () => setRigMode(b.dataset.rm)));
+}
+
 function setStation(i) {
   st.station = i;
   st.quinticPlan = null;
@@ -1321,80 +1470,156 @@ $("btn-auto").onclick = () => {
   }
 };
 
-// Firmware Quintic Sweep button (executes exact 5th-order polynomial segments from imu_calibration.yaml)
-function startQuinticSweep() {
+// Firmware Quintic Sweep (executes exact 5th-order polynomial segments from config/trajectories/*.yaml)
+async function startQuinticSweep() {
+  await fetchTrajectoriesFromServer();
   st.tween = null;
-  let qPrev = st.q4.map(r => r * R2D);
-  const segs = QUINTIC_SWEEP_WAYPOINTS.map(wp => {
-    const qTgt = wp.targetsDeg.slice();
-    const minT = Math.max(...qTgt.map((qt, j) => quinticMinDuration(qt - qPrev[j])));
-    const moveT = Math.max(wp.dur, minT);
-    const seg = { q0: qPrev, qf: qTgt, moveT, settleT: wp.settle, label: wp.label };
-    qPrev = qTgt;
-    return seg;
-  });
-  st.quinticPlan = { t0: performance.now() / 1000, segs };
-  $("watch-status").textContent = "Running: imu_calibration.yaml (5th-order quintic)";
+  const trajKey = $("traj-select")?.value || st.selectedTraj || "imu_calibration";
+  st.selectedTraj = trajKey;
+  const trajObj = TRAJECTORY_CACHE[trajKey] || TRAJECTORY_CACHE.imu_calibration;
+  const segs = expandTrajectorySegments(trajObj);
+  st.quinticPlan = { t0: performance.now() / 1000, segs, name: `${trajKey}.yaml` };
+  if ($("watch-status")) {
+    $("watch-status").textContent = `Running: ${trajKey}.yaml (${segs.length} segments, 5th-order quintic)`;
+  }
 }
-$("btn-quintic").onclick = startQuinticSweep;
-$("btn-synth-watch").onclick = () => {
-  st.uploadedWatchCSV = null;
-  startQuinticSweep();
-};
+if ($("btn-quintic")) $("btn-quintic").onclick = startQuinticSweep;
+if ($("traj-select")) {
+  $("traj-select").addEventListener("change", () => {
+    st.selectedTraj = $("traj-select").value;
+  });
+}
+if ($("btn-clear-watch")) {
+  $("btn-clear-watch").onclick = () => {
+    st.uploadedWatchCSV = null;
+    st.uploadedWatchIdx = 0;
+    st.watchSourceName = null;
+    if ($("watch-file")) $("watch-file").value = "";
+    if ($("watch-status")) $("watch-status").textContent = "Source: Analytic Sim IMU only (no Watch CSV or live stream)";
+  };
+}
 
-// Parse uploaded Apple Watch CSV (SensorLog or Sensor Logger format, matching compare.py)
+// Parse uploaded Apple Watch CSV (SensorLog wide format or Sensor Logger long/combined format, matching compare.py:parse_watch)
 $("watch-file").addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
   const text = await file.text();
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const lines = text.split(/\r?\n/).filter(l => l.trim() && !l.trim().startsWith("#"));
   if (lines.length < 3) return;
-  const hdr = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
-  const findIdx = (...needles) => hdr.findIndex(h => needles.every(n => h.includes(n)));
-  const axI = findIdx("acc", "x") >= 0 ? findIdx("acc", "x") : findIdx("x");
-  const ayI = findIdx("acc", "y") >= 0 ? findIdx("acc", "y") : findIdx("y");
-  const azI = findIdx("acc", "z") >= 0 ? findIdx("acc", "z") : findIdx("z");
-  const gxI = findIdx("gyr", "x");
-  const gyI = findIdx("gyr", "y");
-  const gzI = findIdx("gyr", "z");
+  const rawHdr = lines[0].split(",").map(h => h.trim());
+  const normHdr = rawHdr.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const findCol = (...cands) => {
+    for (const c of cands) {
+      const k = c.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const idx = normHdr.indexOf(k);
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+
+  const sensorCol = findCol("sensor");
   const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(",").map(Number);
-    if (cols.length < 3) continue;
-    let ax = cols[axI] || 0, ay = cols[ayI] || 0, az = cols[azI] || 0;
-    // Auto-scale g -> m/s^2 if magnitude near 1.0
-    if (Math.hypot(ax, ay, az) < 3.5) { ax *= G0; ay *= G0; az *= G0; }
-    let gx = gxI >= 0 ? (cols[gxI] || 0) : 0;
-    let gy = gyI >= 0 ? (cols[gyI] || 0) : 0;
-    let gz = gzI >= 0 ? (cols[gzI] || 0) : 0;
-    if (Math.hypot(gx, gy, gz) > 12) { gx *= D2R; gy *= D2R; gz *= D2R; }
-    rows.push({ acc: [ax, ay, az], gyro: [gx, gy, gz] });
+
+  if (sensorCol >= 0) {
+    // Sensor Logger combined long format (rows interleaved by sensor == Accelerometer / Gyroscope)
+    const tCol = findCol("seconds_elapsed", "time", "timestamp");
+    const xCol = findCol("x"), yCol = findCol("y"), zCol = findCol("z");
+    const accRows = [], gyrRows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",");
+      if (cols.length <= Math.max(sensorCol, xCol, yCol, zCol)) continue;
+      const sType = (cols[sensorCol] || "").toLowerCase();
+      const t = tCol >= 0 ? parseFloat(cols[tCol]) || (i * 0.01) : (i * 0.01);
+      const x = parseFloat(cols[xCol]) || 0, y = parseFloat(cols[yCol]) || 0, z = parseFloat(cols[zCol]) || 0;
+      if (sType.includes("accel") && !sType.includes("uncalibrated")) accRows.push({ t, v: [x, y, z] });
+      else if (sType.includes("gyro") && !sType.includes("uncalibrated")) gyrRows.push({ t, v: [x, y, z] });
+    }
+    let gIdx = 0;
+    for (const a of accRows) {
+      while (gIdx + 1 < gyrRows.length && Math.abs(gyrRows[gIdx + 1].t - a.t) <= Math.abs(gyrRows[gIdx].t - a.t)) gIdx++;
+      const g = gyrRows[gIdx] ? gyrRows[gIdx].v : [0, 0, 0];
+      rows.push({ t: a.t, acc: a.v.slice(), gyro: g.slice() });
+    }
+  } else {
+    // SensorLog wide CSV or pre-aligned CSV (matching compare.py:_parse_sensorlog)
+    const tCol = findCol("accelerometertimestampsincereboot", "motiontimestampsincereboot", "timestamp", "seconds_elapsed", "time", "t");
+    let axI = findCol("accelerometeraccelerationx", "acc_x", "ax", "x");
+    let ayI = findCol("accelerometeraccelerationy", "acc_y", "ay", "y");
+    let azI = findCol("accelerometeraccelerationz", "acc_z", "az", "z");
+    const uaXI = findCol("motionuseraccelerationx", "useraccelerationx");
+    const uaYI = findCol("motionuseraccelerationy", "useraccelerationy");
+    const uaZI = findCol("motionuseraccelerationz", "useraccelerationz");
+    const grXI = findCol("motiongravityx", "gravityx");
+    const grYI = findCol("motiongravityy", "gravityy");
+    const grZI = findCol("motiongravityz", "gravityz");
+    const gxI = findCol("gyrorotationx", "motionrotationratex", "gyro_x", "gx", "wx");
+    const gyI = findCol("gyrorotationy", "motionrotationratey", "gyro_y", "gy", "wy");
+    const gzI = findCol("gyrorotationz", "motionrotationratez", "gyro_z", "gz", "wz");
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",").map(Number);
+      if (cols.length < 3) continue;
+      const t = tCol >= 0 && Number.isFinite(cols[tCol]) ? cols[tCol] : i * 0.01;
+      let ax = 0, ay = 0, az = 0;
+      if (axI >= 0 && ayI >= 0 && azI >= 0) {
+        ax = cols[axI] || 0; ay = cols[ayI] || 0; az = cols[azI] || 0;
+      } else if (uaXI >= 0 && grXI >= 0) {
+        ax = (cols[uaXI] || 0) + (cols[grXI] || 0);
+        ay = (cols[uaYI] || 0) + (cols[grYI] || 0);
+        az = (cols[uaZI] || 0) + (cols[grZI] || 0);
+      }
+      const gx = gxI >= 0 ? (cols[gxI] || 0) : 0;
+      const gy = gyI >= 0 ? (cols[gyI] || 0) : 0;
+      const gz = gzI >= 0 ? (cols[gzI] || 0) : 0;
+      if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(az)) continue;
+      rows.push({ t, acc: [ax, ay, az], gyro: [gx, gy, gz] });
+    }
   }
+
   if (rows.length) {
+    // Unit auto-detection matching compare.py:_parse_sensorlog (median |a| in [0.5, 2.0] => g -> m/s^2; max |w| > 25 => deg/s -> rad/s)
+    const mags = rows.map(r => Math.hypot(...r.acc)).sort((a, b) => a - b);
+    const medMag = mags[Math.floor(mags.length / 2)] || 0;
+    const scaleA = (medMag > 0.5 && medMag < 2.0) ? G0 : 1.0;
+    const maxG = Math.max(...rows.map(r => Math.hypot(...r.gyro)), 0);
+    const scaleG = maxG > 25.0 ? D2R : 1.0;
+    const t0 = rows[0].t;
+    rows.forEach(r => {
+      r.t = r.t - t0;
+      r.acc = r.acc.map(v => v * scaleA);
+      r.gyro = r.gyro.map(v => v * scaleG);
+    });
     st.uploadedWatchCSV = rows;
     st.uploadedWatchIdx = 0;
-    $("watch-status").textContent = `Loaded Watch CSV: ${file.name} (${rows.length} rows)`;
+    st.watchSourceName = `${file.name} (${rows.length} samples, ${scaleA === G0 ? "g->m/s²" : "m/s²"})`;
+    $("watch-status").textContent = `Loaded Watch CSV: ${st.watchSourceName}`;
   }
 });
 
-// Export sim_imu.csv + watch.csv (UTC-synchronized & compatible with `python compare.py --sim sim_imu.csv --watch watch.csv`)
-$("btn-export-imu").onclick = () => requireLicense("Full Sim + Watch IMU CSV Export", () => {
+// Export sim_imu.csv (and watch_aligned.csv only if real Watch data is present), compatible with `python compare.py --sim sim_imu.csv --watch watch.csv`
+$("btn-export-imu").onclick = () => requireLicense("Sim + Watch IMU CSV Export", () => {
   const hist = st.imuHistory.length ? st.imuHistory : [];
   if (!hist.length) return;
   const t0 = hist[0].t;
-  const simLines = ["t,utc_iso,epoch_utc_ms,ax,ay,az,gx,gy,gz,fused_pitch_deg,fused_roll_deg"];
+  const simLines = ["t,ax,ay,az,gx,gy,gz,utc_iso,epoch_utc_ms"];
   const watchLines = ["loggingTime,epoch_utc_ms,accelerometerTimestamp_sinceReboot,accelerometerAccelerationX,accelerometerAccelerationY,accelerometerAccelerationZ,gyroRotationX,gyroRotationY,gyroRotationZ"];
+  let hasWatch = false;
   hist.forEach(h => {
     const dt = (h.t - t0).toFixed(6);
     const uIso = h.utcIso || new Date().toISOString();
     const uMs = h.utcEpochMs || Date.now();
-    simLines.push(`${dt},${uIso},${uMs},${h.simAcc.map(v => v.toFixed(6)).join(",")},${h.simGyro.map(v => v.toFixed(6)).join(",")},${(h.fusedPitchDeg || 0).toFixed(2)},${(h.fusedRollDeg || 0).toFixed(2)}`);
-    const rawWAcc = applyMat3(R_SIM_TO_WATCH, h.watchAcc).map(v => (v / G0).toFixed(6));
-    const rawWGyro = applyMat3(R_SIM_TO_WATCH, h.watchGyro).map(v => (v * R2D).toFixed(6));
-    watchLines.push(`${uIso},${uMs},${dt},${rawWAcc.join(",")},${rawWGyro.join(",")}`);
+    simLines.push(`${dt},${h.simAcc.map(v => v.toFixed(6)).join(",")},${h.simGyro.map(v => v.toFixed(6)).join(",")},${uIso},${uMs}`);
+    if (h.watchAccRaw && h.watchGyroRaw) {
+      hasWatch = true;
+      const rawG = h.watchAccRaw.map(v => (v / G0).toFixed(6));
+      const rawW = h.watchGyroRaw.map(v => v.toFixed(6));
+      watchLines.push(`${uIso},${uMs},${dt},${rawG.join(",")},${rawW.join(",")}`);
+    }
   });
   downloadText("sim_imu.csv", simLines.join("\n"), "text/csv");
-  setTimeout(() => downloadText("watch.csv", watchLines.join("\n"), "text/csv"), 250);
+  if (hasWatch) {
+    setTimeout(() => downloadText("watch_captured.csv", watchLines.join("\n"), "text/csv"), 250);
+  }
 });
 
 // Sliders & Drive Modes
@@ -1580,7 +1805,7 @@ $("btn-snap-png").onclick = () => {
 $("btn-rec").onclick = () => {
   st.recording = !st.recording;
   $("btn-rec").classList.toggle("active", st.recording);
-  $("btn-rec").textContent = st.recording ? "⏹ Stop Recording" : "⏺ Record Episode (30 Hz)";
+  $("btn-rec").textContent = st.recording ? "Stop Recording" : "Record Episode (30 Hz)";
   updateRecBadge();
 };
 $("btn-clear-ep").onclick = () => {
@@ -1612,8 +1837,14 @@ function downloadText(filename, text, mime = "application/json") {
 
 function buildOpenUSD(stepObj, epList) {
   const samples = epList.length ? epList : [stepObj];
-  const q4TimeSamples = samples.map((s, i) => `        ${i}: (${s.observation.q4_rad.map(v => (v * R2D).toFixed(2)).join(", ")})`).join(",\n");
-  const q6TimeSamples = samples.map((s, i) => `        ${i}: (${s.observation.q6_rad.map(v => (v * R2D).toFixed(2)).join(", ")})`).join(",\n");
+  const q6SimSamples = samples.map((s, i) => {
+    const arr = s.observation.q6_sim_rad || s.observation.q6_rad || [0, 0, 0, 0, 0, 0];
+    return `        ${i}: (${arr.map(v => (v * R2D).toFixed(2)).join(", ")})`;
+  }).join(",\n");
+  const q6RealSamples = samples.map((s, i) => {
+    const arr = s.observation.q6_real_rad || s.observation.q6_rad || [0, 0, 0, 0, 0, 0];
+    return `        ${i}: (${arr.map(v => (v * R2D).toFixed(2)).join(", ")})`;
+  }).join(",\n");
   const imuSamples = samples.slice(-15).map((s, i) => `        ${i}: (${s.observation.forearm_imu.sim_acc_ms2.join(", ")})`).join(",\n");
   return `#usda 1.0
 (
@@ -1623,7 +1854,7 @@ function buildOpenUSD(stepObj, epList) {
     startTimeCode = 0
     timeCodesPerSecond = 30
     upAxis = "Z"
-    doc = "Exported from Physical AI Omniverse Teleop & Sim2Real Telemetry Studio"
+    doc = "Exported from Operon 6-DOF Sim-to-Real Kinematic & Inertial Calibration Workbench"
 )
 
 def Xform "World"
@@ -1634,13 +1865,23 @@ def Xform "World"
         float physics:gravityMagnitude = 9.80665
     }
 
-    def ArticulationRoot "abel_arm_4dof" (
+    def ArticulationRoot "ur5e_sim_6dof" (
         prepend apiSchemas = ["PhysicsArticulationRootAPI"]
     )
     {
-        token[] dofNames = ["base", "shoulder", "elbow", "wrist_pitch"]
-        double4d drive:jointPositions.timeSamples = {
-${q4TimeSamples}
+        token[] dofNames = ["yaw", "shoulder", "elbow", "wrist_roll", "wrist_pitch", "tool_roll"]
+        double[] drive:jointPositions.timeSamples = {
+${q6SimSamples}
+        }
+    }
+
+    def ArticulationRoot "ur5e_real_twin_6dof" (
+        prepend apiSchemas = ["PhysicsArticulationRootAPI"]
+    )
+    {
+        token[] dofNames = ["yaw", "shoulder", "elbow", "wrist_roll", "wrist_pitch", "tool_roll"]
+        double[] drive:jointPositions.timeSamples = {
+${q6RealSamples}
         }
 
         def Xform "forearm_link"
@@ -1653,16 +1894,6 @@ ${q4TimeSamples}
 ${imuSamples}
                 }
             }
-        }
-    }
-
-    def ArticulationRoot "spherical_arm_6dof" (
-        prepend apiSchemas = ["PhysicsArticulationRootAPI"]
-    )
-    {
-        token[] dofNames = ["yaw", "shoulder", "elbow", "wrist_roll", "wrist_pitch", "tool_roll"]
-        double[] drive:jointPositions.timeSamples = {
-${q6TimeSamples}
         }
     }
 }
@@ -1715,39 +1946,57 @@ async function syncUtcClock() {
 syncUtcClock();
 setInterval(syncUtcClock, 30000);
 
+function buildYamlContractPreview() {
+  const trajKey = st.selectedTraj || "imu_calibration";
+  const trajObj = TRAJECTORY_CACHE[trajKey] || TRAJECTORY_CACHE.imu_calibration;
+  const segs = expandTrajectorySegments(trajObj);
+  const totalDur = segs.reduce((a, s) => a + s.moveT + s.settleT, 0);
+  const segRows = segs.map((s, idx) =>
+    `  #${idx} [${s.q0.map(v => String(v).padStart(3)).join(",")}] -> [${s.qf.map(v => String(v).padStart(3)).join(",")}] | cmd=${s.commandedT.toFixed(2)}s min=${s.minT.toFixed(2)}s move=${s.moveT.toFixed(2)}s settle=${s.settleT.toFixed(2)}s | ${s.label}`
+  ).join("\n");
+  return `================================================================
+FIRMWARE QUINTIC TRAJECTORY CONTRACT: config/trajectories/${trajKey}.yaml
+================================================================
+joint_order : [${(trajObj.joint_order || ["base", "shoulder", "elbow", "gripper"]).join(", ")}]
+home_deg    : [${(trajObj.home || [90, 90, 90, 90]).join(", ")}]  (servo 90 deg = URDF 0.0 rad)
+segments    : ${segs.length} waypoints | total duration = ${totalDur.toFixed(2)} s
+limits      : V_MAX_DEG_S = ${V_MAX_DEG_S.toFixed(1)} deg/s | A_MAX_DEG_S2 = ${A_MAX_DEG_S2.toFixed(1)} deg/s^2
+hw_streamer : AbelArmHardwareInterface (deadband=1.0 deg, min_send=100 ms, segment_time=150 ms)
+----------------------------------------------------------------
+Expanded 5th-Order Quintic Segments (sim/trajectory.py:expand_segments):
+${segRows}
+================================================================`;
+}
+
 function drawCharts() {
   const hist = st.imuHistory;
   if (hist.length < 2) return;
+  const hasWatch = hist.some(h => h.watchAcc !== null && h.watchGyro !== null);
 
-  // Chart 1: Forearm 6-Axis IMU Fusion Overlay (Unified Accel + Gyro, Separate Accel/Gyro, or Welch PSD)
+  // Chart 1: Forearm 6-Axis IMU Overlay (Analytic Sim IMU + Real Watch IMU when connected/loaded)
   const cv1 = $("chart-imu"), ctx1 = cv1.getContext("2d");
   const W1 = cv1.width, H1 = cv1.height;
   ctx1.clearRect(0, 0, W1, H1);
 
   if (st.imuChartMode === "psd") {
-    // Simple FFT magnitude spectrum of |accel| and |gyro|
     const N = Math.min(128, hist.length);
     const slice = hist.slice(-N);
     const sSig = slice.map(h => Math.hypot(...h.simAcc));
-    const wSig = slice.map(h => Math.hypot(...h.watchAcc));
-    const gSig = slice.map(h => Math.hypot(...h.watchGyro));
     const sMean = sSig.reduce((a, b) => a + b, 0) / N;
-    const wMean = wSig.reduce((a, b) => a + b, 0) / N;
-    const gMean = gSig.reduce((a, b) => a + b, 0) / N;
     const bins = Math.floor(N / 2);
-    const sPsd = [], wPsd = [], gPsd = [];
+    const sPsd = [], wPsd = [];
+    const wSig = hasWatch ? slice.map(h => h.watchAcc ? Math.hypot(...h.watchAcc) : 0) : null;
+    const wMean = wSig ? wSig.reduce((a, b) => a + b, 0) / N : 0;
     for (let k = 1; k < bins; k++) {
-      let sr = 0, si = 0, wr = 0, wi = 0, gr = 0, gi = 0;
+      let sr = 0, si = 0, wr = 0, wi = 0;
       for (let n = 0; n < N; n++) {
         const ang = (-2 * Math.PI * k * n) / N;
         const c = Math.cos(ang), s = Math.sin(ang);
         sr += (sSig[n] - sMean) * c; si += (sSig[n] - sMean) * s;
-        wr += (wSig[n] - wMean) * c; wi += (wSig[n] - wMean) * s;
-        gr += (gSig[n] - gMean) * c; gi += (gSig[n] - gMean) * s;
+        if (wSig) { wr += (wSig[n] - wMean) * c; wi += (wSig[n] - wMean) * s; }
       }
       sPsd.push(Math.log10(Math.hypot(sr, si) / N + 1e-4));
-      wPsd.push(Math.log10(Math.hypot(wr, wi) / N + 1e-4));
-      gPsd.push(Math.log10(Math.hypot(gr, gi) / N + 1e-4));
+      if (wSig) wPsd.push(Math.log10(Math.hypot(wr, wi) / N + 1e-4));
     }
     const plotLine = (arr, col) => {
       ctx1.strokeStyle = col; ctx1.lineWidth = 1.8; ctx1.beginPath();
@@ -1758,93 +2007,75 @@ function drawCharts() {
       });
       ctx1.stroke();
     };
-    plotLine(sPsd, "#00b4d8");
-    plotLine(wPsd, "#ff5d5d");
-    plotLine(gPsd, "#fbbc04");
+    plotLine(sPsd, "#60a5fa");
+    if (wPsd.length) plotLine(wPsd, "#e879f9");
     ctx1.fillStyle = "#647187"; ctx1.font = "10px 'Roboto Mono', monospace";
-    ctx1.fillText("0 Hz", 10, H1 - 3); ctx1.fillText("30 Hz (Accel + Gyro Log-PSD)", W1 - 165, H1 - 3);
+    ctx1.fillText("0 Hz", 10, H1 - 3);
+    ctx1.fillText(hasWatch ? "30 Hz (Sim vs Watch Log-PSD)" : "30 Hz (Sim Analytic Log-PSD)", W1 - 185, H1 - 3);
   } else if (st.imuChartMode === "fused") {
-    // Unified 6-DOF Sensor Fusion View:
-    // Plots Linear Proper Acceleration |a| (m/s^2, cyan=Sim, coral=Watch) AND Angular Velocity |w| (rad/s, yellow=Sim, green=Watch) working together
     const sAcc = hist.map(h => Math.hypot(...h.simAcc));
-    const wAcc = hist.map(h => Math.hypot(...h.watchAcc));
     const sGyr = hist.map(h => Math.hypot(...h.simGyro));
-    const wGyr = hist.map(h => Math.hypot(...h.watchGyro));
+    const wAcc = hasWatch ? hist.map(h => h.watchAcc ? Math.hypot(...h.watchAcc) : null) : [];
+    const wGyr = hasWatch ? hist.map(h => h.watchGyro ? Math.hypot(...h.watchGyro) : null) : [];
 
-    const minA = 6.5, maxA = Math.max(14.0, ...sAcc, ...wAcc);
-    const minG = 0.0, maxG = Math.max(3.0, ...sGyr, ...wGyr);
+    const validWAcc = wAcc.filter(v => v !== null);
+    const validWGyr = wGyr.filter(v => v !== null);
+    const minA = 6.5, maxA = Math.max(14.0, ...sAcc, ...validWAcc);
+    const minG = 0.0, maxG = Math.max(3.0, ...sGyr, ...validWGyr);
     const mapA = (v) => H1 - 14 - ((v - minA) / Math.max(0.1, maxA - minA)) * (H1 - 26);
     const mapG = (v) => H1 - 14 - ((v - minG) / Math.max(0.1, maxG - minG)) * (H1 - 26);
 
-    // Shaded coupling band between Accel and Gyro activity
-    ctx1.fillStyle = "rgba(0, 180, 216, 0.10)";
-    ctx1.beginPath();
-    sAcc.forEach((sv, i) => {
-      const x = (i / Math.max(1, sAcc.length - 1)) * W1;
-      i ? ctx1.lineTo(x, mapA(sv)) : ctx1.moveTo(x, mapA(sv));
-    });
-    for (let i = sGyr.length - 1; i >= 0; i--) {
-      const x = (i / Math.max(1, sGyr.length - 1)) * W1;
-      ctx1.lineTo(x, mapG(sGyr[i]));
-    }
-    ctx1.closePath();
-    ctx1.fill();
-
     const strokeTrace = (arr, mapper, col, lw, dash = []) => {
       ctx1.strokeStyle = col; ctx1.lineWidth = lw; ctx1.setLineDash(dash); ctx1.beginPath();
+      let started = false;
       arr.forEach((v, i) => {
+        if (v === null || v === undefined) return;
         const x = (i / Math.max(1, arr.length - 1)) * W1;
         const y = mapper(v);
-        i ? ctx1.lineTo(x, y) : ctx1.moveTo(x, y);
+        if (!started) { ctx1.moveTo(x, y); started = true; } else ctx1.lineTo(x, y);
       });
       ctx1.stroke();
       ctx1.setLineDash([]);
     };
-    strokeTrace(sAcc, mapA, "#60a5fa", 2.0);          // Sim Accel |a| (cobalt blue)
-    strokeTrace(wAcc, mapA, "#e879f9", 1.5, [4, 2]);  // Watch Accel |a| (magenta-violet dashed)
-    strokeTrace(sGyr, mapG, "#b99aff", 1.9);          // Sim Gyro |w| (metallic purple)
-    strokeTrace(wGyr, mapG, "#38bdf8", 1.4, [3, 2]);  // Watch Gyro |w| (cyan dashed)
+    strokeTrace(sAcc, mapA, "#60a5fa", 2.0);
+    strokeTrace(sGyr, mapG, "#b99aff", 1.9);
+    if (hasWatch) {
+      strokeTrace(wAcc, mapA, "#e879f9", 1.5, [4, 2]);
+      strokeTrace(wGyr, mapG, "#38bdf8", 1.4, [3, 2]);
+    }
 
     ctx1.fillStyle = "#93c5fd"; ctx1.font = "10px 'Roboto Mono', monospace";
-    ctx1.fillText("L: |a| m/s² (gravity+impulse)", 8, 11);
-    ctx1.fillStyle = "#d8b4fe";
-    ctx1.fillText("R: |ω| rad/s (joint rotation)", W1 - 176, 11);
+    ctx1.fillText("Sim |a| m/s² & |ω| rad/s", 8, 11);
+    ctx1.fillStyle = hasWatch ? "#f0abfc" : "#64748b";
+    ctx1.fillText(hasWatch ? "Watch: Active (Wahba SVD)" : "Watch: None (Load CSV / Pair)", W1 - 184, 11);
   } else {
     const isAcc = st.imuChartMode === "acc";
     const sVals = hist.map(h => isAcc ? Math.hypot(...h.simAcc) : Math.hypot(...h.simGyro));
-    const wVals = hist.map(h => isAcc ? Math.hypot(...h.watchAcc) : Math.hypot(...h.watchGyro));
+    const wVals = hasWatch ? hist.map(h => {
+      const vec = isAcc ? h.watchAcc : h.watchGyro;
+      return vec ? Math.hypot(...vec) : null;
+    }) : [];
+    const validW = wVals.filter(v => v !== null);
     const minV = isAcc ? 6.5 : 0.0;
-    const maxV = isAcc ? Math.max(13.5, ...sVals, ...wVals) : Math.max(2.5, ...sVals, ...wVals);
+    const maxV = isAcc ? Math.max(13.5, ...sVals, ...validW) : Math.max(2.5, ...sVals, ...validW);
     const mapY = (v) => H1 - 10 - ((v - minV) / Math.max(0.1, maxV - minV)) * (H1 - 20);
-
-    // Shaded residual band between Sim and Watch
-    ctx1.fillStyle = "rgba(157, 114, 255, 0.22)";
-    ctx1.beginPath();
-    sVals.forEach((sv, i) => {
-      const x = (i / Math.max(1, sVals.length - 1)) * W1;
-      i ? ctx1.lineTo(x, mapY(sv)) : ctx1.moveTo(x, mapY(sv));
-    });
-    for (let i = wVals.length - 1; i >= 0; i--) {
-      const x = (i / Math.max(1, wVals.length - 1)) * W1;
-      ctx1.lineTo(x, mapY(wVals[i]));
-    }
-    ctx1.closePath();
-    ctx1.fill();
 
     const strokeArr = (arr, col, lw) => {
       ctx1.strokeStyle = col; ctx1.lineWidth = lw; ctx1.beginPath();
+      let started = false;
       arr.forEach((v, i) => {
+        if (v === null || v === undefined) return;
         const x = (i / Math.max(1, arr.length - 1)) * W1;
         const y = mapY(v);
-        i ? ctx1.lineTo(x, y) : ctx1.moveTo(x, y);
+        if (!started) { ctx1.moveTo(x, y); started = true; } else ctx1.lineTo(x, y);
       });
       ctx1.stroke();
     };
     strokeArr(sVals, "#60a5fa", 2.0);
-    strokeArr(wVals, "#e879f9", 1.5);
+    if (hasWatch) strokeArr(wVals, "#e879f9", 1.5);
   }
 
-  // Chart 2: 4-DOF vs 6-DOF Orientation Divergence + Quintic Peak Joint Velocity
+  // Chart 2: Sim vs Hardware Streamer Tracking Residual + Peak Joint Velocity
   const cv2 = $("chart-err"), ctx2 = cv2.getContext("2d");
   const W2 = cv2.width, H2 = cv2.height;
   ctx2.clearRect(0, 0, W2, H2);
@@ -1858,18 +2089,58 @@ function drawCharts() {
     });
     ctx2.stroke();
   };
-  plotMetric(h => h.oriErr4, 90, "#b99aff"); // 4-DOF orientation error (metallic purple)
-  plotMetric(h => h.oriErr6, 90, "#60a5fa"); // 6-DOF orientation error (cobalt blue)
-  plotMetric(h => h.dqPeak * R2D, 140, "#cbd5e1"); // joint velocity deg/s (silver grey)
+  plotMetric(h => h.oriErr4, 90, "#b99aff");
+  plotMetric(h => h.oriErr6, 90, "#60a5fa");
+  plotMetric(h => h.dqPeak * R2D, 140, "#cbd5e1");
 }
 
 function computeImuComparisonMetrics() {
   const hist = st.imuHistory;
-  if (hist.length < 5) return;
-  const sA = hist.map(h => Math.hypot(...h.simAcc));
-  const wA = hist.map(h => Math.hypot(...h.watchAcc));
-  const sG = hist.map(h => Math.hypot(...h.simGyro));
-  const wG = hist.map(h => Math.hypot(...h.watchGyro));
+  if (hist.length < 3) return;
+  const paired = hist.filter(h => h.watchAccRaw && h.watchGyroRaw);
+
+  if (paired.length < 5) {
+    // No real Watch data connected or uploaded: report honest N/A for Watch comparison KPIs
+    ["m-acc-rmse", "m-acc-mae", "m-acc-r", "m-gyr-rmse", "m-gyr-mae", "m-gyr-r"].forEach(id => {
+      if ($(id)) $(id).textContent = "N/A";
+    });
+    const lastH = hist[hist.length - 1];
+    const simAmag = Math.hypot(...lastH.simAcc).toFixed(4);
+    const simGmag = Math.hypot(...lastH.simGyro).toFixed(4);
+    latestSim2RealReport =
+`================================================================
+ANALYTIC FOREARM IMU TELEMETRY (sim/isaac_replay.py engine)
+================================================================
+ sim   : n=${hist.length}  dt~16.7 ms  forearm_fk(q) + R^T(a_world + g)
+ watch : NONE (load a SensorLog / Sensor Logger CSV or pair Watch)
+----------------------------------------------------------------
+ Latest Sim Proper Accel : [${lastH.simAcc.map(v => (v >= 0 ? "+" : "") + v.toFixed(3)).join(", ")}] m/s^2 (|a|=${simAmag})
+ Latest Sim Body Gyro    : [${lastH.simGyro.map(v => (v >= 0 ? "+" : "") + v.toFixed(3)).join(", ")}] rad/s (|w|=${simGmag})
+ Hardware Twin Streamer  : AbelArmHardwareInterface (1.0 deg deadband, 150 ms quintic)
+================================================================`;
+    return;
+  }
+
+  // Solve real 3x3 Wahba / Kabsch SVD rotation matrix R_watch_to_sim (compare.py:kabsch)
+  const P = paired.map(h => h.watchAccRaw);
+  const Q = paired.map(h => h.simAcc);
+  const R = kabschSVD(P, Q);
+  st.estimatedR = R;
+
+  // Geodesic angle of solved R: arccos((tr(R) - 1) / 2)
+  const tr = R[0] + R[4] + R[8];
+  const geoDeg = Math.acos(Math.max(-1, Math.min(1, (tr - 1) / 2))) * R2D;
+
+  // Rotate Watch vectors into Sim frame using solved R
+  for (const h of paired) {
+    h.watchAcc = applyMat3(R, h.watchAccRaw);
+    h.watchGyro = applyMat3(R, h.watchGyroRaw);
+  }
+
+  const sA = paired.map(h => Math.hypot(...h.simAcc));
+  const wA = paired.map(h => Math.hypot(...h.watchAcc));
+  const sG = paired.map(h => Math.hypot(...h.simGyro));
+  const wG = paired.map(h => Math.hypot(...h.watchGyro));
 
   const calc = (a, b) => {
     const n = a.length;
@@ -1878,7 +2149,7 @@ function computeImuComparisonMetrics() {
     ma /= n; mb /= n;
     let num = 0, da = 0, db = 0;
     for (let i = 0; i < n; i++) { num += (a[i] - ma) * (b[i] - mb); da += (a[i] - ma) ** 2; db += (b[i] - mb) ** 2; }
-    const r = (da > 1e-9 && db > 1e-9) ? num / Math.sqrt(da * db) : 0.998;
+    const r = (da > 1e-9 && db > 1e-9) ? num / Math.sqrt(da * db) : 0.0;
     return { rmse: Math.sqrt(se / n), mae: ae / n, r: Math.max(-1, Math.min(1, r)) };
   };
   const mA = calc(sA, wA), mG = calc(sG, wG);
@@ -1893,14 +2164,13 @@ function computeImuComparisonMetrics() {
 `================================================================
 SIM vs WATCH  IMU comparison (abel_sim2real compare.py engine)
 ================================================================
- sim   : n=${hist.length}  dt~16.7 ms  analytic/Isaac forearm_imu
- watch : n=${hist.length}  [SensorLog / CoreMotion Wahba aligned]
+ sim   : n=${paired.length}  analytic forearm_fk(q)
+ watch : n=${paired.length}  source=${st.watchSourceName || "Live DeviceMotion"}
 ----------------------------------------------------------------
- TIME LAG (watch - sim) : +0.0 ms (tap-synced)
- FRAME R (watch -> sim), Wahba SVD solved (geodesic 37.0°):
-   [${R_WATCH_TO_SIM.slice(0, 3).map(v => (v >= 0 ? "+" : "") + v.toFixed(3)).join(" ")}]
-   [${R_WATCH_TO_SIM.slice(3, 6).map(v => (v >= 0 ? "+" : "") + v.toFixed(3)).join(" ")}]
-   [${R_WATCH_TO_SIM.slice(6, 9).map(v => (v >= 0 ? "+" : "") + v.toFixed(3)).join(" ")}]
+ FRAME R (watch -> sim), Kabsch SVD solved (geodesic ${geoDeg.toFixed(1)} deg):
+   [${R.slice(0, 3).map(v => (v >= 0 ? "+" : "") + v.toFixed(3)).join(" ")}]
+   [${R.slice(3, 6).map(v => (v >= 0 ? "+" : "") + v.toFixed(3)).join(" ")}]
+   [${R.slice(6, 9).map(v => (v >= 0 ? "+" : "") + v.toFixed(3)).join(" ")}]
 ----------------------------------------------------------------
 channel   unit         RMSE        MAE   Pearson
 ----------------------------------------------------------------
@@ -1918,7 +2188,7 @@ function tick(now) {
   const c = now > st.holdCrowd ? crowdPose() : null;
 
   if (st.quinticPlan) {
-    // Evaluate firmware-matching 5th-order quintic trajectory segments
+    // Evaluate firmware-matching 5th-order quintic trajectory segments (servo deg -> URDF rad via (deg - 90) * pi / 180)
     const elapsed = now / 1000 - st.quinticPlan.t0;
     let accT = 0, activeSeg = null, localT = 0;
     for (const seg of st.quinticPlan.segs) {
@@ -1927,16 +2197,23 @@ function tick(now) {
       accT += span;
     }
     if (activeSeg) {
-      const qNext = activeSeg.q0.map((q0, j) => evalQuintic(q0, activeSeg.qf[j], activeSeg.moveT, localT).pos * D2R);
-      st.q4 = qNext;
+      const servoDegs = activeSeg.q0.map((q0, j) => evalQuintic(q0, activeSeg.qf[j], activeSeg.moveT, localT).pos);
+      // Map [base, shoulder, elbow, gripper] servo degrees to URDF radians
+      st.q4 = servoDegs.map(deg => servoDegToUrdfRad(deg));
+      // Also set gripper open/close state from servo index 3 (120 = open, 60 = closed)
+      if (servoDegs.length >= 4) {
+        st.closed = servoDegs[3] < 80;
+      }
       const fk = fk4(st.q4);
       st.cmd.x = fk.tip[0]; st.cmd.y = fk.tip[1]; st.cmd.z = fk.tip[2];
-      st.q6 = smooth(st.q6, ik6(fk.tip, fk.R).q, 0.35);
+      st.q6 = smooth(st.q6, ik6(fk.tip, fk.R, st.q6).q, 0.45);
       showCmd(st.cmd);
-      $("cmd-src").textContent = `Quintic: ${activeSeg.label}`;
+      $("cmd-src").textContent = `${st.quinticPlan.name}: ${activeSeg.label}`;
     } else {
       st.quinticPlan = null;
-      $("watch-status").textContent = "Mode: Live Sim + Synthetic Watch Twin";
+      if ($("watch-status") && !st.uploadedWatchCSV) {
+        $("watch-status").textContent = "Completed YAML sweep (Analytic Sim IMU active)";
+      }
     }
   } else if (st.drive !== "joints") {
     if (st.tween) {
@@ -1950,10 +2227,7 @@ function tick(now) {
       $("cmd-src").textContent = "Command: Auto Trajectory";
     } else if (c) {
       const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-      // 1:1 Direct Cartesian velocity + Optional Wrist Tilt-to-Position mapping:
-      // No hidden X/Z spring-back forces! When you push Forward (+vx), arm moves Forward (+X); Left/Right (vy) moves Left/Right (Y); Up/Down (vz) moves Up/Down (Z).
       let vxCmd = c.vx, vyCmd = c.vy, vzCmd = c.vz;
-      // If user is tilting their wrist/phone in "tilt" mode without touching the 2D pad, let gentle wrist pitch/roll also steer XY reach intuitively
       if (c.aim === "tilt" && Math.hypot(c.vx, c.vy) < 0.04) {
         vxCmd = cl(c.pitch / 42, -0.85, 0.85);
         vyCmd = cl(-c.roll / 42, -0.85, 0.85);
@@ -1975,7 +2249,6 @@ function tick(now) {
     }
     showCmd(st.cmd);
     const R = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
-    // Continuous shortest-path joint unwrapping so 6-DOF spherical wrist never flips 180° or winds up to -782°
     const raw4 = ik4(p, R).q;
     const raw6 = ik6(p, R, st.q6).q;
     st.q4 = smooth(st.q4, raw4, 0.82);
@@ -1995,13 +2268,45 @@ function tick(now) {
 
   st.dq4 = st.q4.map((q, i) => (q - prevQ4[i]) / dt);
   st.dq6 = st.q6.map((q, i) => (q - prevQ6[i]) / dt);
-  const dqPeak = Math.max(...st.dq4.map(Math.abs), ...st.dq6.map(Math.abs));
 
-  const f4 = fk4(st.q4), f6 = fk6(st.q6);
-  const v4 = evaluateArm(4, f4, dt), v6 = evaluateArm(6, f6, dt);
+  // Exact ROS2 AbelArmHardwareInterface Open-Loop Segment Streamer (abel_arm_hardware.cpp):
+  // - Converts desired URDF joint radians to integer servo degrees: round(clamp(90 + rad * 180/pi, 0, 180))
+  // - Applies command_deadband_deg = 1.0 deg and min_send_interval_ms = 100 ms rate limiter
+  // - Executes on-device 5th-order quintic segment interpolation over segment_time_ms = 150 ms
+  const prevQ6Real = st.q6Real.slice();
+  const hw = st.hwStreamer;
+  const desiredServoDeg = st.q6.map(r => urdfRadToServoDeg(r));
+  const maxStepDeg = Math.max(...desiredServoDeg.map((d, j) => Math.abs(d - hw.lastSentServoDeg[j])));
+  if (maxStepDeg >= 1.0 && (now - hw.lastSentMs) >= 100.0) {
+    // Latch current interpolated servo position as q0 of new 150 ms firmware quintic segment
+    const curElapsedS = Math.max(0, (now - hw.segStartMs) / 1000);
+    hw.segQ0Deg = hw.segQ0Deg.map((q0, j) => evalQuintic(q0, hw.segQfDeg[j], hw.segDurS, curElapsedS).pos);
+    hw.segQfDeg = desiredServoDeg.slice();
+    hw.segStartMs = now;
+    hw.segDurS = 0.150;
+    hw.lastSentMs = now;
+    hw.lastSentServoDeg = desiredServoDeg.slice();
+  }
+  const segElapsedS = Math.max(0, (now - hw.segStartMs) / 1000);
+  st.q6Real = hw.segQ0Deg.map((q0, j) => {
+    const posDeg = evalQuintic(q0, hw.segQfDeg[j], hw.segDurS, segElapsedS).pos;
+    return servoDegToUrdfRad(posDeg);
+  });
+  st.dq6Real = st.q6Real.map((q, i) => (q - prevQ6Real[i]) / dt);
 
-  // Forearm IMU analytic prediction (matches abel_sim2real/sim/isaac_replay.py:analytic_imu)
-  const site = forearmSiteFK(st.q4);
+  const dqPeak = Math.max(...st.dq6.map(Math.abs), ...st.dq6Real.map(Math.abs));
+
+  const f4 = fk4(st.q4), f6Sim = fk6(st.q6), f6Real = fk6(st.q6Real);
+  const is4v6 = st.rigMode === "4d_vs_6d";
+  const fLeft = is4v6 ? f4 : f6Sim;
+  const fRight = is4v6 ? f6Sim : f6Real;
+  const vLeft = evaluateArm(4, fLeft, dt);
+  const vRight = evaluateArm(6, fRight, dt);
+
+  // Forearm IMU analytic prediction on active forearm link (sim/isaac_replay.py:forearm_fk)
+  const siteLeft = forearmSiteFK(is4v6 ? st.q4 : st.q6.slice(0, 4));
+  const siteRight = forearmSiteFK(st.q6Real.slice(0, 4));
+  const site = st.quinticPlan ? forearmSiteFK(st.q4) : siteRight;
   if (!prevSiteP) { prevSiteP = site.p.slice(); prevSiteR = site.R.slice(); }
   const siteVel = site.p.map((x, i) => (x - prevSiteP[i]) / dt);
   const siteAccWorld = siteVel.map((v, i) => (v - prevSiteV[i]) / dt);
@@ -2018,69 +2323,76 @@ function tick(now) {
   ];
   prevSiteP = site.p.slice(); prevSiteV = siteVel; prevSiteR = site.R.slice();
 
-  // Compare against: (a) Live Phone/Watch IMU if streaming, (b) Uploaded Watch CSV, or (c) Synthetic Watch Twin with noise
-  let watchAcc, watchGyro;
+  // Real Watch IMU source only: (a) Live Phone/Watch DeviceMotion/SensorLogger stream, or (b) Uploaded Watch CSV.
+  // Never fabricate synthetic random watch noise when no Watch source is active.
+  let watchAccRaw = null, watchGyroRaw = null;
+  let watchAcc = null, watchGyro = null;
   if (c && c.liveImu) {
-    watchAcc = [c.liveImu.ax, c.liveImu.ay, c.liveImu.az];
-    watchGyro = [c.liveImu.gx, c.liveImu.gy, c.liveImu.gz];
-    $("watch-status").textContent = `Live DeviceMotion IMU${c.liveImu.tap ? " · ⚡ TAP SYNCED" : ""}`;
+    watchAccRaw = [c.liveImu.ax, c.liveImu.ay, c.liveImu.az];
+    watchGyroRaw = [c.liveImu.gx, c.liveImu.gy, c.liveImu.gz];
+    watchAcc = applyMat3(st.estimatedR, watchAccRaw);
+    watchGyro = applyMat3(st.estimatedR, watchGyroRaw);
+    st.watchSourceName = "Live DeviceMotion / SensorLogger";
+    $("watch-status").textContent = `Live DeviceMotion IMU${c.liveImu.tap ? " · TAP FIDUCIAL SYNCED" : ""}`;
   } else if (st.uploadedWatchCSV && st.uploadedWatchCSV.length) {
     const row = st.uploadedWatchCSV[st.uploadedWatchIdx % st.uploadedWatchCSV.length];
     st.uploadedWatchIdx++;
-    watchAcc = row.acc;
-    watchGyro = row.gyro;
-  } else {
-    // Synthetic Watch Twin (sim_imu + realistic watch sensor noise + gripper stall recoil & 24 Hz PWM servo-hunting vibration)
-    const inRecoil = now < st.recoilUntil;
-    const recoilSpike = inRecoil ? Math.sin((st.recoilUntil - now) * 0.08) * 2.8 : 0;
-    const servoHunt = st.closed ? Math.sin((now / 1000) * 2 * Math.PI * 24) * 0.42 : 0;
-    const nA = () => (Math.random() - 0.5) * 0.065;
-    const nG = () => (Math.random() - 0.5) * 0.022;
-    watchAcc = [simAcc[0] + nA() + servoHunt, simAcc[1] + nA(), simAcc[2] + nA() + recoilSpike];
-    watchGyro = [simGyro[0] + nG() + (inRecoil ? 0.45 : 0), simGyro[1] + nG(), simGyro[2] + nG()];
-    if (inRecoil) {
-      $("watch-status").textContent = st.closed ? "Forearm IMU: Grip Contact Recoil + 24Hz Servo Stall" : "Forearm IMU: Release Step Transient";
-    }
+    watchAccRaw = row.acc;
+    watchGyroRaw = row.gyro;
+    watchAcc = applyMat3(st.estimatedR, watchAccRaw);
+    watchGyro = applyMat3(st.estimatedR, watchGyroRaw);
   }
 
-  // 6-Axis Complementary Filter Attitude Fusion (Gyro integrates fast rate, Accel anchors gravity vector)
-  const accPitch = Math.atan2(-watchAcc[0], Math.hypot(watchAcc[1], watchAcc[2])) * R2D;
-  const accRoll = Math.atan2(watchAcc[1], watchAcc[2]) * R2D;
+  // 6-Axis Complementary Filter Attitude Fusion (uses Watch IMU when present, else Analytic Sim IMU)
+  const attAcc = watchAcc || simAcc;
+  const attGyr = watchGyro || simGyro;
+  const accPitch = Math.atan2(-attAcc[0], Math.hypot(attAcc[1], attAcc[2])) * R2D;
+  const accRoll = Math.atan2(attAcc[1], attAcc[2]) * R2D;
   const alpha = 0.96;
-  st.fusedPitchDeg = alpha * (st.fusedPitchDeg + watchGyro[1] * R2D * dt) + (1 - alpha) * accPitch;
-  st.fusedRollDeg = alpha * (st.fusedRollDeg + watchGyro[0] * R2D * dt) + (1 - alpha) * accRoll;
+  st.fusedPitchDeg = alpha * (st.fusedPitchDeg + attGyr[1] * R2D * dt) + (1 - alpha) * accPitch;
+  st.fusedRollDeg = alpha * (st.fusedRollDeg + attGyr[0] * R2D * dt) + (1 - alpha) * accRoll;
 
   const utcNowMs = Date.now() + st.utcOffsetMs;
   const utcIso = new Date(utcNowMs).toISOString();
+
+  // Sim-to-Real 6-DOF tip tracking error (or 4D vs 6D divergence when in 4d_vs_6d mode)
+  const sim2realPosMm = +(Math.hypot(
+    fLeft.tip[0] - fRight.tip[0],
+    fLeft.tip[1] - fRight.tip[1],
+    fLeft.tip[2] - fRight.tip[2]
+  ) * 1000).toFixed(1);
+  const sim2realOriDeg = +oriError(fLeft.R, fRight.R).toFixed(1);
 
   st.imuHistory.push({
     t: now / 1000,
     utcIso,
     utcEpochMs: Math.round(utcNowMs),
-    simAcc, simGyro, watchAcc, watchGyro,
+    simAcc, simGyro,
+    watchAccRaw, watchGyroRaw,
+    watchAcc, watchGyro,
     fusedPitchDeg: +st.fusedPitchDeg.toFixed(2),
     fusedRollDeg: +st.fusedRollDeg.toFixed(2),
-    posErr4: v4.posMm, posErr6: v6.posMm,
-    oriErr4: v4.oriDeg, oriErr6: v6.oriDeg,
+    posErr4: vLeft.posMm, posErr6: vRight.posMm,
+    oriErr4: vLeft.oriDeg, oriErr6: is4v6 ? vRight.oriDeg : sim2realOriDeg,
     dqPeak
   });
   if (st.imuHistory.length > 180) st.imuHistory.shift();
 
   // Update 3D Rigs
   st.openVis += ((st.closed ? 0 : 1) - st.openVis) * Math.min(1, dt * 8);
-  const makeProps = (dof, v) => {
-    const a = st.arm[dof], tgt = armTarget(dof);
+  const makeProps = (slot, v, watchSiteObj) => {
+    const a = st.arm[slot], tgt = armTarget(slot);
     return {
       station: st.station, open: st.openVis, aligned: v.aligned,
       target: { p: tgt.p, R: tgt.R, open: a.held ? 0 : 1 },
-      watchSite: dof === 4 ? site : null,
+      watchSite: watchSiteObj,
       battery: { held: a.held, inserted: a.inserted, rest: { p: a.battP, R: a.battR } },
       charger: { p: ST[1].p, R: ST[1].R, lit: a.done[1] },
       valve: { p: ST[2].p, angle: a.valve * D2R }
     };
   };
-  updateRig(4, f4, makeProps(4, v4));
-  updateRig(6, f6, makeProps(6, v6));
+  updateRig(4, fLeft, makeProps(4, vLeft, is4v6 ? siteLeft : null));
+  updateRig(6, fRight, makeProps(6, vRight, siteRight));
 
   syncViewportSize();
   controls.update();
@@ -2088,28 +2400,31 @@ function tick(now) {
   latestBBoxes = computeBBoxes();
 
   // Build LeRobot / RLDS step record with UTC synchronization + 6-Axis Sensor Fusion
-  const w4 = manipulability(st.q4, 4), w6 = manipulability(st.q6, 6);
+  const wLeft = is4v6 ? manipulability(st.q4, 4) : manipulability(st.q6, 6);
+  const wRight = manipulability(is4v6 ? st.q6 : st.q6Real, 6);
   latestStepRecord = {
     step_index: stepIdx++,
     timestamp_s: +(now / 1000).toFixed(4),
     utc_iso: utcIso,
     utc_epoch_ms: Math.round(utcNowMs),
     utc_sync_offset_ms: st.utcOffsetMs,
+    rig_mode: st.rigMode,
     station_id: ST[st.station].id,
     observation: {
       q4_rad: st.q4.map(v => +v.toFixed(4)),
-      dq4_rads: st.dq4.map(v => +v.toFixed(4)),
-      q6_rad: st.q6.map(v => +v.toFixed(4)),
-      dq6_rads: st.dq6.map(v => +v.toFixed(4)),
-      tip4_xyz_m: f4.tip.map(v => +v.toFixed(4)),
-      tip6_xyz_m: f6.tip.map(v => +v.toFixed(4)),
+      q6_sim_rad: st.q6.map(v => +v.toFixed(4)),
+      q6_real_rad: st.q6Real.map(v => +v.toFixed(4)),
+      dq6_sim_rads: st.dq6.map(v => +v.toFixed(4)),
+      dq6_real_rads: st.dq6Real.map(v => +v.toFixed(4)),
+      tip_left_xyz_m: fLeft.tip.map(v => +v.toFixed(4)),
+      tip_right_xyz_m: fRight.tip.map(v => +v.toFixed(4)),
       gripper_closed: st.closed ? 1 : 0,
-      manipulability: { w4, w6 },
+      manipulability: { w_left: wLeft, w_right: wRight },
       forearm_imu: {
         sim_acc_ms2: simAcc.map(v => +v.toFixed(3)),
         sim_gyro_rads: simGyro.map(v => +v.toFixed(3)),
-        watch_acc_ms2: watchAcc.map(v => +v.toFixed(3)),
-        watch_gyro_rads: watchGyro.map(v => +v.toFixed(3)),
+        watch_acc_ms2: watchAcc ? watchAcc.map(v => +v.toFixed(3)) : null,
+        watch_gyro_rads: watchGyro ? watchGyro.map(v => +v.toFixed(3)) : null,
         fused_attitude_deg: { pitch: +st.fusedPitchDeg.toFixed(2), roll: +st.fusedRollDeg.toFixed(2) }
       }
     },
@@ -2119,10 +2434,10 @@ function tick(now) {
       gripper_cmd: st.closed ? 1 : 0
     },
     sim2real_gap: {
-      dof4_pos_err_mm: v4.posMm,
-      dof4_ori_err_deg: v4.oriDeg,
-      dof6_pos_err_mm: v6.posMm,
-      dof6_ori_err_deg: v6.oriDeg
+      tip_tracking_residual_mm: sim2realPosMm,
+      tip_orientation_residual_deg: sim2realOriDeg,
+      left_target_pos_err_mm: vLeft.posMm,
+      right_target_pos_err_mm: vRight.posMm
     }
   };
 
@@ -2132,19 +2447,16 @@ function tick(now) {
     updateRecBadge();
   }
 
-  // Action-Confidence Policy Gate evaluation (System 1 Local Reflex vs System 2 Foundation Fallback)
-  const oriDivergence = Math.abs(v4.oriDeg - v6.oriDeg);
-  const prob = Math.max(0.18, Math.min(0.98, 0.96 - (oriDivergence / 110) - (dqPeak > 2.2 ? 0.25 : 0)));
-  st.nemoProb = prob;
-  if (prob < 0.78) {
-    if (st.nemoTier.startsWith("On-Robot")) st.nemoTeacherCalls++;
-    st.nemoTier = "Foundation VLM Fallback";
+  // Kinematic Singularity & Envelope Monitor (Yoshikawa manipulability w = sqrt(det(J*J^T)) + tracking residual)
+  const wRatio = Math.min(0.99, Math.max(0.15, wRight / 0.145));
+  if (wRight < 0.035 || dqPeak > 2.2) {
     $("nemo-tier").className = "pill warn";
-    $("nemo-rationale").textContent = `Out-of-plane 4-DOF kinematic lock (${oriDivergence}° divergence, p=${prob.toFixed(2)} < τ=0.78) -> escalated to foundation policy.`;
+    $("nemo-tier").textContent = "Near Wrist Singularity";
+    $("nemo-rationale").textContent = `Wrist pitch q5=${Math.round(st.q6[4] * R2D)}° approaching collinear lock (w=${wRight.toFixed(3)}, peak |dq|=${Math.round(dqPeak * R2D)}°/s). Damped least-squares active.`;
   } else {
-    st.nemoTier = "On-Robot ReflexPolicy";
     $("nemo-tier").className = "pill ok";
-    $("nemo-rationale").textContent = `Trajectory within calibrated kinematic envelope (p=${prob.toFixed(2)} ≥ τ=0.78) -> executed locally on-robot.`;
+    $("nemo-tier").textContent = "Full Rank · Well-Conditioned";
+    $("nemo-rationale").textContent = `6-DOF spherical wrist Jacobian well-conditioned (w=${wRight.toFixed(3)}, Sim-to-Real Δp=${sim2realPosMm} mm, ΔR=${sim2realOriDeg}°).`;
   }
 
   if (now - lastUi > 180) {
@@ -2160,17 +2472,20 @@ function tick(now) {
     if ($("fusion-att")) {
       $("fusion-att").textContent = `6-Axis Fusion Attitude: Pitch ${st.fusedPitchDeg.toFixed(1)}° · Roll ${st.fusedRollDeg.toFixed(1)}°`;
     }
-    $("j4-str").textContent = st.q4.map(a => `${Math.round(a * R2D)}°`).join(", ");
-    $("j6-str").textContent = st.q6.map(a => `${Math.round(a * R2D)}°`).join(", ");
-    $("verdict-4").innerHTML = `<span class="pill ${v4.cls}">${v4.msg}</span>`;
-    $("verdict-6").innerHTML = `<span class="pill ${v6.cls}">${v6.msg}</span>`;
-    $("m-dof-pos").textContent = `${v4.posMm} / ${v6.posMm} mm`;
-    $("m-dof-ori").textContent = `${v4.oriDeg}° / ${v6.oriDeg}°`;
-    $("m-dof-w").textContent = `w=${w4.toFixed(2)}/${w6.toFixed(2)}`;
-    $("div-readout").textContent = `Δori: ${oriDivergence.toFixed(0)}° · peak |dq|: ${Math.round(dqPeak * R2D)}°/s`;
-    $("nemo-prob").textContent = prob.toFixed(2);
-    $("nemo-tier").textContent = st.nemoTier;
-    $("nemo-cost").textContent = `$${(st.nemoTeacherCalls * 0.0017).toFixed(4)}`;
+    const qLeftArr = is4v6 ? st.q4 : st.q6;
+    const qRightArr = is4v6 ? st.q6 : st.q6Real;
+    $("j4-str").textContent = qLeftArr.map(a => `${Math.round(a * R2D)}°`).join(", ");
+    $("j6-str").textContent = qRightArr.map(a => `${Math.round(a * R2D)}°`).join(", ");
+    $("verdict-4").innerHTML = `<span class="pill ${vLeft.cls}">${vLeft.msg}</span>`;
+    $("verdict-6").innerHTML = `<span class="pill ${vRight.cls}">${vRight.msg}</span>`;
+    $("m-dof-pos").textContent = is4v6 ? `${vLeft.posMm} / ${vRight.posMm} mm` : `${vLeft.posMm} / ${vRight.posMm} mm (Δ${sim2realPosMm})`;
+    $("m-dof-ori").textContent = is4v6 ? `${vLeft.oriDeg}° / ${vRight.oriDeg}°` : `${vLeft.oriDeg}° / ${vRight.oriDeg}° (Δ${sim2realOriDeg}°)`;
+    $("m-dof-w").textContent = `w=${wLeft.toFixed(2)}/${wRight.toFixed(2)}`;
+    $("div-readout").textContent = is4v6
+      ? `Δori: ${Math.abs(vLeft.oriDeg - vRight.oriDeg).toFixed(0)}° · peak |dq|: ${Math.round(dqPeak * R2D)}°/s`
+      : `Sim-Real Δp: ${sim2realPosMm}mm · ΔR: ${sim2realOriDeg}° · |dq|: ${Math.round(dqPeak * R2D)}°/s`;
+    $("nemo-prob").textContent = wRatio.toFixed(2);
+    $("nemo-cost").textContent = `w=${wRight.toFixed(3)}`;
 
     computeImuComparisonMetrics();
     drawCharts();
@@ -2181,18 +2496,22 @@ function tick(now) {
       $("schema-preview").textContent = buildOpenUSD(latestStepRecord, st.episode.slice(-4));
     } else if (st.schemaTab === "coco") {
       $("schema-preview").textContent = JSON.stringify({ aov: st.aov, bboxes_3d_2d: latestBBoxes }, null, 2);
+    } else if (st.schemaTab === "yaml") {
+      $("schema-preview").textContent = buildYamlContractPreview();
     } else {
       $("schema-preview").textContent = latestSim2RealReport;
     }
 
     // Send live hints & scores back to connected phones
     const s0 = ST[st.station];
-    send({ t: "hint", h4: v4, h6: v6, station: s0.icon });
-    send({ t: "score", e4: { pos: v4.posMm, ori: v4.oriDeg }, e6: { pos: v6.posMm, ori: v6.oriDeg } });
+    send({ t: "hint", h4: vLeft, h6: vRight, station: s0.icon });
+    send({ t: "score", e4: { pos: vLeft.posMm, ori: vLeft.oriDeg }, e6: { pos: vRight.posMm, ori: vRight.oriDeg } });
   }
 
   requestAnimationFrame(tick);
 }
 
+fetchTrajectoriesFromServer();
+setRigMode("6d_sim2real");
 setStation(0);
 requestAnimationFrame(tick);

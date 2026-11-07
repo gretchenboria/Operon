@@ -8,39 +8,46 @@ import http from "node:http";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, "public");
+const TRAJ_DIR = path.join(__dirname, "config", "trajectories");
 const PORT = parseInt(process.env.PORT || "8787", 10);
-const PRESENTER_TOKEN = (process.env.PRESENTER_TOKEN || "").trim();
-const GCP_PROJECT = process.env.GCP_PROJECT || "gen-lang-client-0221638641";
 
-let cachedToken = { token: "", exp: 0 };
-async function getVertexToken() {
-  if (cachedToken.token && Date.now() < cachedToken.exp) return cachedToken.token;
-  try {
-    const r = await fetch("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", {
-      headers: { "Metadata-Flavor": "Google" },
-      signal: AbortSignal.timeout(1500)
-    });
-    if (r.ok) {
-      const d = await r.json();
-      cachedToken = { token: d.access_token, exp: Date.now() + Math.max(60, (d.expires_in || 1800) - 60) * 1000 };
-      return cachedToken.token;
+// Deterministic parser for config/trajectories/*.yaml (shared firmware contract)
+function parseTrajectoryYaml(raw, fileStem = "trajectory") {
+  const out = { name: fileStem, description: "", joint_order: ["base", "shoulder", "elbow", "gripper"], home: [90, 90, 90, 90], waypoints: [] };
+  for (const line of raw.split(/\r?\n/)) {
+    const clean = line.replace(/#.*$/, "").trim();
+    if (!clean) continue;
+    const mName = clean.match(/^name:\s*(.+)$/);
+    if (mName) { out.name = mName[1].trim(); continue; }
+    const mDesc = clean.match(/^description:\s*(.+)$/);
+    if (mDesc) { out.description = mDesc[1].trim().replace(/^["']|["']$/g, ""); continue; }
+    const mOrder = clean.match(/^joint_order:\s*\[([^\]]+)\]/);
+    if (mOrder) { out.joint_order = mOrder[1].split(",").map(s => s.trim()); continue; }
+    const mHome = clean.match(/^home:\s*\[([^\]]+)\]/);
+    if (mHome) { out.home = mHome[1].split(",").map(Number); continue; }
+    const mWp = clean.match(/^-\s*\{(.+)\}/);
+    if (mWp) {
+      const body = mWp[1];
+      const mTgt = body.match(/targets:\s*\[([^\]]+)\]/);
+      const mDur = body.match(/duration_ms:\s*([0-9.]+)/);
+      const mSet = body.match(/settle_ms:\s*([0-9.]+)/);
+      if (mTgt) {
+        const commentMatch = line.match(/#\s*(.+)$/);
+        out.waypoints.push({
+          targets: mTgt[1].split(",").map(Number),
+          duration_ms: mDur ? Number(mDur[1]) : 1000,
+          settle_ms: mSet ? Number(mSet[1]) : 0,
+          label: commentMatch ? commentMatch[1].trim() : ""
+        });
+      }
     }
-  } catch {}
-  return new Promise((resolve) => {
-    execFile("gcloud", ["auth", "print-access-token"], { timeout: 4000 }, (err, stdout) => {
-      const tok = (stdout || "").trim();
-      if (!err && tok) {
-        cachedToken = { token: tok, exp: Date.now() + 40 * 60 * 1000 };
-        resolve(tok);
-      } else resolve("");
-    });
-  });
+  }
+  return out;
 }
 
 const ROOM_RE = /^[A-Z0-9]{3,8}$/;
@@ -238,8 +245,6 @@ const server = http.createServer((req, res) => {
     const body = JSON.stringify({
       ok: true,
       relay: true,
-      vertex: true,
-      model: "gemini-3.8-flash",
       utc_iso: new Date(nowMs).toISOString(),
       epoch_utc_ms: nowMs
     });
@@ -251,42 +256,36 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (url.pathname === "/api/gemini" && req.method === "POST") {
-    let raw = "";
-    req.setEncoding("utf8");
-    req.on("data", chunk => { if (raw.length < 4 * 1024 * 1024) raw += chunk; });
-    req.on("end", async () => {
-      try {
-        const payload = JSON.parse(raw || "{}");
-        const requestedModel = /^[a-z0-9.-]+$/i.test(payload.model || "") ? payload.model : "gemini-3.8-flash";
-        const vertexModel = requestedModel === "gemini-3.8-flash" ? "gemini-3-flash-preview" : requestedModel;
-        const tok = await getVertexToken();
-        if (!tok) {
-          res.writeHead(503, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: { message: "No Vertex AI credentials available" } }));
-          return;
-        }
-        const contents = (payload.contents || []).map(c => ({ role: c.role || "user", parts: c.parts || [] }));
-        const vBody = JSON.stringify({ contents, generationConfig: payload.generationConfig || { maxOutputTokens: 1200, temperature: 0.4 } });
-        const callVertex = (m) => fetch(`https://aiplatform.googleapis.com/v1/projects/${GCP_PROJECT}/locations/global/publishers/google/models/${encodeURIComponent(m)}:generateContent`, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${tok}`, "Content-Type": "application/json" },
-          body: vBody,
-          signal: AbortSignal.timeout(22000)
-        });
-        let vr = await callVertex(vertexModel);
-        if (vr.status === 404 && vertexModel !== "gemini-3-flash-preview") {
-          vr = await callVertex("gemini-3-flash-preview");
-        }
-        const data = await vr.json().catch(() => ({}));
-        data._model = requestedModel;
-        res.writeHead(vr.status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
-        res.end(JSON.stringify(data));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: { message: e.message } }));
+  if (url.pathname === "/api/trajectories" && req.method === "GET") {
+    try {
+      const files = fs.readdirSync(TRAJ_DIR).filter(f => f.endsWith(".yaml"));
+      const trajectories = {};
+      for (const f of files) {
+        const stem = path.basename(f, ".yaml");
+        const raw = fs.readFileSync(path.join(TRAJ_DIR, f), "utf8");
+        trajectories[stem] = { ...parseTrajectoryYaml(raw, stem), raw_yaml: raw };
       }
-    });
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ ok: true, trajectories }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    }
+    return;
+  }
+
+  const mTraj = url.pathname.match(/^\/api\/trajectories\/([a-zA-Z0-9_-]+)$/);
+  if (mTraj && req.method === "GET") {
+    const stem = mTraj[1];
+    const p = path.join(TRAJ_DIR, `${stem}.yaml`);
+    if (!fs.existsSync(p)) {
+      res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: "Trajectory YAML not found" }));
+      return;
+    }
+    const raw = fs.readFileSync(p, "utf8");
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(JSON.stringify({ ok: true, trajectory: parseTrajectoryYaml(raw, stem), raw_yaml: raw }));
     return;
   }
 
@@ -400,12 +399,12 @@ const server = http.createServer((req, res) => {
             room.lastGestureMs = nowMs;
             room.watchGrip = room.watchGrip ? 0 : 1;
             grabToggle = 1;
-            gesture = room.watchGrip ? "✊ Clench Impulse → GRAB" : "✋ Tendon Release → OPEN";
+            gesture = room.watchGrip ? "Clench Impulse -> GRASP" : "Tendon Impulse -> RELEASE";
           } else if (Math.abs(gx) > 2.3) {
             room.lastGestureMs = nowMs;
             room.watchGrip = room.watchGrip ? 0 : 1;
             grabToggle = 1;
-            gesture = room.watchGrip ? "🔄 Pronation Flick → GRAB" : "🔄 Supination Flick → OPEN";
+            gesture = room.watchGrip ? "Pronation Flick -> GRASP" : "Supination Flick -> RELEASE";
           }
         }
         room.touchHttpPhone(wid);

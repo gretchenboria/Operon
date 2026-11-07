@@ -46,7 +46,7 @@ function startHttpMode() {
   if (useHttp) return;
   useHttp = true;
   if (ws) { try { ws.onclose = null; ws.close(); } catch {} ws = null; }
-  setStatus("ok", `⌚ ${ROOM}`);
+  setStatus("ok", `HTTP ${ROOM}`);
   httpQueue.push({ t: "hello", name: myName });
   const poll = async () => {
     const batch = httpQueue.splice(0, httpQueue.length);
@@ -59,13 +59,13 @@ function startHttpMode() {
       });
       if (r.ok) {
         const d = await r.json();
-        setStatus("ok", `⌚ ${ROOM}`);
+        setStatus("ok", `HTTP ${ROOM}`);
         if (Array.isArray(d.msgs)) d.msgs.forEach(handle);
       } else {
-        setStatus("warn", T("syncing…", "sincronizando…"));
+        setStatus("warn", T("syncing...", "sincronizando..."));
       }
     } catch {
-      setStatus("warn", T("retrying…", "reintentando…"));
+      setStatus("warn", T("retrying...", "reintentando..."));
     }
   };
   poll();
@@ -123,24 +123,24 @@ setInterval(() => { if (!useHttp) send({ t: "ping" }); }, 25000);
 
 // ---------- state ----------
 let slide = "teleop", deckSlide = "idle", mode = "pose", team = 6, assigned = [], vote = null, quizQ = null;
-let station = { n: 1, name: T("🔋 Pick the battery", "🔋 Toma la batería") };
+let station = { n: 1, name: T("[1] Pick & place cell", "[1] Tomar y colocar celda") };
 const DEFAULT_QUIZ = {
   q: 0,
-  text: T("Someone shouts “stop!” while the arm is moving.", "Alguien grita “¡alto!” mientras el brazo se mueve."),
+  text: T("Someone shouts 'stop!' while the arm is moving.", "Alguien grita 'alto!' mientras el brazo se mueve."),
   revealed: false,
   answer: null,
   options: [
-    { name: T("Reflex", "Reflejo"), desc: T("deterministic code", "código determinista") },
-    { name: T("Cloud Gemini", "Gemini en la nube"), desc: T("Layer 2", "Capa 2") },
-    { name: T("On-device model", "Modelo local"), desc: T("YOLO · Gemma · fleet memory", "YOLO · Gemma · memoria") },
-    { name: T("Escalate + safe stop", "Escalar + alto seguro"), desc: T("frontier model, never cached", "modelo grande, sin caché") },
-    { name: T("Refuse · fail closed", "Negar · falla cerrada"), desc: T("no bytes to the motors", "cero bytes a los motores") }
+    { name: T("Reflex", "Reflejo"), desc: T("deterministic code", "codigo determinista") },
+    { name: T("Cloud Model", "Modelo en nube"), desc: T("Layer 2", "Capa 2") },
+    { name: T("On-device model", "Modelo local"), desc: T("local inference", "inferencia local") },
+    { name: T("Escalate + safe stop", "Escalar + alto seguro"), desc: T("safe halt", "parada segura") },
+    { name: T("Refuse · fail closed", "Negar · falla cerrada"), desc: T("zero bytes to motors", "cero bytes a los motores") }
   ]
 };
 let lastQuizMsg = DEFAULT_QUIZ;
-if ($("hint")) $("hint").textContent = T("🎯 Drag joystick to steer · tap SNAP or GRAB", "🎯 Arrastra el joystick · toca ALINEAR o AGARRAR");
-if ($("tab-teleop")) $("tab-teleop").textContent = T("🦾 Robot Teleop", "🦾 Teleop Robot");
-if ($("tab-quiz")) $("tab-quiz").textContent = T("🗳️ Live Quiz", "🗳️ Quiz en Vivo");
+if ($("hint")) $("hint").textContent = T("Drag joystick to steer · tap ALIGN or GRASP", "Arrastra el joystick · toca ALINEAR o AGARRAR");
+if ($("tab-teleop")) $("tab-teleop").textContent = T("Robot Teleop", "Teleop Robot");
+if ($("tab-quiz")) $("tab-quiz").textContent = T("Live Quiz", "Quiz en Vivo");
 if ($("mode-bar")) {
   $("mode-bar").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
     slide = b.dataset.mode;
@@ -153,9 +153,9 @@ function show(ids) {
 }
 function render() {
   $("me-name").textContent = `${T("you are", "eres")} ${myName}`;
-  $("pilot-who").textContent = slide === "teleop" && pilotId ? `🎮 ${pilotId === myId ? T("you", "tú") : pilotName}` : "";
-  $("pilot-title").textContent = T("You're driving!", "¡Tú manejas!");
-  $("pilot-sub").textContent = T("Your phone alone controls both arms now. Everyone's watching!", "Solo tu teléfono controla ambos brazos. ¡Todos te miran!");
+  $("pilot-who").textContent = slide === "teleop" && pilotId ? `[PILOT] ${pilotId === myId ? T("you", "tu") : pilotName}` : "";
+  $("pilot-title").textContent = T("Active Pilot", "Piloto Activo");
+  $("pilot-sub").textContent = T("Your device controls the 6-DOF end-effector pose and IMU stream.", "Tu dispositivo controla la pose 6-DOF y telemetria IMU.");
   if ($("mode-bar")) $("mode-bar").querySelectorAll("button").forEach(b => b.classList.toggle("sel", b.dataset.mode === slide));
   if (station) { $("st-n").textContent = `${T("Mission", "Misión")} · ${station.n}/3`; $("st-name").textContent = station.name; }
   if (slide === "teleop") {
@@ -251,8 +251,8 @@ function onMotion(e) {
     pose.g = pose.g ? 0 : 1;
     paintGrab();
     const gesture = Math.abs(pose.gx) > 2.5
-      ? (pose.g ? "🔄 Wrist Flick → GRAB" : "🔄 Wrist Flick → RELEASE")
-      : (pose.g ? "✊ Clench Impulse → GRAB" : "✋ Tendon Release → OPEN");
+      ? (pose.g ? "Wrist Roll Flick -> GRASP" : "Wrist Roll Flick -> RELEASE")
+      : (pose.g ? "Clench Impulse -> GRASP" : "Tendon Impulse -> RELEASE");
     // Right-handed joystick mapping: Drag Up (-jy) = Reach Forward (+vx), Drag Left (-jx) = Move Left (+vy), Drag Right (+jx) = Move Right (-vy)
     send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, gesture, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: 1 } });
     if (navigator.vibrate) navigator.vibrate([40, 30, 50]);
@@ -307,7 +307,7 @@ $("manual").addEventListener("click", () => { if (manualOn) { manualOn = false; 
 for (const k of ["yaw", "pitch", "roll"]) $("m-" + k).addEventListener("input", (e) => { pose[k] = +e.target.value; $("mv-" + k).textContent = pose[k] + "°"; readout(); });
 
 function paintGrab() {
-  $("grab").textContent = pose.g ? T("✋ RELEASE", "✋ SOLTAR") : T("✊ GRAB", "✊ AGARRAR");
+  $("grab").textContent = pose.g ? T("RELEASE", "SOLTAR") : T("GRASP", "AGARRAR");
   $("grab").style.background = pose.g ? "var(--pr)" : "var(--pg)";
 }
 $("grab").addEventListener("click", () => {
@@ -318,7 +318,7 @@ $("grab").addEventListener("click", () => {
   if (navigator.vibrate) navigator.vibrate(30);
 });
 if ($("snap")) {
-  $("snap").textContent = T("🎯 SNAP", "🎯 ALINEAR");
+  $("snap").textContent = T("ALIGN", "ALINEAR");
   $("snap").addEventListener("click", () => {
     touched = true;
     send({ t: "pose", v: { vx: 0, vy: 0, vz: 0, g: pose.g, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, snap: 1 } });
@@ -389,7 +389,7 @@ function renderQuiz(m) {
     box.querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
     $("q-note").textContent = T("Vote sent. You can change it until the reveal.", "Voto enviado. Puedes cambiarlo antes de revelar.");
   }));
-  $("q-note").textContent = m.revealed ? (vote === null ? T("Answer revealed on the big screen.", "Respuesta revelada en la pantalla.") : vote === right ? T("You got it! 🎉", "¡Acertaste! 🎉") : T("Not this time. See why on the big screen.", "Esta vez no. Mira por qué en la pantalla.")) : vote === null ? T("Tap your answer.", "Toca tu respuesta.") : T("Vote sent.", "Voto enviado.");
+  $("q-note").textContent = m.revealed ? (vote === null ? T("Answer revealed on the big screen.", "Respuesta revelada en la pantalla.") : vote === right ? T("Correct.", "Correcto.") : T("Not this time. See why on the big screen.", "Esta vez no. Mira por que en la pantalla.")) : vote === null ? T("Tap your answer.", "Toca tu respuesta.") : T("Vote sent.", "Voto enviado.");
 }
 
 render();

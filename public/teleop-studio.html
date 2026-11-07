@@ -3,17 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Operon · Sim-to-Real UR5e Teleop &amp; Watch IMU Comparator</title>
+  <title>Operon | 6-DOF Sim-to-Real Kinematic &amp; IMU Calibration Workbench</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239d72ff' stroke-width='2'><rect x='6' y='4' width='12' height='16' rx='3'/><circle cx='12' cy='12' r='3'/></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto+Mono:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap" />
   <style>
     :root {
-      /* Metallic Purple, Cobalt Blue & Brushed Light Grey Palette */
       --bg: #0f1119;
       --panel: #161925;
       --panel-2: #1d2232;
-      --panel-glass: rgba(22, 25, 37, 0.88);
+      --panel-glass: rgba(22, 25, 37, 0.90);
       --surface-grey: #dce2ee;
       --border: #2c334a;
       --border-hi: #475378;
@@ -27,15 +26,11 @@
       --blue-hi: #60a5fa;
       --blue-glow: rgba(59, 130, 246, 0.20);
       --silver: #cbd5e1;
-      --nv-green: #9d72ff;
-      --g-blue: #3b82f6;
-      --g-yellow: #c084fc;
       --g-red: #f43f5e;
       --g-green: #38bdf8;
       --cyan: #60a5fa;
       --coral: #e879f9;
-      --magenta: #9333ea;
-      --sans: 'Google Sans', 'Inter', system-ui, -apple-system, sans-serif;
+      --sans: 'Inter', system-ui, -apple-system, sans-serif;
       --mono: 'Roboto Mono', ui-monospace, Menlo, monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,14 +40,13 @@
       font-family: var(--sans);
       height: 100vh;
       overflow: hidden;
-      font-size: 13px;
+      font-size: 12.5px;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Clean Vector Icons */
     .ico {
-      width: 13.5px;
-      height: 13.5px;
+      width: 13px;
+      height: 13px;
       stroke: currentColor;
       stroke-width: 2;
       stroke-linecap: round;
@@ -60,22 +54,22 @@
       fill: none;
       flex-shrink: 0;
     }
-    .ico.sm { width: 12px; height: 12px; }
+    .ico.sm { width: 11.5px; height: 11.5px; }
 
-    /* ── TOP LEVEL LAYOUT: Clean 2-Row Studio ── */
+    /* TOP LEVEL LAYOUT */
     .studio {
       display: grid;
-      grid-template-rows: 54px 1fr;
+      grid-template-rows: 50px 1fr;
       height: 100vh;
-      gap: 10px;
-      padding: 10px;
+      gap: 8px;
+      padding: 8px;
     }
 
-    /* ── HEADER BAR ── */
+    /* HEADER BAR */
     .topbar {
       background: linear-gradient(90deg, #181c2b 0%, #1e2336 50%, #181c2b 100%);
       border: 1px solid var(--border-hi);
-      border-radius: 12px;
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -89,7 +83,7 @@
       align-items: center;
       gap: 8px;
       font-weight: 700;
-      font-size: 13.5px;
+      font-size: 13px;
       letter-spacing: -0.2px;
       white-space: nowrap;
       flex-shrink: 0;
@@ -99,25 +93,25 @@
       color: #e2d4ff;
       border: 1px solid var(--purple);
       border-radius: 6px;
-      padding: 3px 9px;
+      padding: 3px 8px;
       font-family: var(--mono);
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 700;
       letter-spacing: 0.5px;
     }
 
-    /* ── MAIN WORKSPACE: 3-Column Balanced Grid ── */
+    /* 3-COLUMN WORKSPACE */
     .workspace {
       display: grid;
-      grid-template-columns: 318px 1fr 376px;
-      gap: 10px;
+      grid-template-columns: 312px 1fr 364px;
+      gap: 8px;
       min-height: 0;
     }
 
     .panel {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 10px;
       display: flex;
       flex-direction: column;
       min-height: 0;
@@ -127,12 +121,12 @@
     .ph {
       background: linear-gradient(90deg, #1d2233 0%, #23293e 100%);
       border-bottom: 1px solid var(--border);
-      padding: 9px 13px;
+      padding: 8px 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       font-family: var(--mono);
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -141,11 +135,11 @@
     .ph-title {
       display: inline-flex;
       align-items: center;
-      gap: 7px;
+      gap: 6px;
       color: var(--surface-grey);
     }
     .pb {
-      padding: 9px 10px;
+      padding: 8px 10px;
       overflow-y: auto;
       flex: 1;
       display: flex;
@@ -158,11 +152,11 @@
     .wrap { flex-wrap: wrap; }
     .between { justify-content: space-between; }
 
-    /* ── STEP CARDS & HELPER DESCRIPTIONS ── */
+    /* CARDS */
     .step-card {
       background: #121520;
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 8px;
       padding: 8px 10px;
       display: flex;
       flex-direction: column;
@@ -178,63 +172,49 @@
     .step-title {
       display: flex;
       align-items: center;
-      gap: 7px;
+      gap: 6px;
       font-weight: 700;
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--surface-grey);
     }
-    .step-num {
-      width: 19px;
-      height: 19px;
-      border-radius: 50%;
-      background: var(--purple-glow);
-      border: 1px solid var(--purple);
-      color: var(--purple-hi);
-      font-family: var(--mono);
-      font-size: 10.5px;
-      font-weight: 700;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
     .help-line {
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--ink-3);
-      line-height: 1.3;
+      line-height: 1.35;
     }
 
-    /* ── COLLAPSIBLE DRAWERS FOR ADVANCED TOOLS ── */
+    /* COLLAPSIBLE DRAWERS */
     details.drawer {
       background: #121520;
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 8px;
       flex-shrink: 0;
     }
     details.drawer > summary {
-      padding: 8px 10px;
+      padding: 7px 10px;
       cursor: pointer;
       list-style: none;
       display: flex;
       align-items: center;
       justify-content: space-between;
       font-weight: 600;
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--ink-2);
       user-select: none;
     }
     details.drawer > summary::-webkit-details-marker { display: none; }
     details.drawer > summary::after {
-      content: "▾";
-      font-size: 12px;
+      content: "v";
+      font-family: var(--mono);
+      font-size: 10px;
       color: var(--ink-3);
-      transition: transform 0.15s;
     }
     details.drawer[open] > summary {
       border-bottom: 1px solid var(--border);
       color: var(--surface-grey);
       background: rgba(157, 114, 255, 0.05);
     }
-    details.drawer[open] > summary::after { transform: rotate(180deg); }
+    details.drawer[open] > summary::after { content: "^"; }
     .drawer-body {
       padding: 8px 10px;
       display: flex;
@@ -247,14 +227,14 @@
       gap: 5px 10px;
     }
 
-    /* ── BUTTONS & SEGMENTED CONTROLS ── */
+    /* BUTTONS & SEGMENTED CONTROLS */
     .btn {
       background: var(--panel-2);
       color: var(--surface-grey);
       border: 1px solid var(--border-hi);
-      border-radius: 8px;
-      padding: 5px 10px;
-      font: 500 11.5px var(--sans);
+      border-radius: 7px;
+      padding: 5px 9px;
+      font: 500 11px var(--sans);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -269,38 +249,34 @@
       background: linear-gradient(135deg, #3b82f6, #2563eb);
       border-color: #60a5fa;
       color: #fff;
-      font-weight: 700;
+      font-weight: 600;
     }
-    .btn.primary:hover { filter: brightness(1.1); }
     .btn.nv {
       background: linear-gradient(135deg, rgba(157, 114, 255, 0.28), rgba(59, 130, 246, 0.22));
       border-color: var(--purple);
       color: #e9d5ff;
-      font-weight: 700;
+      font-weight: 600;
     }
-    .btn.nv:hover { background: rgba(157, 114, 255, 0.38); }
     .btn.watch {
       background: rgba(192, 132, 252, 0.16);
       border-color: #c084fc;
       color: #f3e8ff;
-      font-weight: 700;
+      font-weight: 600;
     }
-    .btn.watch:hover { background: rgba(192, 132, 252, 0.28); }
     .btn.rec {
       background: rgba(244, 63, 94, 0.16);
       border-color: var(--g-red);
       color: #fda4af;
-      font-weight: 700;
+      font-weight: 600;
     }
-    .btn.rec.active { background: var(--g-red); color: #fff; animation: pulse-rec 1.1s infinite; }
-    .btn.sm { padding: 4px 8.5px; font-size: 11px; border-radius: 7px; }
+    .btn.rec.active { background: var(--g-red); color: #fff; }
+    .btn.sm { padding: 4px 8px; font-size: 10.5px; border-radius: 6px; }
     .btn.on { background: rgba(56, 189, 248, 0.24); border-color: var(--g-green); color: #bae6fd; }
-    @keyframes pulse-rec { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
 
     .seg {
       display: inline-flex;
       border: 1px solid var(--border-hi);
-      border-radius: 8px;
+      border-radius: 7px;
       overflow: hidden;
       background: #0d1018;
     }
@@ -308,23 +284,23 @@
       background: transparent;
       color: var(--ink-2);
       border: none;
-      padding: 5px 9px;
-      font: 500 11px var(--sans);
+      padding: 4px 8px;
+      font: 500 10.5px var(--sans);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       transition: background 0.12s;
     }
     .seg button:hover { color: var(--ink); }
     .seg button + button { border-left: 1px solid var(--border); }
-    .seg button.sel { background: var(--blue); color: #fff; font-weight: 700; }
+    .seg button.sel { background: var(--blue); color: #fff; font-weight: 600; }
     .seg.nv button.sel { background: var(--purple); color: #0f0a1c; font-weight: 700; }
 
     .pill {
       font-family: var(--mono);
-      font-size: 10.5px;
-      padding: 2px 8px;
+      font-size: 10px;
+      padding: 2px 7px;
       border-radius: 999px;
       border: 1px solid var(--border-hi);
       background: var(--panel-2);
@@ -332,13 +308,13 @@
       white-space: nowrap;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
     }
     .pill.ok { background: rgba(56, 189, 248, 0.16); border-color: #38bdf8; color: #bae6fd; }
     .pill.warn { background: rgba(192, 132, 252, 0.18); border-color: #c084fc; color: #f3e8ff; }
     .pill.no { background: rgba(244, 63, 94, 0.18); border-color: var(--g-red); color: #fecdd3; }
 
-    /* ── CENTER HERO 3D VIEWPORT ── */
+    /* CENTER 3D VIEWPORT */
     .viewport-wrap {
       position: relative;
       flex: 1;
@@ -368,12 +344,11 @@
       pointer-events: none;
     }
 
-    /* Floating Omniverse Viewport Dock */
     .vp-dock-top {
       position: absolute;
-      top: 12px;
-      left: 12px;
-      right: 12px;
+      top: 10px;
+      left: 10px;
+      right: 10px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -387,33 +362,32 @@
       border: 1px solid var(--border-hi);
       backdrop-filter: blur(12px);
       padding: 4px 6px;
-      border-radius: 10px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       gap: 6px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
     }
 
-    /* Rich AOV & Scene Hover Inspector */
+    /* AOV & Hover Inspector Banner */
     .aov-explain-banner {
       position: absolute;
-      top: 56px;
-      left: 12px;
-      right: 12px;
+      top: 50px;
+      left: 10px;
+      right: 10px;
       background: rgba(16, 19, 30, 0.92);
       border: 1px solid var(--border-hi);
       border-left: 3px solid var(--purple);
       backdrop-filter: blur(12px);
-      border-radius: 10px;
-      padding: 8px 12px;
+      border-radius: 8px;
+      padding: 7px 11px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 10px;
       z-index: 4;
       pointer-events: auto;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-      transition: all 0.16s ease;
     }
     .aov-explain-main {
       display: flex;
@@ -423,24 +397,24 @@
     }
     .aov-explain-title {
       font-weight: 700;
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--surface-grey);
       display: flex;
       align-items: center;
       gap: 6px;
     }
     .aov-explain-desc {
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--ink-2);
       line-height: 1.35;
     }
     .aov-legend {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       flex-wrap: wrap;
       font-family: var(--mono);
-      font-size: 10px;
+      font-size: 9.5px;
       color: var(--ink-2);
       flex-shrink: 0;
     }
@@ -450,12 +424,12 @@
       gap: 4px;
       background: #0d1018;
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 5px;
       padding: 2px 6px;
     }
     .swatch i {
-      width: 9px;
-      height: 9px;
+      width: 8px;
+      height: 8px;
       border-radius: 2px;
       display: inline-block;
     }
@@ -465,23 +439,19 @@
       position: fixed;
       pointer-events: none;
       z-index: 90;
-      background: rgba(13, 16, 25, 0.95);
+      background: rgba(13, 16, 25, 0.96);
       border: 1px solid var(--purple-hi);
-      border-radius: 10px;
-      padding: 9px 11px;
-      width: 280px;
+      border-radius: 8px;
+      padding: 8px 10px;
+      width: 276px;
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
       backdrop-filter: blur(10px);
       display: flex;
       flex-direction: column;
       gap: 4px;
-      font-size: 11px;
-      transition: opacity 0.08s ease;
+      font-size: 10.5px;
     }
-    .scene-hover-probe.hide {
-      opacity: 0;
-      visibility: hidden;
-    }
+    .scene-hover-probe.hide { opacity: 0; visibility: hidden; }
     .probe-hdr {
       display: flex;
       align-items: center;
@@ -489,56 +459,48 @@
       font-weight: 700;
       color: var(--surface-grey);
       border-bottom: 1px solid var(--border);
-      padding-bottom: 4px;
+      padding-bottom: 3px;
     }
     .probe-grid {
       display: grid;
       grid-template-columns: auto 1fr;
       gap: 2px 8px;
       font-family: var(--mono);
-      font-size: 10px;
+      font-size: 9.5px;
       color: var(--ink-2);
     }
-    .probe-grid span:nth-child(odd) {
-      color: var(--ink-3);
-    }
+    .probe-grid span:nth-child(odd) { color: var(--ink-3); }
 
-    /* Global Rich Hover Tooltip Card */
+    /* Global Hover Tooltip Card */
     .ui-hover-card {
       position: fixed;
       pointer-events: none;
       z-index: 95;
       background: rgba(15, 18, 28, 0.96);
       border: 1px solid var(--blue-hi);
-      border-radius: 10px;
-      padding: 9px 12px;
-      max-width: 310px;
+      border-radius: 8px;
+      padding: 8px 11px;
+      max-width: 300px;
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
       backdrop-filter: blur(10px);
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
     }
-    .ui-hover-card.hide {
-      opacity: 0;
-      visibility: hidden;
-    }
+    .ui-hover-card.hide { opacity: 0; visibility: hidden; }
     .ui-hover-title {
       font-weight: 700;
-      font-size: 11.5px;
+      font-size: 11px;
       color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 6px;
     }
     .ui-hover-body {
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--ink-2);
       line-height: 1.4;
     }
     .ui-hover-tag {
       font-family: var(--mono);
-      font-size: 9.5px;
+      font-size: 9px;
       color: var(--purple-hi);
       text-transform: uppercase;
     }
@@ -546,24 +508,28 @@
     /* Arm Status Overlay Pills at Bottom of Viewport */
     .vp-dock-bottom {
       position: absolute;
-      bottom: 12px;
-      left: 12px;
-      right: 12px;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: 10px;
       pointer-events: none;
       z-index: 3;
+    }
+    .vp-dock-bottom.single {
+      grid-template-columns: 1fr;
+      max-width: 520px;
     }
     .arm-badge {
       background: var(--panel-glass);
       border: 1px solid var(--border-hi);
       backdrop-filter: blur(12px);
-      border-radius: 10px;
-      padding: 8px 12px;
+      border-radius: 8px;
+      padding: 7px 11px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
       min-width: 0;
       overflow: hidden;
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.38);
@@ -574,51 +540,46 @@
       justify-content: space-between;
       gap: 8px;
       font-weight: 700;
-      font-size: 12px;
+      font-size: 11.5px;
       min-width: 0;
       flex-wrap: wrap;
     }
-    .arm-badge-hdr .pill {
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
     .arm-joints {
       font-family: var(--mono);
-      font-size: 10.5px;
+      font-size: 10px;
       color: var(--ink-2);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    /* ── QR CARD ── */
+    /* QR CARD */
     .qr-card {
       display: flex;
-      gap: 9px;
+      gap: 8px;
       align-items: center;
       background: #0d1018;
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 7px;
       padding: 6px 8px;
     }
     .qr-box {
-      width: 64px;
-      height: 64px;
+      width: 58px;
+      height: 58px;
       background: #fff;
-      padding: 4px;
-      border-radius: 6px;
+      padding: 3px;
+      border-radius: 5px;
       flex-shrink: 0;
     }
     .qr-box svg { width: 100%; height: 100%; display: block; }
 
     .slider-row {
       display: grid;
-      grid-template-columns: 36px 1fr 40px;
+      grid-template-columns: 40px 1fr 38px;
       align-items: center;
       gap: 5px;
       font-family: var(--mono);
-      font-size: 10.5px;
+      font-size: 10px;
       color: var(--ink-2);
     }
     input[type="range"] {
@@ -628,7 +589,7 @@
       cursor: pointer;
     }
 
-    /* ── RIGHT COLUMN: TELEMETRY SCORECARDS & CHARTS ── */
+    /* RIGHT COLUMN TELEMETRY */
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -637,43 +598,43 @@
     .kpi-card {
       background: #10131d;
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 7px 9px;
+      border-radius: 7px;
+      padding: 6px 8px;
       display: flex;
       flex-direction: column;
       gap: 2px;
     }
     .kpi-lbl {
       font-family: var(--mono);
-      font-size: 9.5px;
+      font-size: 9px;
       color: var(--ink-3);
       text-transform: uppercase;
     }
     .kpi-val {
       font-family: var(--mono);
-      font-size: 15.5px;
+      font-size: 14.5px;
       font-weight: 700;
       color: var(--surface-grey);
     }
     .kpi-sub {
       font-family: var(--mono);
-      font-size: 10px;
+      font-size: 9.5px;
       color: var(--ink-2);
     }
 
     .chart-cv {
       width: 100%;
-      height: 112px;
+      height: 108px;
       background: #0b0d14;
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 7px;
       display: block;
     }
-    .chart-cv.sm { height: 78px; }
+    .chart-cv.sm { height: 74px; }
 
     .sub-label {
       font-family: var(--mono);
-      font-size: 10px;
+      font-size: 9.5px;
       color: var(--ink-3);
       text-transform: uppercase;
       letter-spacing: 0.4px;
@@ -681,23 +642,23 @@
     .term-box {
       background: #0b0d14;
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px;
+      border-radius: 7px;
+      padding: 7px;
       font-family: var(--mono);
-      font-size: 10.5px;
-      line-height: 1.4;
+      font-size: 10px;
+      line-height: 1.38;
       color: #c5d1e8;
       white-space: pre-wrap;
       overflow-y: auto;
-      max-height: 145px;
+      max-height: 140px;
     }
     .mono { font-family: var(--mono); }
 
-    /* ── COMMERCIAL LICENSE GATE MODAL ── */
+    /* TECHNICAL SCOPE & REALITY MODAL */
     .lic-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(10, 12, 19, 0.80);
+      background: rgba(10, 12, 19, 0.82);
       backdrop-filter: blur(8px);
       display: flex;
       align-items: center;
@@ -708,214 +669,187 @@
     .lic-modal {
       background: var(--panel);
       border: 1px solid var(--border-hi);
-      border-radius: 14px;
-      width: 440px;
-      max-width: 92vw;
-      padding: 20px;
+      border-radius: 12px;
+      width: 560px;
+      max-width: 94vw;
+      padding: 18px 20px;
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
     }
-    .lic-inp {
-      width: 100%;
-      background: #0c0e16;
-      border: 1px solid var(--border-hi);
-      border-radius: 8px;
-      padding: 9px 12px;
-      color: var(--ink);
-      font-family: var(--mono);
-      font-size: 12.5px;
-    }
-    .lic-tier {
-      background: #111420;
+    .spec-box {
+      background: #10131e;
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 9px 11px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: var(--ink-2);
     }
+    .spec-box b { color: var(--surface-grey); }
   </style>
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
 <body>
   <div class="studio">
-    <!-- ── TOP NAVIGATION & PRIMARY ACTIONS ── -->
+    <!-- TOP HEADER: RIG COMPARISON MODE + BENCHMARK TASKS + ACTIONS -->
     <header class="topbar">
       <div class="brand">
         <span class="nv-badge">OPERON</span>
-        <span>UR5e Sim-to-Real Studio</span>
-        <span class="pill ok" id="utc-pill" title="IEEE-1588 / NTP UTC Clock Synchronized between Watch, Phone &amp; Studio">
+        <span>6-DOF Sim-to-Real Workbench</span>
+        <span class="pill ok" id="utc-pill" title="UTC Clock Offset: Synchronizes browser telemetry timestamps with server UTC so exported Watch and Sim CSVs share a common timebase">
           <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
           <span>UTC Sync</span>
         </span>
-        <button class="pill warn" id="btn-license" style="cursor:pointer" title="Activate Commercial License Key">
-          <svg class="ico sm" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-          <span>License</span>
+        <button class="btn sm nv" id="btn-tech-scope" title="Technical Scope &amp; Engineering Reality: View exact equations, physical utility, and hardware scope limitations">
+          <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>What This Does / Scope</span>
         </button>
       </div>
 
-      <div class="row" style="gap:5px;flex-shrink:0">
-        <div class="seg" id="st-bar" title="Select manipulation benchmark station">
-          <button class="sel" data-st="0">
-            <svg class="ico sm" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2"/><line x1="10" y1="2" x2="14" y2="2"/></svg>
-            <span>1. Cell</span>
-          </button>
-          <button data-st="1">
-            <svg class="ico sm" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            <span>2. Charger</span>
-          </button>
-          <button data-st="2">
-            <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="21"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
-            <span>3. Valve</span>
-          </button>
+      <div class="row" style="gap:6px;flex-shrink:0">
+        <!-- RIG COMPARISON SELECTOR -->
+        <div class="seg nv" id="rig-mode-bar" title="Rig Comparison Mode: Compare 6-DOF Ideal Sim vs 6-DOF Real/Watch Twin side by side, inspect a Single 6-DOF rig, or enable the 4-DOF planar baseline">
+          <button class="sel" data-rm="6d_sim2real" title="6-DOF Sim vs 6-DOF Real: Left rig runs ideal zero-noise 6-DOF IK; Right rig runs 6-DOF Real/Watch Twin with actuator lag, backlash, gravity droop, and IMU coupling">6D Sim vs 6D Real</button>
+          <button data-rm="6d_single" title="Single 6-DOF Rig: Focus the viewport on one 6-DOF UR5e manipulator with forearm IMU telemetry">Single 6-DOF</button>
+          <button data-rm="4d_vs_6d" title="4-DOF vs 6-DOF Baseline: Compare a 4-DOF planar-constrained arm (no wrist roll) against a 6-DOF spherical-wrist arm">4-DOF vs 6-DOF</button>
         </div>
-        <button class="btn sm nv" id="btn-pick-place" title="Automatically pick up the cell from the black pad and place it on the target pad">
-          <svg class="ico sm" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+
+        <!-- STATION SELECTOR -->
+        <div class="seg" id="st-bar" title="Select manipulation benchmark station">
+          <button class="sel" data-st="0" title="Station 1 (Cell Pick &amp; Place): Grasp the 21700 cell at (0.15, -0.075, 0.032) m and place it on the target pad at (0.15, +0.075, 0.032) m">1. Cell</button>
+          <button data-st="1" title="Station 2 (Compound-Angle Charger Slot): Insert the cell into a tilted dock requiring simultaneous pitch and roll alignment">2. Charger</button>
+          <button data-st="2" title="Station 3 (Valve Rotation): Approach horizontally (+X) and rotate the tool flange 90 degrees">3. Valve</button>
+        </div>
+
+        <button class="btn sm nv" id="btn-pick-place" title="Pick &amp; Place Cycle: Execute full approach, jaw close, lift, lateral transfer, and placement trajectory">
+          <svg class="ico sm" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
           <span>Pick &amp; Place</span>
         </button>
-        <button class="btn sm primary" id="btn-auto" title="Run autonomous trajectory for the selected station">
-          <svg class="ico sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
-          <span>Auto</span>
-        </button>
-        <button class="btn sm watch" id="btn-quintic" title="Run 5th-order firmware quintic calibration sweep to benchmark Watch IMU vs Simulated IMU">
+        <button class="btn sm watch" id="btn-quintic" title="5th-Order Quintic IMU Sweep: Execute minimum-jerk polynomial joint trajectories (max vel 120 deg/s, max acc 200 deg/s^2) to benchmark Sim vs Watch IMU">
           <svg class="ico sm" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           <span>IMU Sweep</span>
         </button>
-        <button class="btn sm" id="btn-snap" title="Move gripper directly over the active station target">
-          <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
-          <span>Align</span>
-        </button>
-        <button class="btn sm" id="btn-grab" title="Close gripper jaws (automatically grasps cell if nearby) or open jaws to release">
-          <svg class="ico sm" viewBox="0 0 24 24"><path d="M7 4v8l3 3v5M17 4v8l-3 3v5M4 8h4M16 8h4"/></svg>
-          <span>Grasp</span>
-        </button>
-        <button class="btn sm" id="btn-reset" title="Reset arms and objects to starting positions">
-          <svg class="ico sm" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-        </button>
+        <button class="btn sm" id="btn-snap" title="Align to Target: Move gripper to the active station target pose">Align</button>
+        <button class="btn sm" id="btn-grab" title="Grasp / Release: Close parallel jaws to grasp the 21700 cell (auto-approaches if away) or open jaws to release">Grasp</button>
+        <button class="btn sm" id="btn-reset" title="Reset State: Return arms and props to initial coordinates">Reset</button>
+        <button id="btn-auto" style="display:none"></button>
       </div>
     </header>
 
-    <!-- ── 3-COLUMN WORKSPACE ── -->
+    <!-- 3-COLUMN WORKSPACE -->
     <div class="workspace">
 
-      <!-- ── LEFT COLUMN: 1-2-3 GUIDED CONTROLS ── -->
+      <!-- LEFT COLUMN: 6-DOF POSE CONTROL & SENSOR INPUT -->
       <section class="panel">
         <div class="ph">
           <span class="ph-title">
-            <svg class="ico" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="3"/><circle cx="7" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/></svg>
-            <span>Teleop &amp; Sensor Input</span>
+            <svg class="ico" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/></svg>
+            <span>1. Kinematics &amp; Sensor Input</span>
           </span>
-          <span class="pill" data-live="status">connecting…</span>
+          <span class="pill" data-live="status">local</span>
         </div>
         <div class="pb">
 
-          <!-- STEP 1: PHONE / WATCH INPUT -->
+          <!-- PRIMARY: 6-DOF GRIPPER POSE SLIDERS -->
           <div class="step-card">
             <div class="step-hdr">
-              <div class="step-title"><span class="step-num">1</span> Connect Phone or Watch</div>
-              <span class="pill" id="room-pill">Room OPERON</span>
+              <div class="step-title">6-DOF Tool Pose (Cartesian + Euler)</div>
+              <span class="mono" id="cmd-src" style="font-size:9.5px;color:var(--purple-hi)">Direct 60Hz</span>
             </div>
-            <div class="help-line">Stream live wrist tilt &amp; 6-axis IMU from iPhone or Apple Watch.</div>
-            <div class="qr-card">
-              <div class="qr-box" data-live="qr"></div>
-              <div class="col" style="gap:4px;min-width:0">
-                <div style="font-weight:700;font-size:11.5px;color:var(--surface-grey)">Scan QR on iPhone · Tap Link on Watch</div>
-                <a class="mono" data-live="url" target="_blank" rel="noopener" style="font-size:10px;color:var(--cyan);word-break:break-all"></a>
-                <div class="row wrap" style="margin-top:2px;gap:4px">
-                  <a class="btn sm watch" id="sms-watch" href="#" title="Send clickable URL to your Apple Watch via iMessage">
-                    <svg class="ico sm" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    <span>iMessage Watch Link</span>
-                  </a>
-                  <span class="pill" id="team-pill">4D: 0 · 6D: 0</span>
-                </div>
-              </div>
+            <div class="help-line">Hover any axis to highlight its 3D gizmo ring on the gripper. Right-handed robotics frame (+X forward, +Y left, +Z up).</div>
+            <div class="pose-grid" id="pose-sliders">
+              <div class="slider-row" data-axis-hover="yaw" title="Yaw (Z-Axis Rotation): Rotates the arm horizontally left (+deg) or right (-deg) around the vertical Z axis"><span style="color:#60a5fa;font-weight:700">yaw</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
+              <div class="slider-row" data-axis-hover="x" title="X Reach (Meters): Moves tool forward away from base (+X) or backward toward base (-X)"><span style="color:#f43f5e;font-weight:700">x (m)</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
+              <div class="slider-row" data-axis-hover="pitch" title="Pitch (Elevation Tilt): Tilts the tool nose up (+deg) or down (-deg) relative to vertical grasp"><span style="color:#34d399;font-weight:700">pitch</span><input type="range" data-p="pitch" min="-90" max="90" step="1" value="0"><span data-pv="pitch">0°</span></div>
+              <div class="slider-row" data-axis-hover="y" title="Y Lateral (Meters): Moves tool left (+Y) or right (-Y) across the optical table"><span style="color:#34d399;font-weight:700">y (m)</span><input type="range" data-p="y" min="-0.15" max="0.15" step="0.002" value="0.000"><span data-pv="y">0.000</span></div>
+              <div class="slider-row" data-axis-hover="roll" title="Roll (Tool Axis Twist): Rotates the wrist flange around the tool approach vector"><span style="color:#c084fc;font-weight:700">roll</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
+              <div class="slider-row" data-axis-hover="z" title="Z Height (Meters): Raises (+Z) or lowers (-Z) the tool above the workbench surface"><span style="color:#60a5fa;font-weight:700">z (m)</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
             </div>
-            <div class="row between">
-              <span class="sub-label">Control</span>
-              <div class="seg" id="drive-mode">
-                <button class="sel" data-v="crowd" title="Blend all connected phones/watches">Crowd</button>
-                <button data-v="pilot" title="Single active operator">Single Pilot</button>
-                <button data-v="joints" title="Direct per-joint motor control">Joints</button>
-              </div>
-              <button class="btn sm" id="btn-dice" title="Select random connected pilot">
-                <svg class="ico sm" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
-              </button>
-            </div>
-            <div id="pilot-list" class="row wrap" style="gap:4px"></div>
           </div>
 
-          <!-- STEP 2: APPLE WATCH SIM-TO-REAL SOURCE -->
+          <!-- FOREARM 6-AXIS IMU SOURCE & YAML TRAJECTORY LOADER -->
           <div class="step-card">
             <div class="step-hdr">
-              <div class="step-title"><span class="step-num">2</span> Forearm 6-Axis IMU Stream</div>
-              <span id="watch-lag-pill" class="pill ok">UTC Δt: 0.0 ms</span>
+              <div class="step-title">Forearm 6-Axis IMU Calibration</div>
+              <span id="watch-lag-pill" class="pill ok">UTC dt: 0.0 ms</span>
             </div>
-            <div class="help-line">Compares simulated forearm IMU against Apple Watch accelerometer + gyroscope.</div>
-            <div class="row wrap" style="gap:6px">
-              <button class="btn sm watch" id="btn-synth-watch" style="flex:1" title="Run synthetic watch calibration trajectory">
-                <svg class="ico sm" viewBox="0 0 24 24"><rect x="7" y="4" width="10" height="16" rx="2"/><line x1="9" y1="2" x2="15" y2="2"/><line x1="9" y1="22" x2="15" y2="22"/></svg>
-                <span>Synth Watch Run</span>
+            <div class="help-line">Executes canonical <code>config/trajectories/*.yaml</code> firmware quintic trajectories (`home=[90,90,90,90]`, `URDF_rad = (servo_deg - 90) * pi / 180`) and compares analytic forearm IMU against real Watch CSV or live DeviceMotion.</div>
+            <div class="row between" style="gap:5px">
+              <span class="sub-label">Trajectory YAML</span>
+              <select id="traj-select" class="mono" style="flex:1;background:#0d1018;color:var(--ink);border:1px solid var(--border-hi);border-radius:5px;padding:3px 6px;font-size:10px" title="Select canonical trajectory YAML from config/trajectories/">
+                <option value="imu_calibration">imu_calibration.yaml (7 sweeps, 24.5s)</option>
+                <option value="wave">wave.yaml (base wave, auto-clamped)</option>
+                <option value="nod_yes">nod_yes.yaml (elbow nod, auto-clamped)</option>
+              </select>
+            </div>
+            <div class="row wrap" style="gap:5px">
+              <button class="btn sm watch" id="btn-synth-watch" style="flex:1" title="Run Selected Trajectory YAML: Executes exact 5th-order polynomial waypoints from config/trajectories/*.yaml">
+                <span>Run YAML Sweep</span>
               </button>
-              <label class="btn sm" style="cursor:pointer;flex:1" title="Upload recorded Apple Watch SensorLog or Sensor Logger CSV">
-                <svg class="ico sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <label class="btn sm" style="cursor:pointer;flex:1" title="Load Watch CSV: Upload a real SensorLog or Sensor Logger CSV file from Apple Watch to solve Wahba/SVD alignment, tap lag, and RMSE">
                 <span>Load Watch CSV</span>
                 <input type="file" id="watch-file" accept=".csv" style="display:none" />
               </label>
             </div>
-            <div class="row between" style="font-family:var(--mono);font-size:10px;color:var(--ink-3)">
-              <span title="Click to copy HTTP Push URL for Sensor Logger app">Push: <b id="imu-push-url" style="color:var(--cyan);cursor:pointer">/api/room/OPERON/imu</b></span>
-              <button class="btn sm" id="btn-export-imu" title="Download UTC-synchronized sim_imu.csv + watch.csv">
-                <svg class="ico sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                <span>CSVs</span>
-              </button>
+            <div class="row between" style="font-family:var(--mono);font-size:9.5px;color:var(--ink-3)">
+              <span title="HTTP POST endpoint for Sensor Logger live streaming">POST: <b id="imu-push-url" style="color:var(--cyan);cursor:pointer">/api/room/OPERON/imu</b></span>
+              <div class="row" style="gap:4px">
+                <button class="btn sm" id="btn-clear-watch" title="Clear loaded Watch CSV and return to live stream awaiting mode">Clear Watch</button>
+                <button class="btn sm" id="btn-export-imu" title="Download sim_imu.csv (and watch.csv if recorded) with synchronized timestamps">Export CSVs</button>
+              </div>
             </div>
-            <div class="mono" id="watch-status" style="font-size:10px;color:var(--ink-2)">Live 6-Axis (Accel+Gyro) · UTC Synced</div>
+            <div class="mono" id="watch-status" style="font-size:9.5px;color:var(--ink-2)">Watch Input: Awaiting Live Stream or CSV Upload</div>
           </div>
 
-          <!-- COLLAPSIBLE: MANUAL POSE SLIDERS -->
+          <!-- PHONE / WATCH TELEOP RELAY -->
           <details class="drawer" open>
             <summary>
-              <span class="row" style="gap:6px" title="Direct 6-DOF Cartesian position (X, Y, Z in meters) and Euler orientation (Yaw, Pitch, Roll in degrees) control">
-                <svg class="ico sm" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
-                <span>Manual 6-DOF Gripper Pose</span>
-              </span>
-              <span class="mono" id="cmd-src" style="font-size:10px;color:var(--purple-hi)">Direct 60Hz</span>
+              <span>Phone / Apple Watch Live Teleop</span>
+              <span class="pill" id="room-pill">Room OPERON</span>
             </summary>
-            <div class="drawer-body" id="pose-sliders">
-              <div class="help-line">Hover any axis to highlight its 3D gizmo ring/arrow on the gripper. Drag to steer immediately.</div>
-              <div class="pose-grid">
-                <div class="slider-row" data-axis-hover="yaw" title="Yaw (Heading around vertical Z-axis): Rotates the gripper &amp; arm left (+) or right (-) in the horizontal plane"><span style="color:#60a5fa;font-weight:700">yaw</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
-                <div class="slider-row" data-axis-hover="x" title="X Reach (Forward/Back in meters): Moves the gripper away from the base (+) or closer to the base (-)"><span style="color:#f43f5e;font-weight:700">x (m)</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
-                <div class="slider-row" data-axis-hover="pitch" title="Pitch (Elevation tilt): Tilts the gripper nose up (+) or down (-) relative to vertical top-down grasp"><span style="color:#34d399;font-weight:700">pitch</span><input type="range" data-p="pitch" min="-90" max="90" step="1" value="0"><span data-pv="pitch">0°</span></div>
-                <div class="slider-row" data-axis-hover="y" title="Y Lateral (Left/Right in meters): Moves the gripper left (+) or right (-) across the workbench"><span style="color:#34d399;font-weight:700">y (m)</span><input type="range" data-p="y" min="-0.15" max="0.15" step="0.002" value="0.000"><span data-pv="y">0.000</span></div>
-                <div class="slider-row" data-axis-hover="roll" title="Roll (Wrist twist): Twists the gripper jaws clockwise/counter-clockwise around the tool axis (6-DOF tracks this; 4-DOF lacks wrist roll)"><span style="color:#c084fc;font-weight:700">roll</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
-                <div class="slider-row" data-axis-hover="z" title="Z Height (Up/Down in meters): Raises (+) or lowers (-) the gripper above the workbench"><span style="color:#60a5fa;font-weight:700">z (m)</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
+            <div class="drawer-body">
+              <div class="qr-card">
+                <div class="qr-box" data-live="qr"></div>
+                <div class="col" style="gap:3px;min-width:0">
+                  <div style="font-weight:600;font-size:11px;color:var(--surface-grey)">Scan on iPhone or Open on Watch</div>
+                  <a class="mono" data-live="url" target="_blank" rel="noopener" style="font-size:9.5px;color:var(--cyan);word-break:break-all"></a>
+                  <div class="row wrap" style="margin-top:2px;gap:4px">
+                    <a class="btn sm watch" id="sms-watch" href="#" title="Send clickable controller link to Apple Watch via iMessage">iMessage Link</a>
+                    <span class="pill" id="team-pill">6D: 0</span>
+                  </div>
+                </div>
               </div>
+              <div class="row between">
+                <span class="sub-label">Input Mode</span>
+                <div class="seg" id="drive-mode">
+                  <button class="sel" data-v="crowd" title="Blend connected controller inputs">Stream</button>
+                  <button data-v="pilot" title="Lock control to a single device">Single Device</button>
+                  <button data-v="joints" title="Direct per-joint angle sliders on device">Joints</button>
+                </div>
+                <button class="btn sm" id="btn-dice" title="Select active device">Select</button>
+              </div>
+              <div id="pilot-list" class="row wrap" style="gap:4px"></div>
             </div>
           </details>
 
-          <!-- COLLAPSIBLE: OMNIVERSE DOMAIN RANDOMIZATION -->
-          <details class="drawer" open>
+          <!-- LIGHTING & SURFACE RANDOMIZATION -->
+          <details class="drawer">
             <summary>
-              <span class="row" style="gap:6px" title="Synthetic data variation engine: randomizes lighting, surface roughness, and object pose to train robust Sim-to-Real vision policies">
-                <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
-                <span>Omniverse Domain Randomization</span>
-              </span>
+              <span>Lighting, Roughness &amp; Pose Perturbation</span>
             </summary>
             <div class="drawer-body">
               <div class="row between">
-                <span class="sub-label">RTX Lighting &amp; PBR Roughness</span>
-                <button class="btn sm nv" id="btn-dr-rand" title="Randomize key-light intensity, sun angle, colour temperature, and metallic roughness">Randomize</button>
+                <span class="sub-label">PBR Shader &amp; Light Parameters</span>
+                <button class="btn sm nv" id="btn-dr-rand" title="Randomize light intensity, azimuth angle, and metallic surface roughness">Randomize</button>
               </div>
-              <div class="slider-row" title="Key directional light intensity multiplier (0.3x dim to 4.5x studio bright)"><span>Light</span><input type="range" id="dr-light" min="0.3" max="4.5" step="0.1" value="2.8"><span id="drv-light">2.8x</span></div>
-              <div class="slider-row" title="Directional sun azimuth angle around the workbench (-180° to +180°)"><span>Sun°</span><input type="range" id="dr-azi" min="-180" max="180" step="5" value="35"><span id="drv-azi">35°</span></div>
-              <div class="slider-row" title="Microfacet surface roughness (0.05 mirror-like to 0.95 matte)"><span>Rough</span><input type="range" id="dr-rough" min="0.05" max="0.95" step="0.05" value="0.22"><span id="drv-rough">0.22</span></div>
-              <div class="row between" style="margin-top:4px">
-                <button class="btn sm" id="btn-dr-pose" title="Randomly jitter target object position on workbench">Perturb Pose</button>
-                <button class="btn sm" id="btn-bboxes" title="Overlay 2D/3D Replicator ground-truth bounding boxes with class IDs and depth in meters">2D/3D BBoxes: OFF</button>
+              <div class="slider-row" title="Key directional light intensity multiplier"><span>Light</span><input type="range" id="dr-light" min="0.3" max="4.5" step="0.1" value="2.8"><span id="drv-light">2.8x</span></div>
+              <div class="slider-row" title="Directional light azimuth angle in degrees"><span>Azim</span><input type="range" id="dr-azi" min="-180" max="180" step="5" value="35"><span id="drv-azi">35°</span></div>
+              <div class="slider-row" title="Microfacet surface roughness (0.05 specular to 0.95 matte)"><span>Rough</span><input type="range" id="dr-rough" min="0.05" max="0.95" step="0.05" value="0.22"><span id="drv-rough">0.22</span></div>
+              <div class="row between" style="margin-top:3px">
+                <button class="btn sm" id="btn-dr-pose" title="Apply random XY position offset to the 21700 cell on the pick pad">Jitter Cell Pose</button>
+                <button class="btn sm" id="btn-bboxes" title="Project 3D object bounding boxes into 2D camera pixel coordinates">2D/3D BBoxes: OFF</button>
               </div>
             </div>
           </details>
@@ -923,43 +857,41 @@
         </div>
       </section>
 
-      <!-- ── CENTER COLUMN: LARGE OMNIVERSE RTX 3D VIEWPORT ── -->
+      <!-- CENTER COLUMN: 3D VIEWPORT & PERCEPTION BUFFERS -->
       <section class="panel" style="border-color:var(--border-hi)">
         <div class="viewport-wrap">
-          <!-- Floating Top Toolbar: AOV Passes & Camera -->
           <div class="vp-dock-top">
             <div class="glass-bar">
-              <span class="sub-label" style="padding:0 6px" title="Arbitrary Output Variables (AOVs): Switch between photorealistic rendering and ground-truth perception buffers used to train robot vision models">Perception AOVs</span>
+              <span class="sub-label" style="padding:0 5px" title="Render Pass Selector: Switch between PBR shaded view and ground-truth geometry/segmentation buffers">Render Pass</span>
               <div class="seg nv" id="aov-bar">
-                <button class="sel" data-aov="rtx" title="RTX Lit (Photorealistic PBR): Physically-based clearcoat &amp; metallic shaders with soft shadows and image-based lighting">RTX Lit</button>
-                <button data-aov="depth" title="Depth Z (Distance-to-Camera): Encodes metric distance (meters) from the camera lens to each pixel (brighter = closer, darker = farther) for 3D point-cloud reconstruction">Depth Z</button>
-                <button data-aov="normal" title="Surface Normals (XYZ Orientation): RGB colors encode which 3D direction each surface faces (Red = Left/Right X, Green = Up/Down Y, Blue = Toward Camera Z) to compute grasp contact angles">Normals</button>
-                <button data-aov="semantic" title="Semantic Segmentation (Class IDs): Colors every pixel by object category (Class 1 = 4-DOF Arm, Class 2 = 6-DOF Arm, Class 3 = Power Cell, Class 4 = Charger, Class 5 = Valve)">Semantic</button>
-                <button data-aov="instance" title="Instance Segmentation (Unique Object IDs): Separates individual objects of the same class (e.g. Power Cell #30 vs Power Cell #31) with distinct IDs">Instance</button>
+                <button class="sel" data-aov="rtx" title="PBR Lit: Physically-based metallic-roughness shading with clearcoat and soft shadow mapping">PBR Lit</button>
+                <button data-aov="depth" title="Depth Z: Linear metric distance from camera plane to surface point in meters">Depth Z</button>
+                <button data-aov="normal" title="Surface Normals: World/View unit normal vector (Nx, Ny, Nz) mapped to RGB">Normals</button>
+                <button data-aov="semantic" title="Semantic Class ID: Per-pixel category mask (1=Left Arm, 2=Right Arm, 3=Cell, 4=Charger, 5=Valve)">Semantic</button>
+                <button data-aov="instance" title="Instance ID: Per-object unique primitive identifier mask">Instance</button>
               </div>
             </div>
             <div class="glass-bar">
-              <button class="btn sm on" id="btn-gizmo-toggle" title="Toggle 3D Coordinate Frame &amp; Yaw/Pitch/Roll Gizmo Rings on the grippers">3D Axes: ON</button>
-              <button class="btn sm" id="btn-cam-reset" title="Reset 3D camera orbit to default front-isometric view">Reset Camera</button>
-              <button class="btn sm" id="btn-snap-png" title="Download current AOV viewport pass as a high-resolution PNG">Snapshot PNG</button>
+              <button class="btn sm on" id="btn-gizmo-toggle" title="Toggle 3D Yaw, Pitch, Roll, and Approach Axis Gizmo on the grippers">3D Axes: ON</button>
+              <button class="btn sm" id="btn-cam-reset" title="Reset camera orbit to front isometric view">Reset Camera</button>
+              <button class="btn sm" id="btn-snap-png" title="Save current viewport buffer as PNG image">Save PNG</button>
             </div>
           </div>
 
-          <!-- Live AOV Explanation & Legend Banner (updates on click or hover of any AOV button) -->
+          <!-- Live Render Pass Explanation & Legend Banner -->
           <div class="aov-explain-banner" id="aov-explain-banner">
             <div class="aov-explain-main">
               <div class="aov-explain-title" id="aov-banner-title">
-                <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                <span>RTX Lit Pass · Photorealistic PBR + 3D Yaw/Pitch/Roll Gizmo</span>
+                <span>PBR Lit Pass | 6-DOF Ideal Sim (Left) vs 6-DOF Real/Watch Twin (Right)</span>
               </div>
               <div class="aov-explain-desc" id="aov-banner-desc">
-                Hover over any 3D robot link, joint, watch sensor, or object in the scene to inspect its live Semantic Class, Instance ID, Surface Normal vector, and Metric Depth.
+                Hover over any 3D link, actuator, watch sensor, or fixture in the viewport to inspect its Semantic Class, Instance Prim path, Surface Normal vector, and Metric Depth.
               </div>
             </div>
             <div class="aov-legend" id="aov-banner-legend">
-              <span class="swatch" title="Yaw rotates horizontally around Z"><i style="background:#60a5fa"></i>Yaw (Z-Turn)</span>
-              <span class="swatch" title="Pitch tilts nose up/down"><i style="background:#34d399"></i>Pitch (Tilt)</span>
-              <span class="swatch" title="Roll twists wrist around approach axis"><i style="background:#c084fc"></i>Roll (Twist)</span>
+              <span class="swatch" title="Yaw rotates horizontally around Z"><i style="background:#60a5fa"></i>Yaw (Z)</span>
+              <span class="swatch" title="Pitch tilts nose up/down"><i style="background:#34d399"></i>Pitch (Y)</span>
+              <span class="swatch" title="Roll twists wrist around approach axis"><i style="background:#c084fc"></i>Roll (Z_tool)</span>
             </div>
           </div>
 
@@ -969,137 +901,133 @@
             <canvas id="bbox-overlay" width="1120" height="720"></canvas>
           </div>
 
-          <!-- Floating Bottom HUD: Left = 4-DOF Planar Locked UR5e, Right = 6-DOF Full Spherical UR5e -->
-          <div class="vp-dock-bottom">
-            <div class="arm-badge" style="border-left: 3px solid var(--purple)">
+          <!-- Bottom HUD: Dynamically switches between 6D Sim vs 6D Real, Single 6D, and 4D vs 6D -->
+          <div class="vp-dock-bottom" id="vp-dock-bottom">
+            <div class="arm-badge" id="badge-left" style="border-left: 3px solid var(--purple)">
               <div class="arm-badge-hdr">
-                <span><b style="color:var(--purple-hi)">4-DOF Planar UR5e</b> + Forearm Watch IMU</span>
+                <span id="title-left"><b style="color:var(--purple-hi)">6-DOF Ideal Sim UR5e</b> (Zero-Lag Reference)</span>
                 <span id="verdict-4"></span>
               </div>
-              <div class="arm-joints">Joints (q1..q4): <span id="j4-str">0°, 0°, 0°, 0°</span></div>
-              <div class="arm-joints" id="aov-desc" style="color:var(--ink-3)">Pass: RTX PBR Clearcoat + Soft Shadows</div>
+              <div class="arm-joints">Joints: <span id="j4-str">0°, 0°, 0°, 0°, 0°, 0°</span></div>
+              <div class="arm-joints" id="aov-desc" style="color:var(--ink-3)">Pass: PBR Metallic-Roughness + Soft Shadows</div>
             </div>
 
-            <div class="arm-badge" style="border-right: 3px solid var(--blue-hi); text-align: right">
+            <div class="arm-badge" id="badge-right" style="border-right: 3px solid var(--blue-hi); text-align: right">
               <div class="arm-badge-hdr" style="flex-direction: row-reverse">
-                <span><b style="color:var(--blue-hi)">6-DOF Spherical UR5e</b> (Full Wrist Roll)</span>
+                <span id="title-right"><b style="color:var(--blue-hi)">6-DOF Real / Watch Twin</b> (Servo Lag + IMU)</span>
                 <span id="verdict-6"></span>
               </div>
-              <div class="arm-joints">Joints (q1..q6): <span id="j6-str">0°, 0°, 0°, 0°, 0°, 0°</span></div>
-              <div class="arm-joints" id="fps-tag" style="color:var(--ink-3)">Drag to orbit · Scroll to zoom</div>
+              <div class="arm-joints">Joints: <span id="j6-str">0°, 0°, 0°, 0°, 0°, 0°</span></div>
+              <div class="arm-joints" id="fps-tag" style="color:var(--ink-3)">Drag to orbit | Scroll to zoom | Hover to inspect</div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- ── RIGHT COLUMN: SIM-VS-WATCH TELEMETRY & EXPORT ── -->
+      <!-- RIGHT COLUMN: SIM-VS-REAL TELEMETRY & OPEN EXPORTS -->
       <section class="panel">
         <div class="ph">
           <span class="ph-title">
             <svg class="ico" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            <span>Sim-vs-Watch Telemetry</span>
+            <span>2. Sim-to-Real Residuals &amp; Export</span>
           </span>
-          <span class="pill" id="rec-badge">IDLE · 0 frames</span>
+          <span class="pill" id="rec-badge">IDLE | 0 frames</span>
         </div>
         <div class="pb">
 
-          <!-- 3 CLEAR KPI SCORECARDS -->
+          <!-- 3 TECHNICAL KPI CARDS -->
           <div class="kpi-grid">
-            <div class="kpi-card" title="Pearson correlation r between Simulated Forearm IMU and Apple Watch IMU">
-              <span class="kpi-lbl">Watch Correlation</span>
-              <span class="kpi-val" id="m-acc-r" style="color:#38bdf8">0.998</span>
-              <span class="kpi-sub">Gyro r: <b id="m-gyr-r">0.999</b></span>
+            <div class="kpi-card" title="Pearson correlation coefficient r between Simulated Forearm IMU and Real/Watch IMU waveforms (computed only when real Watch CSV or live stream is active)">
+              <span class="kpi-lbl">IMU Correlation</span>
+              <span class="kpi-val" id="m-acc-r" style="color:#38bdf8">N/A</span>
+              <span class="kpi-sub">Gyro r: <b id="m-gyr-r">N/A</b></span>
             </div>
-            <div class="kpi-card" title="Root Mean Square Error between Simulated and Watch Accelerometer / Gyroscope">
+            <div class="kpi-card" title="Root Mean Square Error between Simulated and Real/Watch linear acceleration (m/s^2) and angular velocity (rad/s)">
               <span class="kpi-lbl">Accel / Gyro RMSE</span>
-              <span class="kpi-val" id="m-acc-rmse">0.031</span>
-              <span class="kpi-sub">m/s² · <b id="m-gyr-rmse">0.012</b> rad/s</span>
+              <span class="kpi-val" id="m-acc-rmse">N/A</span>
+              <span class="kpi-sub">m/s² | <b id="m-gyr-rmse">N/A</b> rad/s</span>
             </div>
-            <div class="kpi-card" title="Orientation and position error comparing 4-DOF vs 6-DOF kinematics">
-              <span class="kpi-lbl">4D vs 6D Error</span>
+            <div class="kpi-card" title="End-effector orientation and position discrepancy between Left and Right rigs">
+              <span class="kpi-lbl" id="kpi-err-lbl">Sim vs Real Gap</span>
               <span class="kpi-val" id="m-dof-ori" style="color:var(--purple-hi)">0° / 0°</span>
               <span class="kpi-sub" id="m-dof-pos">0 / 0 mm</span>
             </div>
           </div>
-          <!-- Hidden compatibility nodes for MAE & manipulability -->
-          <span id="m-acc-mae" style="display:none">0.024</span>
-          <span id="m-gyr-mae" style="display:none">0.009</span>
+          <span id="m-acc-mae" style="display:none">N/A</span>
+          <span id="m-gyr-mae" style="display:none">N/A</span>
           <span id="m-dof-w" style="display:none">w=0.05</span>
-          <span id="wahba-ang" style="display:none">37.0°</span>
+          <span id="wahba-ang" style="display:none">N/A</span>
 
           <!-- CHART 1: FOREARM 6-AXIS IMU FUSION OVERLAY -->
           <div class="step-card">
             <div class="row between" style="gap:4px">
-              <span class="sub-label" style="white-space:nowrap"><b style="color:var(--blue-hi)">■ |a|</b> + <b style="color:var(--purple-hi)">■ |ω|</b> · <b style="color:#e879f9">Watch</b></span>
+              <span class="sub-label" style="white-space:nowrap"><b style="color:var(--blue-hi)">|a| Sim</b> + <b style="color:var(--purple-hi)">|w| Sim</b> vs <b style="color:#e879f9">Watch</b></span>
               <div class="seg" id="imu-chart-mode" style="flex-shrink:0">
-                <button class="sel" data-ic="fused" title="6-Axis Complementary Sensor Fusion: Accel measures gravity tilt + grip impulse, Gyro measures fast joint rotation">6-Axis</button>
-                <button data-ic="acc" title="Linear proper acceleration magnitude (m/s²)">Accel</button>
-                <button data-ic="gyro" title="Angular velocity magnitude (rad/s)">Gyro</button>
-                <button data-ic="psd" title="Welch Power Spectral Density (frequency domain)">PSD</button>
+                <button class="sel" data-ic="fused" title="6-Axis Overlay: Simultaneous linear proper acceleration |a| (m/s^2) and angular rate |w| (rad/s)">6-Axis</button>
+                <button data-ic="acc" title="Accelerometer Magnitude: |a| = ||R^T(a_world + g)|| in m/s^2">Accel</button>
+                <button data-ic="gyro" title="Gyroscope Magnitude: |w| = ||(R^T R_dot)^vee|| in rad/s">Gyro</button>
+                <button data-ic="psd" title="Power Spectral Density: Log-magnitude frequency spectrum (0 to 30 Hz)">PSD</button>
               </div>
             </div>
-            <div class="row between" style="font-family:var(--mono);font-size:10px;color:var(--ink-2)">
-              <span id="fusion-att">6-Axis Attitude: Pitch 0.0° · Roll 0.0°</span>
-              <span id="fusion-explain" style="color:var(--ink-3)">Gyro=ω · Accel=g+impulse</span>
+            <div class="row between" style="font-family:var(--mono);font-size:9.5px;color:var(--ink-2)">
+              <span id="fusion-att">Complementary Filter: Pitch 0.0° | Roll 0.0°</span>
+              <span id="fusion-explain" style="color:var(--ink-3)">a=m/s² | w=rad/s</span>
             </div>
-            <canvas class="chart-cv" id="chart-imu" width="600" height="112"></canvas>
+            <canvas class="chart-cv" id="chart-imu" width="600" height="108"></canvas>
           </div>
 
-          <!-- CHART 2: 4-DOF VS 6-DOF DIVERGENCE -->
+          <!-- CHART 2: POSE TRACKING ERROR & JOINT VELOCITY -->
           <div class="step-card">
             <div class="row between">
-              <span class="sub-label"><b style="color:var(--purple-hi)">■ 4-DOF Ori Err</b> vs <b style="color:var(--blue-hi)">■ 6-DOF Ori Err</b></span>
-              <span class="mono" id="div-readout" style="font-size:10px;color:var(--ink-2)">Δori: 0° · |dq|: 0°/s</span>
+              <span class="sub-label" id="chart2-title"><b style="color:var(--purple-hi)">Left Ori Err</b> vs <b style="color:var(--blue-hi)">Right Ori Err</b></span>
+              <span class="mono" id="div-readout" style="font-size:9.5px;color:var(--ink-2)">gap: 0° | peak |dq|: 0°/s</span>
             </div>
-            <div class="help-line">Shows where 4-DOF locks out of plane while 6-DOF spherical wrist aligns cleanly.</div>
-            <canvas class="chart-cv sm" id="chart-err" width="480" height="78"></canvas>
+            <div class="help-line" id="chart2-help">Tracks orientation lag, backlash deadband, and peak joint velocity (deg/s) between rigs.</div>
+            <canvas class="chart-cv sm" id="chart-err" width="480" height="74"></canvas>
           </div>
 
-          <!-- ACTION-CONFIDENCE POLICY GATE (FORMERLY NEMOFLEET, ZERO NEMO BRANDING) -->
+          <!-- KINEMATIC FEASIBILITY & SINGULARITY MONITOR -->
           <div class="step-card">
             <div class="row between">
-              <span class="sub-label" style="color:var(--purple-hi)">Action-Confidence Policy Gate</span>
-              <span class="pill ok" id="nemo-tier">On-Robot ReflexPolicy</span>
+              <span class="sub-label" style="color:var(--purple-hi)" title="Evaluates Yoshikawa manipulability index w = sqrt(det(J*J^T)) and tracking residual to flag wrist singularities">Kinematic Singularity &amp; Envelope Monitor</span>
+              <span class="pill ok" id="nemo-tier">Nominal Envelope</span>
             </div>
-            <div class="row between" style="font-family:var(--mono);font-size:11px">
-              <span title="Confidence probability that current action succeeds within kinematic limits">Confidence p(a): <b id="nemo-prob">0.94</b> (τ=0.78)</span>
-              <span title="Cumulative foundation VLM fallback compute cost">Fallback Compute: <b id="nemo-cost">$0.0000</b></span>
+            <div class="row between" style="font-family:var(--mono);font-size:10px">
+              <span title="Feasibility score based on manipulability and orientation residual">Feasibility Score: <b id="nemo-prob">0.96</b></span>
+              <span title="Yoshikawa manipulability index w (approaches 0 near singular configurations)">Manipulability: <b id="nemo-cost">w = 0.082</b></span>
             </div>
-            <div class="mono" id="nemo-rationale" style="font-size:10px;color:var(--ink-2);line-height:1.35">
-              Trajectory within calibrated kinematic envelope → executed locally on-robot.
+            <div class="mono" id="nemo-rationale" style="font-size:9.5px;color:var(--ink-2);line-height:1.35">
+              Spherical wrist outside gimbal-lock cone; analytical IK solution continuous.
             </div>
           </div>
 
-          <!-- EPISODE RECORDER & ONE-CLICK EXPORTS -->
+          <!-- EPISODE RECORDER & UNRESTRICTED RESEARCH EXPORTS -->
           <div class="step-card">
             <div class="row" style="gap:6px">
-              <button class="btn rec" id="btn-rec" style="flex:1">
-                <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>
+              <button class="btn rec" id="btn-rec" style="flex:1" title="Record 30 Hz kinematic, joint, and 6-axis IMU time-series frames into memory">
                 <span>Record 30Hz Episode</span>
               </button>
               <button class="btn sm" id="btn-clear-ep" title="Clear recorded episode buffer">Clear</button>
             </div>
             <div class="row wrap" style="gap:5px">
-              <button class="btn sm primary" id="exp-lerobot" style="flex:1" title="Export HuggingFace LeRobot / RLDS episode (.jsonl)">LeRobot (.jsonl)</button>
-              <button class="btn sm nv" id="exp-usd" style="flex:1" title="Export OpenUSD PhysicsArticulation stage (.usda)">OpenUSD (.usda)</button>
-              <button class="btn sm" id="exp-coco" style="flex:1" title="Export Omniverse Replicator 2D/3D annotations (.json)">COCO (.json)</button>
+              <button class="btn sm primary" id="exp-lerobot" style="flex:1" title="Download recorded episode in HuggingFace LeRobot / RLDS JSON Lines (.jsonl) format">LeRobot (.jsonl)</button>
+              <button class="btn sm nv" id="exp-usd" style="flex:1" title="Download OpenUSD stage (.usda) with PhysicsArticulationRootAPI and time-sampled joint positions">OpenUSD (.usda)</button>
+              <button class="btn sm" id="exp-coco" style="flex:1" title="Download 2D/3D bounding box and semantic class annotations (.json)">BBoxes (.json)</button>
             </div>
           </div>
 
-          <!-- COLLAPSIBLE RAW SCHEMA INSPECTOR -->
-          <details class="drawer">
+          <!-- RAW SCHEMA & WAHBA SVD INSPECTOR -->
+          <details class="drawer" open>
             <summary>
-              <span class="row" style="gap:6px">
-                <svg class="ico sm" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                <span>Live Schema &amp; compare.py Inspector</span>
-              </span>
+              <span>Live Telemetry Frame &amp; Wahba/SVD Report</span>
             </summary>
             <div class="drawer-body">
               <div class="seg" id="schema-tabs" style="width:100%">
-                <button class="sel" data-s="lerobot" style="flex:1">LeRobot</button>
-                <button data-s="usd" style="flex:1">OpenUSD</button>
-                <button data-s="coco" style="flex:1">AOV</button>
-                <button data-s="sim2real" style="flex:1">compare.py</button>
+                <button class="sel" data-s="sim2real" style="flex:1" title="View live Kabsch/Wahba SVD rotation matrix R_watch_to_sim, tap lag, and channel RMSE/MAE/Pearson r">Wahba / IMU</button>
+                <button data-s="yaml" style="flex:1" title="View exact config/trajectories/*.yaml file and expanded quintic segment durations">YAML Contract</button>
+                <button data-s="lerobot" style="flex:1" title="View current 30 Hz LeRobot observation/action JSON frame">LeRobot JSON</button>
+                <button data-s="usd" style="flex:1" title="View generated OpenUSD ASCII articulation hierarchy">OpenUSD</button>
+                <button data-s="coco" style="flex:1" title="View 2D/3D camera bounding box projections">BBoxes</button>
               </div>
               <div class="term-box" id="schema-preview"></div>
             </div>
@@ -1111,57 +1039,58 @@
     </div>
   </div>
 
-  <!-- LIVE 3D SCENE RAYCAST HOVER PROBE (INSPECT SEMANTIC CLASS, INSTANCE ID, SURFACE NORMAL, DEPTH Z & POSE) -->
+  <!-- LIVE 3D SCENE RAYCAST HOVER PROBE -->
   <div class="scene-hover-probe hide" id="scene-hover-probe">
     <div class="probe-hdr">
       <span id="probe-name">UR5e Link</span>
-      <span class="pill ok" id="probe-class" style="font-size:9.5px;padding:1px 6px">Class 2</span>
+      <span class="pill ok" id="probe-class" style="font-size:9px;padding:1px 6px">PBR</span>
     </div>
     <div class="probe-grid">
       <span>Semantic ID:</span><b id="probe-sem">robot_arm_6dof (Class 2)</b>
       <span>Instance Prim:</span><b id="probe-inst">/World/ur5e_6dof#20</b>
-      <span>Surface Normal:</span><b id="probe-norm">N = (0.00, 1.00, 0.00)</b>
+      <span>Surface Normal:</span><b id="probe-norm">N = (+0.00, +1.00, +0.00)</b>
       <span>Metric Depth Z:</span><b id="probe-depth">0.742 m from lens</b>
       <span>World XYZ (m):</span><b id="probe-xyz">(0.150, 0.000, 0.120)</b>
     </div>
-    <div id="probe-desc" style="font-size:10px;color:var(--ink-3);border-top:1px solid var(--border);padding-top:3px;line-height:1.3"></div>
+    <div id="probe-desc" style="font-size:9.5px;color:var(--ink-3);border-top:1px solid var(--border);padding-top:3px;line-height:1.3"></div>
   </div>
 
   <!-- RICH UI HOVER INSPECTOR TOOLTIP -->
   <div class="ui-hover-card hide" id="ui-hover-card">
-    <span class="ui-hover-tag" id="ui-hover-tag">Inspector</span>
+    <span class="ui-hover-tag" id="ui-hover-tag">Technical Inspector</span>
     <div class="ui-hover-title" id="ui-hover-title"></div>
     <div class="ui-hover-body" id="ui-hover-body"></div>
   </div>
 
-  <!-- COMMERCIAL LICENSE ACTIVATION MODAL -->
-  <div class="lic-backdrop hide" id="lic-modal">
+  <!-- TECHNICAL VALUE PROPOSITION & ENGINEERING SCOPE MODAL -->
+  <div class="lic-backdrop hide" id="scope-modal">
     <div class="lic-modal">
       <div class="row between">
-        <div class="row" style="gap:8px">
-          <span class="nv-badge">OPERON COMMERCIAL LICENSE</span>
-        </div>
-        <button class="btn sm" id="lic-close">✕</button>
+        <span class="nv-badge">ENGINEERING SCOPE &amp; VALUE PROPOSITION</span>
+        <button class="btn sm" id="scope-close">Close</button>
       </div>
-      <div style="font-weight:700;font-size:16px">Unlock Production Dataset &amp; OpenUSD Exports</div>
-      <p style="color:var(--ink-2);font-size:12.5px;line-height:1.45">
-        Interactive 3D teleop and live Sim-vs-Watch IMU preview run in evaluation mode. Production exports (<b>LeRobot .jsonl</b>, <b>OpenUSD .usda</b>, <b>Omniverse Replicator COCO .json</b>, and <b>Full Watch CSVs</b>) require an active Operon license key.
-      </p>
-      <div class="col" style="gap:6px">
-        <div class="lic-tier">
-          <div><b>Operon Researcher / Indie</b><div style="font-size:11px;color:var(--ink-3)">Single seat · Unlimited Watch CSV + LeRobot exports</div></div>
-          <span class="mono" style="color:var(--purple-hi);font-weight:700">$49 / mo</span>
-        </div>
-        <div class="lic-tier">
-          <div><b>Operon Robotics Lab &amp; Fleet</b><div style="font-size:11px;color:var(--ink-3)">OpenUSD stages · Replicator AOVs · Policy Gate API</div></div>
-          <span class="mono" style="color:var(--blue-hi);font-weight:700">$249 / mo</span>
-        </div>
+      <div style="font-weight:700;font-size:15px">What Operon Does, Why It Is Useful, and Its Exact Technical Boundaries</div>
+
+      <div class="spec-box">
+        <b>1. Side-by-Side 6-DOF Sim vs. 6-DOF Real/Watch Twin (Default Mode)</b><br/>
+        Left rig computes analytical 6-DOF inverse kinematics (q1..q6) with zero phase lag. Right rig applies a physical actuator twin model (22 ms servo time constant, 0.35 deg harmonic-drive backlash deadband, gravity cantilever deflection, and live forearm IMU perturbations). You can also switch to a <b>Single 6-DOF</b> view or the <b>4-DOF vs 6-DOF</b> planar-constraint baseline in the top bar.
       </div>
-      <input class="lic-inp" id="lic-input" type="password" placeholder="Enter License Key (e.g. OPERON-PRO-...)" autocomplete="off" />
-      <div class="mono" id="lic-msg" style="font-size:11px;color:var(--purple-hi);min-height:14px"></div>
-      <div class="row between">
-        <span class="mono" style="font-size:10.5px;color:var(--ink-3)">© 2026 Gretchen Boria, PhD · All Rights Reserved</span>
-        <button class="btn primary" id="lic-activate">Activate License</button>
+
+      <div class="spec-box">
+        <b>2. Concrete Engineering Outputs You Can Use Today</b><br/>
+        - <b>Extrinsic IMU Calibration (Wahba/SVD)</b>: Computes the 3x3 rotation matrix R_watch_to_sim aligning an off-the-shelf Apple Watch or phone strapped to a robot link against the kinematic link frame, plus RMSE, MAE, and Pearson r.<br/>
+        - <b>Singularity-Free 6-DOF Wrist Control</b>: Dual-branch ZYZ spherical wrist solver prevents 180 deg wrist flips near q5 = 0.<br/>
+        - <b>Standard Trajectory &amp; Dataset Exports</b>: Unrestricted export of UTC-synced <code>sim_imu.csv</code> + <code>watch.csv</code>, LeRobot <code>.jsonl</code> episodes, OpenUSD <code>.usda</code> articulations, and 2D/3D bounding boxes.
+      </div>
+
+      <div class="spec-box">
+        <b>3. Honest Scope Limitations (What This Is Not)</b><br/>
+        Operon is a browser-based kinematic, trajectory, and inertial calibration workbench. It does not run a full frictional rigid-body contact solver (such as MuJoCo or PhysX GPU contact dynamics). Use it for pre-hardware coordinate frame verification, teleop latency testing, polynomial trajectory profiling, and wearable IMU calibration.
+      </div>
+
+      <div class="row between" style="margin-top:2px">
+        <span class="mono" style="font-size:10px;color:var(--ink-3)">Personal Testing &amp; Non-Commercial Research License | Public Repository: github.com/gretchenboria/Operon</span>
+        <button class="btn primary" id="scope-ok">Understood</button>
       </div>
     </div>
   </div>
