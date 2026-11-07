@@ -70,6 +70,32 @@ class Room {
     this.code = code;
     this.sockets = new Set(); // each ws has ws.meta = { role, id }
     this.state = null;
+    this.httpPhones = new Map(); // id -> { lastSeen, queue: [] }
+  }
+
+  touchHttpPhone(id) {
+    let p = this.httpPhones.get(id);
+    const isNew = !p;
+    if (!p) {
+      p = { lastSeen: Date.now(), queue: [] };
+      this.httpPhones.set(id, p);
+    } else {
+      p.lastSeen = Date.now();
+    }
+    return isNew;
+  }
+
+  pruneHttpPhones() {
+    const now = Date.now();
+    let changed = false;
+    for (const [id, p] of this.httpPhones) {
+      if (now - p.lastSeen > 12000) {
+        this.httpPhones.delete(id);
+        this.toDecks({ t: "leave", from: id });
+        changed = true;
+      }
+    }
+    if (changed) this.toDecks({ t: "presence", phones: this.phoneIds() });
   }
 
   getWebSockets(tag) {
@@ -82,7 +108,9 @@ class Room {
   }
 
   phoneIds() {
-    return [...new Set(this.getWebSockets("phone").map(ws => ws.meta.id).filter(Boolean))];
+    this.pruneHttpPhones();
+    const wsIds = this.getWebSockets("phone").map(ws => ws.meta.id).filter(Boolean);
+    return [...new Set([...wsIds, ...this.httpPhones.keys()])];
   }
 
   toDecks(msg) {
@@ -131,6 +159,11 @@ class Room {
         for (const p of this.getWebSockets(`id:${msg.to}`)) {
           try { p.send(raw); } catch {}
         }
+        const hp = this.httpPhones.get(msg.to);
+        if (hp) {
+          hp.queue.push(msg);
+          if (hp.queue.length > 25) hp.queue.shift();
+        }
         return;
       }
       if (msg.t === "state") {
@@ -141,6 +174,10 @@ class Room {
       }
       for (const p of this.getWebSockets("phone")) {
         try { p.send(raw); } catch {}
+      }
+      for (const hp of this.httpPhones.values()) {
+        hp.queue.push(msg);
+        if (hp.queue.length > 25) hp.queue.shift();
       }
       return;
     }
@@ -252,6 +289,49 @@ const server = http.createServer((req, res) => {
     }
     res.writeHead(426, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("expected websocket");
+    return;
+  }
+
+  // HTTP polling & command fallback for Apple Watch WebKit (where watchOS blocks WebSockets)
+  const mPoll = url.pathname.match(/^\/api\/room\/([^/]+)\/poll$/);
+  if (mPoll && (req.method === "POST" || req.method === "OPTIONS")) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+    const code = mPoll[1].toUpperCase();
+    if (!ROOM_RE.test(code)) { res.writeHead(400); res.end("bad room"); return; }
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", chunk => { if (raw.length < 128 * 1024) raw += chunk; });
+    req.on("end", () => {
+      try {
+        const body = JSON.parse(raw || "{}");
+        const id = String(body.id || "watch-1").replace(/[^a-zA-Z0-9-]/g, "").slice(0, 40) || "watch-1";
+        const room = getRoom(code);
+        const isNew = room.touchHttpPhone(id);
+        const hp = room.httpPhones.get(id);
+        if (isNew) {
+          if (room.state) hp.queue.push(room.state);
+          room.toDecks({ t: "join", from: id });
+          room.toDecks({ t: "presence", phones: room.phoneIds() });
+        }
+        if (Array.isArray(body.msgs)) {
+          for (const msg of body.msgs) {
+            if (msg && typeof msg === "object" && msg.t !== "ping") {
+              msg.from = id;
+              room.toDecks(msg);
+            }
+          }
+        }
+        const out = hp ? hp.queue.splice(0, hp.queue.length) : [];
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+        res.end(JSON.stringify({ ok: true, msgs: out, state: room.state }));
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end('{"ok":false}');
+      }
+    });
     return;
   }
 

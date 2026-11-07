@@ -37,10 +37,41 @@ const STATIC = {
 };
 for (const [k, v] of Object.entries(STATIC)) if ($(k)) $(k).textContent = v;
 
-// ---------- connection ----------
-let ws = null, retry = 0;
+// ---------- connection (WebSocket with instant HTTP fallback for watchOS WebKit) ----------
+let ws = null, retry = 0, useHttp = false, httpQueue = [], httpTimer = null;
 const status = $("status");
 function setStatus(cls, txt) { status.className = `pill ${cls}`; status.textContent = txt; }
+
+function startHttpMode() {
+  if (useHttp) return;
+  useHttp = true;
+  if (ws) { try { ws.onclose = null; ws.close(); } catch {} ws = null; }
+  setStatus("ok", `⌚ ${ROOM}`);
+  httpQueue.push({ t: "hello", name: myName });
+  const poll = async () => {
+    const batch = httpQueue.splice(0, httpQueue.length);
+    try {
+      const r = await fetch(`/api/room/${ROOM}/poll`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: myId, msgs: batch }),
+        cache: "no-store"
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setStatus("ok", `⌚ ${ROOM}`);
+        if (Array.isArray(d.msgs)) d.msgs.forEach(handle);
+      } else {
+        setStatus("warn", T("syncing…", "sincronizando…"));
+      }
+    } catch {
+      setStatus("warn", T("retrying…", "reintentando…"));
+    }
+  };
+  poll();
+  httpTimer = setInterval(poll, 220);
+}
+
 function connect() {
   if (!ROOM_OK) {
     setStatus("no", T("no room", "sin sala"));
@@ -48,16 +79,47 @@ function connect() {
     $("idle-sub").textContent = T("This link is missing its room code.", "A este enlace le falta el código de sala.");
     return;
   }
+  if (useHttp) return;
   const proto = location.protocol === "https:" ? "wss" : "ws";
   setStatus("warn", T("connecting…", "conectando…"));
-  ws = new WebSocket(`${proto}://${location.host}/api/room/${ROOM}/ws?role=phone&id=${myId}`);
-  ws.onopen = () => { retry = 0; setStatus("ok", `${T("room", "sala")} ${ROOM}`); send({ t: "hello", name: myName }); };
-  ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } handle(m); };
-  ws.onclose = () => { setStatus("no", T("reconnecting…", "reconectando…")); setTimeout(connect, Math.min(6000, 400 * 2 ** retry++)); };
+  const fallbackTimeout = setTimeout(() => {
+    if (!ws || ws.readyState !== 1) startHttpMode();
+  }, 1200);
+  try {
+    ws = new WebSocket(`${proto}://${location.host}/api/room/${ROOM}/ws?role=phone&id=${myId}`);
+    ws.onopen = () => {
+      clearTimeout(fallbackTimeout);
+      retry = 0;
+      setStatus("ok", `${T("room", "sala")} ${ROOM}`);
+      send({ t: "hello", name: myName });
+    };
+    ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } handle(m); };
+    ws.onerror = () => { clearTimeout(fallbackTimeout); startHttpMode(); };
+    ws.onclose = () => {
+      clearTimeout(fallbackTimeout);
+      if (useHttp) return;
+      if (retry >= 1) { startHttpMode(); return; }
+      setStatus("no", T("reconnecting…", "reconectando…"));
+      setTimeout(connect, Math.min(3000, 400 * 2 ** retry++));
+    };
+  } catch {
+    clearTimeout(fallbackTimeout);
+    startHttpMode();
+  }
 }
-const send = (m) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
+const send = (m) => {
+  if (useHttp) {
+    if (m.t === "pose") {
+      const idx = httpQueue.findIndex(x => x.t === "pose" && !x.v?.grabToggle && !x.v?.snap);
+      if (idx >= 0 && !m.v?.grabToggle && !m.v?.snap) { httpQueue[idx] = m; return; }
+    }
+    httpQueue.push(m);
+  } else if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify(m));
+  }
+};
 connect();
-setInterval(() => send({ t: "ping" }), 25000);
+setInterval(() => { if (!useHttp) send({ t: "ping" }); }, 25000);
 
 // ---------- state ----------
 let slide = "teleop", deckSlide = "idle", mode = "pose", team = 6, assigned = [], vote = null, quizQ = null;
