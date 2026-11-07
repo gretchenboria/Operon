@@ -48,7 +48,10 @@ function startHttpMode() {
   if (ws) { try { ws.onclose = null; ws.close(); } catch {} ws = null; }
   setStatus("ok", `HTTP ${ROOM}`);
   httpQueue.push({ t: "hello", name: myName });
+  let pollBusy = false;
   const poll = async () => {
+    if (pollBusy) return;
+    pollBusy = true;
     const batch = httpQueue.splice(0, httpQueue.length);
     try {
       const r = await fetch(`/api/room/${ROOM}/poll`, {
@@ -66,10 +69,12 @@ function startHttpMode() {
       }
     } catch {
       setStatus("warn", T("retrying...", "reintentando..."));
+    } finally {
+      pollBusy = false;
     }
   };
   poll();
-  httpTimer = setInterval(poll, 220);
+  httpTimer = setInterval(poll, 60);
 }
 
 function connect() {
@@ -84,7 +89,7 @@ function connect() {
   setStatus("warn", T("connecting…", "conectando…"));
   const fallbackTimeout = setTimeout(() => {
     if (!ws || ws.readyState !== 1) startHttpMode();
-  }, 1200);
+  }, 2400);
   try {
     ws = new WebSocket(`${proto}://${location.host}/api/room/${ROOM}/ws?role=phone&id=${myId}`);
     ws.onopen = () => {
@@ -225,25 +230,25 @@ $("team").querySelectorAll("button").forEach(b => b.addEventListener("click", ()
 const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
 let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false, lastGestureAt = 0;
 let deskGain = 2.5; // Default 2.5x Desk Mode: +/-22 deg comfortable wrist movement in front of screen spans full robot workspace
+let wearMode = "left"; // "left" (Left Wrist Watch) | "right" (Right Wrist Watch) | "phone" (Phone in Hand)
+let flipLR = 1, flipUD = 1;
 let fusedAtt = { yaw: 0, pitch: 0, roll: 0, lastT: 0 };
 let wakeLockSentinel = null, audioKeepAliveCtx = null;
 
 // Prevent Apple Watch / iOS Safari from sleeping, dimming, or freezing JS timers while wrist is held in front of screen
 async function acquireWatchWakeLock() {
-  // 1. Standard W3C Screen Wake Lock API (supported in modern iOS / watchOS WebKit)
   try {
     if ("wakeLock" in navigator && navigator.wakeLock?.request) {
       wakeLockSentinel = await navigator.wakeLock.request("screen");
     }
   } catch {}
-  // 2. WebAudio silent oscillator keep-alive (prevents watchOS WebKit from suspending the JS event loop when wrist lowers slightly)
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (AC && !audioKeepAliveCtx) {
       audioKeepAliveCtx = new AC();
       const osc = audioKeepAliveCtx.createOscillator();
       const gain = audioKeepAliveCtx.createGain();
-      gain.gain.value = 0.00001; // inaudible
+      gain.gain.value = 0.00001;
       osc.connect(gain);
       gain.connect(audioKeepAliveCtx.destination);
       osc.start();
@@ -251,7 +256,6 @@ async function acquireWatchWakeLock() {
       await audioKeepAliveCtx.resume();
     }
   } catch {}
-  // 3. Tiny 1x1 muted canvas stream video loop (prevents mobile Safari screen dim timeout)
   try {
     const vid = $("wake-video");
     if (vid && !vid.srcObject) {
@@ -274,6 +278,32 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+// Wear Mode selector (Left Wrist Watch vs Right Wrist Watch vs Phone in Hand)
+if ($("wrist-side")) {
+  $("wrist-side").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    wearMode = b.dataset.w || "left";
+    $("wrist-side").querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
+    zero = null;
+    touched = true;
+  }));
+}
+
+// Instant 1-tap Axis Flip buttons so user never fights inverted directions
+if ($("flip-lr")) {
+  $("flip-lr").addEventListener("click", () => {
+    flipLR *= -1;
+    $("flip-lr").classList.toggle("sel", flipLR < 0);
+    $("flip-lr").textContent = flipLR < 0 ? "Left/Right: Flipped" : "Flip Left/Right";
+  });
+}
+if ($("flip-ud")) {
+  $("flip-ud").addEventListener("click", () => {
+    flipUD *= -1;
+    $("flip-ud").classList.toggle("sel", flipUD < 0);
+    $("flip-ud").textContent = flipUD < 0 ? "Up/Down: Flipped" : "Flip Up/Down";
+  });
+}
+
 // Gain selector on Watch / Phone (1x Full Arm, 2.5x Desk Mode, 4x Micro)
 if ($("gain-bar")) {
   $("gain-bar").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
@@ -283,11 +313,44 @@ if ($("gain-bar")) {
   }));
 }
 
+// Anatomical Forearm / Hand Frame -> Screen-Centric Robot Frame Mapping:
+// On a Watch strapped to your Left Wrist (+X_device = toward hand/fingers, +Y_device = toward thumb/anterior, +Z_device = out of watch face):
+// - Raising/Lowering forearm or tilting thumb up/down changes gravity along X/Y
+// - Supinating/Pronating forearm rotates around X_device (beta)
+// - Sweeping forearm Left/Right rotates around Z_device (alpha)
+function mapDeviceAnglesToRobot(rawYaw, rawPitch, rawRoll) {
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  let lrDeg, udDeg, twistDeg;
+  if (wearMode === "left") {
+    // Left Wrist Watch held in front of chest facing screen:
+    // - Sweeping arm right/left (yaw) + rolling wrist -> Screen Left/Right
+    // - Raising/lowering hand or tilting watch up/down -> Screen Up/Down & Forward/Back
+    lrDeg = (-rawYaw * 0.85 + rawRoll * 0.55) * flipLR;
+    udDeg = (rawPitch) * flipUD;
+    twistDeg = rawRoll;
+  } else if (wearMode === "right") {
+    // Right Wrist Watch (+X_device points left toward fingers): invert pitch/roll sign relative to left wrist
+    lrDeg = (-rawYaw * 0.85 - rawRoll * 0.55) * flipLR;
+    udDeg = (-rawPitch) * flipUD;
+    twistDeg = -rawRoll;
+  } else {
+    // Phone held in hand pointing at screen:
+    // - Turning/tilting phone right (+gamma / -alpha) -> Screen Right (-Y)
+    // - Tilting phone nose up (+beta) -> Screen Up/Forward
+    lrDeg = (-rawYaw * 0.70 - rawRoll * 0.75) * flipLR;
+    udDeg = rawPitch * flipUD;
+    twistDeg = rawRoll;
+  }
+  pose.yaw = Math.round(clamp(lrDeg * deskGain, -180, 180));
+  pose.pitch = Math.round(clamp(udDeg * deskGain, -90, 90));
+  pose.roll = Math.round(clamp(twistDeg * deskGain, -90, 90));
+}
+
 function onMotion(e) {
   const a = e.accelerationIncludingGravity || e.acceleration;
   const r = e.rotationRate;
   const now = performance.now();
-  const dt = fusedAtt.lastT ? Math.min(0.1, Math.max(0.002, (now - fusedAtt.lastT) / 1000)) : 0.02;
+  const dt = fusedAtt.lastT ? Math.min(0.08, Math.max(0.002, (now - fusedAtt.lastT) / 1000)) : 0.016;
   fusedAtt.lastT = now;
 
   if (a && (a.x != null || a.y != null || a.z != null)) {
@@ -295,7 +358,7 @@ function onMotion(e) {
     pose.ay = +(a.y || 0).toFixed(3);
     pose.az = +(a.z || 0).toFixed(3);
     const mag = Math.hypot(pose.ax, pose.ay, pose.az);
-    if (mag > 16.5) pose.tap = 1; // sharp tap fiducial like abel_sim2real compare.py
+    if (mag > 16.5) pose.tap = 1;
   }
   if (r && (r.alpha != null || r.beta != null || r.gamma != null)) {
     const d2r = Math.PI / 180;
@@ -304,26 +367,33 @@ function onMotion(e) {
     pose.gz = +((r.alpha || 0) * d2r).toFixed(3);
   }
 
-  // Fallback Attitude Integration from 6-Axis Accelerometer + Gyroscope when watchOS omits DeviceOrientationEvent:
-  // If DeviceOrientation hasn't fired recently, compute pitch/roll from gravity vector + gyro integration and yaw from gyro Z
-  if (!lastO || (now - (lastO.t || 0) > 250)) {
-    const r2d = 180 / Math.PI;
-    const accPitch = Math.atan2(-pose.ay, Math.hypot(pose.ax, pose.az)) * r2d;
-    const accRoll = Math.atan2(pose.ax, pose.az) * r2d;
-    fusedAtt.pitch = 0.92 * (fusedAtt.pitch + pose.gx * r2d * dt) + 0.08 * accPitch;
-    fusedAtt.roll = 0.92 * (fusedAtt.roll + pose.gy * r2d * dt) + 0.08 * accRoll;
-    fusedAtt.yaw = Math.max(-90, Math.min(90, fusedAtt.yaw + pose.gz * r2d * dt));
+  // High-rate 6-Axis Complementary Filter (fuses 60Hz Gyro rate with gravity vector so attitude is rock-solid even when DeviceOrientation is noisy or absent)
+  const r2d = 180 / Math.PI;
+  // On wrist watch (+X along forearm toward hand, +Y across wrist, +Z out of screen):
+  // Forearm elevation (raising/lowering hand) tilts +X relative to gravity: atan2(ax, hypot(ay, az))
+  // Forearm pronation/supination (rolling wrist) tilts +Y relative to gravity: atan2(ay, az)
+  const accElev = wearMode === "phone"
+    ? Math.atan2(-pose.ay, Math.hypot(pose.ax, pose.az)) * r2d
+    : Math.atan2(pose.ax, Math.hypot(pose.ay, pose.az)) * r2d;
+  const accTwist = wearMode === "phone"
+    ? Math.atan2(pose.ax, pose.az) * r2d
+    : Math.atan2(pose.ay, pose.az) * r2d;
+
+  fusedAtt.pitch = 0.90 * (fusedAtt.pitch + (wearMode === "phone" ? pose.gx : pose.gy) * r2d * dt) + 0.10 * accElev;
+  fusedAtt.roll = 0.90 * (fusedAtt.roll + (wearMode === "phone" ? pose.gy : pose.gx) * r2d * dt) + 0.10 * accTwist;
+  // Apply small deadzone (2 deg/s) and gentle centering leak (0.996) on gyro Z yaw when compass alpha is unavailable
+  const gzDegS = Math.abs(pose.gz * r2d) > 2.0 ? pose.gz * r2d : 0;
+  fusedAtt.yaw = Math.max(-85, Math.min(85, fusedAtt.yaw * 0.997 + gzDegS * dt));
+
+  if (!lastO || (now - (lastO.t || 0) > 180)) {
     if (!zero) zero = { a: fusedAtt.yaw, b: fusedAtt.pitch, g: fusedAtt.roll };
-    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-    pose.yaw = Math.round(clamp((fusedAtt.yaw - zero.a) * deskGain, -180, 180));
-    pose.pitch = Math.round(clamp((fusedAtt.pitch - zero.b) * deskGain, -90, 90));
-    pose.roll = Math.round(clamp((fusedAtt.roll - zero.g) * deskGain, -90, 90));
+    mapDeviceAnglesToRobot(fusedAtt.yaw - zero.a, fusedAtt.pitch - zero.b, fusedAtt.roll - zero.g);
     tiltOn = true;
     readout();
   }
 
-  // Push immediate pose + IMU packet on significant motion so watch never feels laggy or frozen between intervals
-  if (now - (onMotion.lastSent || 0) >= 45) {
+  // Stream at 30 Hz directly on motion callback for crisp low-latency response
+  if (now - (onMotion.lastSent || 0) >= 32) {
     onMotion.lastSent = now;
     const tMs = Date.now();
     send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
@@ -350,12 +420,11 @@ function onOrient(e) {
   if (e.alpha == null && e.beta == null) return;
   lastO = { a: e.alpha || 0, b: e.beta || 0, g: e.gamma || 0, t: performance.now() };
   if (!zero) zero = { ...lastO };
-  // Apply Desk Motion Gain (default 2.5x) so small comfortable wrist rotations right in front of your screen cover the full workspace
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   let yaw = lastO.a - zero.a; while (yaw > 180) yaw -= 360; while (yaw < -180) yaw += 360;
-  pose.yaw = Math.round(clamp(yaw * deskGain, -180, 180));
-  pose.pitch = Math.round(clamp((lastO.b - zero.b) * deskGain, -90, 90));
-  pose.roll = Math.round(clamp((lastO.g - zero.g) * deskGain, -90, 90));
+  // On wrist watch, beta is rotation around X (twist) and gamma is rotation around Y (elevation tilt)
+  const rawPitch = wearMode === "phone" ? (lastO.b - zero.b) : -(lastO.g - zero.g);
+  const rawRoll = wearMode === "phone" ? (lastO.g - zero.g) : (lastO.b - zero.b);
+  mapDeviceAnglesToRobot(yaw, rawPitch, rawRoll);
   tiltOn = true;
   readout();
 }

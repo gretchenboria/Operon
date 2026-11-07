@@ -107,21 +107,37 @@
     </div>
     <div class="seg" id="aim" style="margin-top:12px"><button data-v="tilt" class="sel">Compact Wrist Desk Mode (1:1)</button><button data-v="auto">Joystick Only</button></div>
     <div id="tilt-box" style="margin-top:10px">
-      <div class="read"><div>yaw<b id="r-yaw">0°</b></div><div>pitch<b id="r-pitch">0°</b></div><div>roll<b id="r-roll">0°</b></div></div>
-      <div class="row" style="margin-bottom:8px;justify-content:space-between">
-        <span class="lbl" id="t-gain">Desk Motion Scale (Gain)</span>
-        <div class="seg" id="gain-bar" style="flex:1;max-width:210px">
+      <div class="read">
+        <div>left/right<b id="r-yaw">0°</b></div>
+        <div>up/down<b id="r-pitch">0°</b></div>
+        <div>twist<b id="r-roll">0°</b></div>
+      </div>
+      <div class="row" style="margin-bottom:8px;justify-content:space-between;gap:6px">
+        <span class="lbl" id="t-hand">Wear</span>
+        <div class="seg" id="wrist-side" style="flex:1">
+          <button data-w="left" class="sel">Left Wrist</button>
+          <button data-w="right">Right Wrist</button>
+          <button data-w="phone">Phone in Hand</button>
+        </div>
+      </div>
+      <div class="row" style="margin-bottom:8px;justify-content:space-between;gap:6px">
+        <span class="lbl" id="t-gain">Scale</span>
+        <div class="seg" id="gain-bar" style="flex:1">
           <button data-g="1">1x</button>
           <button data-g="2.5" class="sel">2.5x Desk</button>
           <button data-g="4">4x Micro</button>
         </div>
       </div>
+      <div class="row" style="margin-bottom:8px;gap:6px">
+        <button class="btn light" id="flip-lr" style="flex:1;padding:8px;font-size:13px">Flip Left/Right</button>
+        <button class="btn light" id="flip-ud" style="flex:1;padding:8px;font-size:13px">Flip Up/Down</button>
+      </div>
       <button class="btn" id="enable-tilt">Enable Live Wrist IMU + Wake Lock</button>
       <div class="row" style="margin-top:10px"><button class="btn light" id="zero">Recenter Here (Zero)</button><button class="btn light" id="manual">Sliders</button></div>
       <div id="manual-box" class="hide js">
-        <div class="row"><span class="lbl">yaw</span><span class="v" id="mv-yaw">0°</span></div><input type="range" id="m-yaw" min="-180" max="180" value="0">
-        <div class="row" style="margin-top:10px"><span class="lbl">pitch</span><span class="v" id="mv-pitch">0°</span></div><input type="range" id="m-pitch" min="-90" max="90" value="0">
-        <div class="row" style="margin-top:10px"><span class="lbl">roll</span><span class="v" id="mv-roll">0°</span></div><input type="range" id="m-roll" min="-90" max="90" value="0">
+        <div class="row"><span class="lbl">left/right (yaw)</span><span class="v" id="mv-yaw">0°</span></div><input type="range" id="m-yaw" min="-180" max="180" value="0">
+        <div class="row" style="margin-top:10px"><span class="lbl">up/down (pitch)</span><span class="v" id="mv-pitch">0°</span></div><input type="range" id="m-pitch" min="-90" max="90" value="0">
+        <div class="row" style="margin-top:10px"><span class="lbl">twist (roll)</span><span class="v" id="mv-roll">0°</span></div><input type="range" id="m-roll" min="-90" max="90" value="0">
       </div>
     </div>
     <!-- Hidden keep-awake media element for watchOS / iOS WebKit screen-lock prevention -->

@@ -2259,16 +2259,32 @@ function tick(now) {
       const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
       const gainScale = (st.studioGain || 2.5) / 2.5;
       if (c.aim === "tilt" && Math.hypot(c.vx, c.vy, c.vz) < 0.04) {
-        // COMPACT DESK WORKSPACE MODE (Position-Proportional):
-        // Small comfortable wrist rotations right in front of your screen (+/-22 deg before gain)
-        // directly position the robot end-effector across the entire X/Y workspace without reaching your arm far out!
-        // - Tilting wrist forward/back (pitch) -> X reach (0.06m to 0.21m)
-        // - Tilting/turning wrist left/right (yaw & roll) -> Y lateral (-0.13m to +0.13m)
-        const targetX = cl(0.145 + (c.pitch / 55) * 0.065 * gainScale, 0.055, 0.215);
-        const targetY = cl(((c.yaw * 0.55 - c.roll * 0.45) / 55) * 0.115 * gainScale, -0.135, 0.135);
-        const kp = Math.min(1, dt * 14);
+        // SCREEN-ALIGNED COMPACT DESK WORKSPACE MODE (Position-Proportional + Magnetic Station Assist):
+        // Because the camera sits at +X looking toward the robot origin:
+        //   - Screen Left/Right is Robot -Y / +Y
+        //   - Screen Up/Down is Robot +Z / -Z (height) and Forward/Back (+X / -X)
+        // Moving your wrist Left/Right (c.yaw) sweeps the gripper across Screen Left/Right (Y).
+        // Tilting your wrist Up/Down (c.pitch) raises/lowers and reaches the gripper toward the active station!
+        const baseP = activeT ? activeT.p : [0.15, 0.0, 0.09];
+        let targetX = cl(0.150 + (c.pitch / 55) * 0.045 * gainScale, 0.075, 0.205);
+        let targetY = cl((c.yaw / 50) * 0.125 * gainScale, -0.135, 0.135);
+        let targetZ = cl(0.085 + (c.pitch / 50) * 0.075 * gainScale, 0.024, 0.210);
+
+        // Magnetic Target Funnel: when wrist brings the tool within 65 mm of the active station target,
+        // gently pull (x, y, z) into alignment so picking cells or slotting the charger feels effortless
+        if (activeT) {
+          const distToTgt = Math.hypot(targetX - baseP[0], targetY - baseP[1], targetZ - baseP[2]);
+          if (distToTgt < 0.065) {
+            const pull = (1 - distToTgt / 0.065) * 0.55;
+            targetX += (baseP[0] - targetX) * pull;
+            targetY += (baseP[1] - targetY) * pull;
+            targetZ += (baseP[2] - targetZ) * pull;
+          }
+        }
+        const kp = Math.min(1, dt * 28);
         st.cmd.x += (targetX - st.cmd.x) * kp;
         st.cmd.y += (targetY - st.cmd.y) * kp;
+        st.cmd.z += (targetZ - st.cmd.z) * kp;
       } else {
         st.cmd.x = cl(st.cmd.x + c.vx * SPEED * gainScale * dt, 0.05, 0.22);
         st.cmd.y = cl(st.cmd.y + c.vy * SPEED * gainScale * dt, -0.14, 0.14);
@@ -2276,7 +2292,7 @@ function tick(now) {
       }
 
       const want = c.aim === "tilt" ? [c.yaw, c.pitch, c.roll] : activeT.ypr;
-      const k = c.aim === "tilt" ? Math.min(1, dt * 18) : Math.min(1, dt * 6);
+      const k = c.aim === "tilt" ? Math.min(1, dt * 28) : Math.min(1, dt * 8);
       for (const [i, key] of ["yaw", "pitch", "roll"].entries()) {
         let d = want[i] - st.cmd[key];
         if (key === "yaw") { while (d > 180) d -= 360; while (d < -180) d += 360; }
@@ -2316,8 +2332,8 @@ function tick(now) {
     const R = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
     const raw4 = ik4(p, R).q;
     const raw6 = ik6(p, R, st.q6).q;
-    st.q4 = smooth(st.q4, raw4, 0.82);
-    st.q6 = smooth(st.q6, raw6, 0.82);
+    st.q4 = smooth(st.q4, raw4, 0.94);
+    st.q6 = smooth(st.q6, raw6, 0.94);
   } else {
     for (const team of [4, 6]) {
       const qv = team === 4 ? st.q4 : st.q6, tgt = qv.slice();
