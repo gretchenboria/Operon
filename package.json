@@ -1,7 +1,9 @@
 {
   "name": "operon",
   "version": "1.0.0",
-  "private": false,
+  "private": true,
+  "license": "UNLICENSED",
+  "author": "Gretchen Boria, PhD",
   "description": "Operon — Browser-native Omniverse RTX Teleop & Sim-to-Real Telemetry Comparator (Phone / Apple Watch IMU vs. Firmware Quintic & Isaac Analytic Twin, LeRobot, OpenUSD, NemoFleet Action-Probability Gate)",
   "type": "module",
   "scripts": {

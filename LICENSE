@@ -1,0 +1,24 @@
+Copyright (c) 2026 Gretchen Boria, PhD. All Rights Reserved.
+
+PROPRIETARY AND CONFIDENTIAL COMMERCIAL SOFTWARE LICENSE
+
+NOTICE: This software, source code, algorithms, kinematic models, firmware
+quintic trajectory contracts, Sim-to-Real IMU calibration pipelines, and
+associated documentation ("Operon") are the exclusive proprietary property
+of Gretchen Boria, PhD ("Licensor").
+
+1. NO FREE OR OPEN-SOURCE GRANT
+   Operon is commercial, licensed software — NOT freeware or open-source.
+   No license or right is granted without an active, paid commercial license
+   subscription or enterprise agreement executed with Licensor.
+
+2. RESTRICTIONS
+   Without a valid commercial license, you may NOT:
+   (a) copy, modify, distribute, sublicense, or host this software;
+   (b) export LeRobot (.jsonl), OpenUSD (.usda), Omniverse Replicator (.json),
+       or calibrated Sim-to-Real IMU datasets for commercial or production use;
+   (c) reverse-engineer, decompile, or extract the underlying kinematic,
+       Wahba/SVD alignment, or NemoFleet action-probability gating models.
+
+3. COMMERCIAL LICENSING
+   For Pro, Lab, or Enterprise Fleet licensing inquiries, contact Gretchen Boria, PhD.

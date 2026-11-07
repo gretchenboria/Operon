@@ -147,8 +147,58 @@ const st = {
   uploadedWatchIdx: 0,
   nemoTeacherCalls: 0,
   nemoProb: 0.94,
-  nemoTier: "System 1 · Local Reflex"
+  nemoTier: "System 1 · Local Reflex",
+  licensed: false
 };
+
+// ── Commercial License Gate ──
+const VALID_LIC_RE = /^(OPERON-(PRO|LAB|ENT|FOUNDER)-[A-Z0-9]{4,}|GBORIA-2026)$/i;
+function syncLicenseUI() {
+  const b = $("btn-license");
+  if (!b) return;
+  if (st.licensed) {
+    b.className = "pill ok";
+    b.textContent = "✓ Operon Pro Licensed";
+  } else {
+    b.className = "pill warn";
+    b.textContent = "🔒 Evaluation · Activate License";
+  }
+}
+try {
+  const savedKey = localStorage.getItem("operon.license") || new URLSearchParams(location.search).get("license") || "";
+  if (VALID_LIC_RE.test(savedKey.trim())) {
+    st.licensed = true;
+    localStorage.setItem("operon.license", savedKey.trim());
+  }
+} catch {}
+setTimeout(syncLicenseUI, 20);
+
+function requireLicense(actionName, callback) {
+  if (st.licensed) return callback();
+  const modal = $("lic-modal");
+  const msg = $("lic-msg");
+  if (msg) msg.textContent = `🔒 "${actionName}" requires an active Operon Pro / Lab license key.`;
+  if (modal) modal.classList.remove("hide");
+}
+
+if ($("btn-license")) $("btn-license").onclick = () => $("lic-modal")?.classList.remove("hide");
+if ($("lic-close")) $("lic-close").onclick = () => $("lic-modal")?.classList.add("hide");
+if ($("lic-activate")) {
+  $("lic-activate").onclick = () => {
+    const val = ($("lic-input")?.value || "").trim();
+    if (VALID_LIC_RE.test(val)) {
+      st.licensed = true;
+      try { localStorage.setItem("operon.license", val); } catch {}
+      syncLicenseUI();
+      $("lic-msg").style.color = "#81c995";
+      $("lic-msg").textContent = "✓ License verified! Full dataset & OpenUSD exports unlocked.";
+      setTimeout(() => $("lic-modal")?.classList.add("hide"), 600);
+    } else {
+      $("lic-msg").style.color = "#f28b82";
+      $("lic-msg").textContent = "Invalid license key format. Contact Gretchen Boria, PhD for a seat key.";
+    }
+  };
+}
 
 function freshArm() {
   return { done: [false, false, false], hold: 0, held: false, inserted: null, valve: 0, gripping: false, battP: [0.15, -0.075, 0.013], battR: PICK_R, dest: "place" };
@@ -885,7 +935,7 @@ $("watch-file").addEventListener("change", async (e) => {
 });
 
 // Export sim_imu.csv + watch.csv (compatible with `python compare.py --sim sim_imu.csv --watch watch.csv`)
-$("btn-export-imu").onclick = () => {
+$("btn-export-imu").onclick = () => requireLicense("Full Sim + Watch IMU CSV Export", () => {
   const hist = st.imuHistory.length ? st.imuHistory : [];
   if (!hist.length) return;
   const t0 = hist[0].t;
@@ -894,14 +944,13 @@ $("btn-export-imu").onclick = () => {
   hist.forEach(h => {
     const dt = (h.t - t0).toFixed(6);
     simLines.push(`${dt},${h.simAcc.map(v => v.toFixed(6)).join(",")},${h.simGyro.map(v => v.toFixed(6)).join(",")}`);
-    // Watch native units in SensorLog CSV: g for accel, deg/s for gyro, in raw watch frame
     const rawWAcc = applyMat3(R_SIM_TO_WATCH, h.watchAcc).map(v => (v / G0).toFixed(6));
     const rawWGyro = applyMat3(R_SIM_TO_WATCH, h.watchGyro).map(v => (v * R2D).toFixed(6));
     watchLines.push(`${dt},${dt},${rawWAcc.join(",")},${rawWGyro.join(",")}`);
   });
   downloadText("sim_imu.csv", simLines.join("\n"), "text/csv");
   setTimeout(() => downloadText("watch.csv", watchLines.join("\n"), "text/csv"), 250);
-};
+});
 
 // Sliders & Drive Modes
 const showCmd = (c) => {
@@ -1074,16 +1123,16 @@ ${q6TimeSamples}
 `;
 }
 
-$("exp-lerobot").onclick = () => {
+$("exp-lerobot").onclick = () => requireLicense("LeRobot Episode (.jsonl) Export", () => {
   const rows = st.episode.length ? st.episode : [latestStepRecord];
   downloadText(`lerobot_episode_${Date.now()}.jsonl`, rows.map(r => JSON.stringify(r)).join("\n") + "\n", "application/x-ndjson");
-};
-$("exp-usd").onclick = () => {
+});
+$("exp-usd").onclick = () => requireLicense("OpenUSD Stage (.usda) Export", () => {
   downloadText(`omniverse_stage_${Date.now()}.usda`, buildOpenUSD(latestStepRecord, st.episode), "text/plain");
-};
-$("exp-coco").onclick = () => {
+});
+$("exp-coco").onclick = () => requireLicense("Omniverse Replicator COCO (.json) Export", () => {
   const payload = {
-    info: { generator: "Omniverse Replicator Web AOV Studio", aov_pass: st.aov, timestamp: new Date().toISOString() },
+    info: { generator: "Operon Omniverse Replicator AOV Studio", aov_pass: st.aov, timestamp: new Date().toISOString() },
     categories: [
       { id: 1, name: "robot_arm_4dof" }, { id: 2, name: "robot_arm_6dof" },
       { id: 3, name: "battery_cell" }, { id: 4, name: "charger_dock" },
@@ -1092,7 +1141,7 @@ $("exp-coco").onclick = () => {
     annotations: latestBBoxes
   };
   downloadText(`replicator_coco_${Date.now()}.json`, JSON.stringify(payload, null, 2));
-};
+});
 
 // ── 10. Main Physics, Kinematics & Telemetry Loop ──
 const smooth = (cur, tgt, k) => cur.map((a, i) => { let d = tgt[i] - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * k; });
