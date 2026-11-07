@@ -325,5 +325,5 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`DevFest Physical AI deck + relay listening on http://0.0.0.0:${PORT}`);
+  console.log(`Operon Studio + Telemetry Relay listening on http://0.0.0.0:${PORT}`);
 });

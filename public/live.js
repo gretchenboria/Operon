@@ -9,7 +9,7 @@ let ws = null, status = "connecting", phones = [], retry = 0, lastState = null, 
 // The room is pinned so the QR code never changes during the talk. ?room= overrides (rehearsals, tests).
 function roomCode() {
   const fromUrl = new URLSearchParams(location.search).get("room");
-  return fromUrl && /^[A-Z0-9]{3,8}$/i.test(fromUrl) ? fromUrl.toUpperCase() : "MODESTO";
+  return fromUrl && /^[A-Z0-9]{3,8}$/i.test(fromUrl) ? fromUrl.toUpperCase() : "OPERON";
 }
 // Presenter key: only a deck opened with ?k=<key> may drive the room.
 function presenterKey() {

@@ -4,7 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#f0f0f0" />
-  <title>DevFest Robot Controller</title>
+  <title>Operon · Teleop &amp; IMU Controller</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌚</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500&display=swap" />
@@ -56,24 +57,19 @@
 <body>
   <div class="top">
     <div class="brand">
-      <svg class="gdg" viewBox="0 0 220 110"><g transform="translate(34 55)"><g transform="rotate(-36)"><rect x="-17" y="-17" width="92" height="34" rx="17" fill="#ea4335" stroke="#1e1e1e" stroke-width="5"/></g><g transform="rotate(36)"><rect x="-17" y="-17" width="92" height="34" rx="17" fill="#4285f4" stroke="#1e1e1e" stroke-width="5"/></g></g><g transform="translate(186 55)"><g transform="rotate(144)"><rect x="-17" y="-17" width="92" height="34" rx="17" fill="#f9ab00" stroke="#1e1e1e" stroke-width="5"/></g><g transform="rotate(216)"><rect x="-17" y="-17" width="92" height="34" rx="17" fill="#34a853" stroke="#1e1e1e" stroke-width="5"/></g></g></svg>
-      DevFest 2026
+      <span style="font-size:20px">⌚</span>
+      Operon · Teleop &amp; IMU
     </div>
     <span class="pill" id="status">…</span>
   </div>
 
-  <div class="seg" id="mode-bar" style="margin-bottom:10px">
-    <button data-mode="teleop" class="sel" id="tab-teleop">🦾 Robot Teleop</button>
-    <button data-mode="quiz" id="tab-quiz">🗳️ Live Quiz</button>
-  </div>
-
   <section class="panel hide" id="p-idle" style="padding:10px 14px;background:var(--pb)">
     <div class="row" style="justify-content:space-between">
-      <span class="lbl" id="idle-lbl">📺 Big screen</span>
-      <span class="pill" id="idle-sync" style="font-size:11px;padding:1px 8px">live sync</span>
+      <span class="lbl" id="idle-lbl">🛰 Operon Studio</span>
+      <span class="pill" id="idle-sync" style="font-size:11px;padding:1px 8px">live IMU sync</span>
     </div>
-    <div id="idle-title" style="font:700 16px var(--sans);margin-top:3px">Watch the big screen</div>
-    <p class="sub" id="idle-sub" style="font-size:12px;margin-top:2px">Your phone auto-switches on the Teleop &amp; Quiz slides, or use the tabs above anytime.</p>
+    <div id="idle-title" style="font:700 16px var(--sans);margin-top:3px">Connected to Operon Studio</div>
+    <p class="sub" id="idle-sub" style="font-size:12px;margin-top:2px">Drive the 4-DOF &amp; 6-DOF digital twin and stream live accelerometer + gyroscope IMU telemetry.</p>
   </section>
 
   <section class="panel hide" id="p-pilot" style="background:var(--py);text-align:center">

@@ -1,6 +1,6 @@
-// Audience phone controller. Connects to the same room as the deck through the relay.
+// Operon phone & IMU controller. Connects to Operon Studio through the WebSocket relay.
 const params = new URLSearchParams(location.search);
-const ROOM = (params.get("room") || "MODESTO").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+const ROOM = (params.get("room") || "OPERON").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
 const ROOM_OK = /^[A-Z0-9]{3,8}$/.test(ROOM);
 const ES = (navigator.language || "").toLowerCase().startsWith("es");
 const T = (en, es) => (ES ? es : en);
@@ -24,8 +24,8 @@ let pilotId = null, pilotName = "", lastHintCls = "";
 
 // ---------- i18n of static text ----------
 const STATIC = {
-  "idle-title": T("Watch the big screen", "Mira la pantalla"),
-  "idle-sub": T("Your phone becomes a robot controller on the teleop slide, and a voting remote for the quiz.", "Tu teléfono será control del robot en la diapositiva de teleoperación y control de votación en el quiz."),
+  "idle-title": T("Connected to Operon Studio", "Conectado a Operon Studio"),
+  "idle-sub": T("Drive the 4-DOF & 6-DOF digital twin and stream live accelerometer + gyroscope IMU telemetry.", "Controla el gemelo digital 4-DOF y 6-DOF y transmite telemetría IMU en vivo."),
   "t-team": T("Your arm", "Tu brazo"),
   "t-pose": T("Tilt to steer the gripper", "Inclina para mover la pinza"),
   "t-pose-sub": T("Phone flat, screen up = gripper pointing down. Tilt forward = pitch, sideways = roll, turn = yaw.", "Teléfono plano = pinza hacia abajo. Inclina al frente = pitch, de lado = roll, gira = yaw."),
