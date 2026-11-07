@@ -71,6 +71,8 @@ class Room {
     this.sockets = new Set(); // each ws has ws.meta = { role, id }
     this.state = null;
     this.httpPhones = new Map(); // id -> { lastSeen, queue: [] }
+    this.lastGestureMs = 0;
+    this.watchGrip = 0;
   }
 
   touchHttpPhone(id) {
@@ -378,10 +380,29 @@ const server = http.createServer((req, res) => {
           gy = +(body.gy ?? body.gyroRotationY ?? 0);
           gz = +(body.gz ?? body.gyroRotationZ ?? 0);
         }
-        const tap = Math.hypot(ax, ay, az) > 16.5 ? 1 : 0;
-        room.toDecks({ t: "pose", from: wid, v: { vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, roll: 0, ax, ay, az, gx, gy, gz, tap } });
+        const aMag = Math.hypot(ax, ay, az);
+        const gMag = Math.hypot(gx, gy, gz);
+        const tap = aMag > 16.5 ? 1 : 0;
+        const nowMs = Date.now();
+        let grabToggle = 0, gesture = "";
+        // Detect Wrist Clench / Double-Tap Tendon Impulse (MMG |a - g| > 3.2 m/s² with low translation) or Pronation Flick (|gx| > 2.3 rad/s)
+        if (nowMs - room.lastGestureMs > 850) {
+          if (Math.abs(aMag - 9.80665) > 3.2 && gMag < 1.8) {
+            room.lastGestureMs = nowMs;
+            room.watchGrip = room.watchGrip ? 0 : 1;
+            grabToggle = 1;
+            gesture = room.watchGrip ? "✊ Clench Impulse → GRAB" : "✋ Tendon Release → OPEN";
+          } else if (Math.abs(gx) > 2.3) {
+            room.lastGestureMs = nowMs;
+            room.watchGrip = room.watchGrip ? 0 : 1;
+            grabToggle = 1;
+            gesture = room.watchGrip ? "🔄 Pronation Flick → GRAB" : "🔄 Supination Flick → OPEN";
+          }
+        }
+        room.touchHttpPhone(wid);
+        room.toDecks({ t: "pose", from: wid, v: { vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, roll: 0, g: room.watchGrip, grabToggle, gesture, ax, ay, az, gx, gy, gz, tap } });
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end('{"ok":true}');
+        res.end(JSON.stringify({ ok: true, grip: room.watchGrip, gesture }));
       } catch {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end('{"ok":false}');

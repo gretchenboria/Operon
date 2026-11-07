@@ -148,7 +148,9 @@ const st = {
   nemoTeacherCalls: 0,
   nemoProb: 0.94,
   nemoTier: "System 1 · Local Reflex",
-  licensed: false
+  licensed: false,
+  recoilUntil: 0,
+  lastGestureBanner: ""
 };
 
 // ── Commercial License Gate ──
@@ -610,6 +612,7 @@ function armTarget(dof) {
 
 function setClosed(v, lift = true) {
   const next = !!v;
+  if (st.closed !== next) st.recoilUntil = performance.now() + 340;
   st.closed = next;
   $("btn-grab").innerHTML = next ? "✋ Release" : "✊ Grab";
   $("btn-grab").classList.toggle("on", next);
@@ -776,6 +779,10 @@ onLive((m) => {
     p.g = v.g ? 1 : 0;
     if (v.grabToggle && (!st.pilot || st.pilot === m.from)) {
       setClosed(!!v.g);
+      if (v.gesture) {
+        st.lastGestureBanner = v.gesture;
+        $("watch-status").textContent = `⌚ ${v.gesture}`;
+      }
       const s = ST[st.station];
       if (s.id === "valve" && st.closed) tweenTo(s.ypr, s.p, 950);
     }
@@ -1422,11 +1429,17 @@ function tick(now) {
     watchAcc = row.acc;
     watchGyro = row.gyro;
   } else {
-    // Synthetic Watch Twin (sim_imu + realistic watch sensor noise + servo hunting vibration)
+    // Synthetic Watch Twin (sim_imu + realistic watch sensor noise + gripper stall recoil & 24 Hz PWM servo-hunting vibration)
+    const inRecoil = now < st.recoilUntil;
+    const recoilSpike = inRecoil ? Math.sin((st.recoilUntil - now) * 0.08) * 2.8 : 0;
+    const servoHunt = st.closed ? Math.sin((now / 1000) * 2 * Math.PI * 24) * 0.42 : 0;
     const nA = () => (Math.random() - 0.5) * 0.065;
     const nG = () => (Math.random() - 0.5) * 0.022;
-    watchAcc = [simAcc[0] + nA(), simAcc[1] + nA(), simAcc[2] + nA()];
-    watchGyro = [simGyro[0] + nG(), simGyro[1] + nG(), simGyro[2] + nG()];
+    watchAcc = [simAcc[0] + nA() + servoHunt, simAcc[1] + nA(), simAcc[2] + nA() + recoilSpike];
+    watchGyro = [simGyro[0] + nG() + (inRecoil ? 0.45 : 0), simGyro[1] + nG(), simGyro[2] + nG()];
+    if (inRecoil) {
+      $("watch-status").textContent = st.closed ? "⌚ Forearm IMU: ✊ Grip Contact Recoil + 24Hz Servo Stall" : "⌚ Forearm IMU: ✋ Release Step Transient";
+    }
   }
 
   st.imuHistory.push({

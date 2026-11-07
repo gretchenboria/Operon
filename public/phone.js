@@ -221,9 +221,9 @@ function handle(m) {
 
 $("team").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { team = +b.dataset.v; send({ t: "team", team }); render(); }));
 
-// ---------- pose: tilt + pad + live IMU (for Sim-vs-Watch/Phone IMU comparison) ----------
+// ---------- pose: tilt + pad + live IMU + Wrist Clench / Flick Grip Detector ----------
 const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
-let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false;
+let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false, lastGestureAt = 0;
 
 function onMotion(e) {
   const a = e.accelerationIncludingGravity || e.acceleration;
@@ -240,6 +240,21 @@ function onMotion(e) {
     pose.gx = +((r.beta || 0) * d2r).toFixed(3);
     pose.gy = +((r.gamma || 0) * d2r).toFixed(3);
     pose.gz = +((r.alpha || 0) * d2r).toFixed(3);
+  }
+  // Hands-free Wrist Clench / Double-Tap Impulse or Pronation Roll Flick -> Toggle Grip/Release
+  const now = performance.now();
+  const aDelta = Math.abs(Math.hypot(pose.ax, pose.ay, pose.az) - 9.80665);
+  const gMag = Math.hypot(pose.gx, pose.gy, pose.gz);
+  if (now - lastGestureAt > 850 && ((aDelta > 3.6 && gMag < 1.9) || Math.abs(pose.gx) > 2.5)) {
+    lastGestureAt = now;
+    touched = true;
+    pose.g = pose.g ? 0 : 1;
+    paintGrab();
+    const gesture = Math.abs(pose.gx) > 2.5
+      ? (pose.g ? "🔄 Wrist Flick → GRAB" : "🔄 Wrist Flick → RELEASE")
+      : (pose.g ? "✊ Clench Impulse → GRAB" : "✋ Tendon Release → OPEN");
+    send({ t: "pose", v: { vx: -jy, vy: jx, vz, g: pose.g, grabToggle: 1, gesture, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: 1 } });
+    if (navigator.vibrate) navigator.vibrate([40, 30, 50]);
   }
 }
 
