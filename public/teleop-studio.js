@@ -695,6 +695,17 @@ const urlEl = document.querySelector('[data-live="url"]');
 const statusEl = document.querySelector('[data-live="status"]');
 if (qrEl) qrEl.innerHTML = qrSVG();
 if (urlEl) { urlEl.href = phoneUrl(); urlEl.textContent = phoneUrl().replace(/^https?:\/\//, ""); }
+if ($("sms-watch")) {
+  $("sms-watch").href = `sms:&body=${encodeURIComponent(phoneUrl())}`;
+}
+if ($("imu-push-url")) {
+  const pushUrl = `${location.origin}/api/room/${ROOM}/imu`;
+  $("imu-push-url").textContent = `/api/room/${ROOM}/imu 📋`;
+  $("imu-push-url").onclick = () => {
+    navigator.clipboard?.writeText(pushUrl);
+    $("watch-status").textContent = `Copied HTTP Push URL: ${pushUrl}`;
+  };
+}
 
 const teamCounts = () => { let a = 0, b = 0; phones.forEach(p => p.team === 4 ? a++ : b++); return { 4: a, 6: b }; };
 const addPhone = (id) => {

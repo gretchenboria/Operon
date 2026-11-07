@@ -255,6 +255,61 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // HTTP POST ingest for Apple Watch Sensor Logger / SensorLog / watchOS Shortcuts live push
+  const mImu = url.pathname.match(/^\/api\/room\/([^/]+)\/imu$/);
+  if (mImu && (req.method === "POST" || req.method === "OPTIONS")) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+    const code = mImu[1].toUpperCase();
+    if (!ROOM_RE.test(code)) { res.writeHead(400); res.end("bad room"); return; }
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", chunk => { if (raw.length < 512 * 1024) raw += chunk; });
+    req.on("end", () => {
+      try {
+        const body = JSON.parse(raw || "{}");
+        const room = getRoom(code);
+        const wid = "watch-http";
+        let ax = 0, ay = 0, az = 9.81, gx = 0, gy = 0, gz = 0;
+        // Support Sensor Logger payload array (`payload: [{ name: "accelerometer"|"wristMotion", values: {...} }]`) or flat JSON
+        if (Array.isArray(body.payload)) {
+          for (const s of body.payload) {
+            const v = s.values || {};
+            if (s.name?.includes("accel") || s.name?.includes("motion")) {
+              ax = +(v.x ?? v.accelerationX ?? ax);
+              ay = +(v.y ?? v.accelerationY ?? ay);
+              az = +(v.z ?? v.accelerationZ ?? az);
+              if (Math.hypot(ax, ay, az) < 3.5) { ax *= 9.80665; ay *= 9.80665; az *= 9.80665; }
+            }
+            if (s.name?.includes("gyro") || s.name?.includes("rotation") || s.name?.includes("motion")) {
+              gx = +(v.rotationRateX ?? v.x ?? gx);
+              gy = +(v.rotationRateY ?? v.y ?? gy);
+              gz = +(v.rotationRateZ ?? v.z ?? gz);
+            }
+          }
+        } else {
+          ax = +(body.ax ?? body.accelerometerAccelerationX ?? 0);
+          ay = +(body.ay ?? body.accelerometerAccelerationY ?? 0);
+          az = +(body.az ?? body.accelerometerAccelerationZ ?? 9.81);
+          if (Math.hypot(ax, ay, az) < 3.5) { ax *= 9.80665; ay *= 9.80665; az *= 9.80665; }
+          gx = +(body.gx ?? body.gyroRotationX ?? 0);
+          gy = +(body.gy ?? body.gyroRotationY ?? 0);
+          gz = +(body.gz ?? body.gyroRotationZ ?? 0);
+        }
+        const tap = Math.hypot(ax, ay, az) > 16.5 ? 1 : 0;
+        room.toDecks({ t: "pose", from: wid, v: { vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, roll: 0, ax, ay, az, gx, gy, gz, tap } });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end('{"ok":true}');
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end('{"ok":false}');
+      }
+    });
+    return;
+  }
+
   // Serve static files from ./public
   let relPath = decodeURIComponent(url.pathname);
   if (relPath === "/" || relPath === "") relPath = "/index.html";

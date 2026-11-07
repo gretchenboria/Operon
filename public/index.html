@@ -555,15 +555,16 @@
           <!-- STEP 1: PHONE / WATCH INPUT -->
           <div class="step-card">
             <div class="step-hdr">
-              <div class="step-title"><span class="step-num">1</span> Pair Phone or Watch</div>
+              <div class="step-title"><span class="step-num">1</span> Pair iPhone or Watch</div>
               <span class="pill" id="room-pill">Room OPERON</span>
             </div>
             <div class="qr-card">
               <div class="qr-box" data-live="qr"></div>
               <div class="col" style="gap:4px;min-width:0">
-                <div style="font-weight:700;font-size:12px">Scan to Drive &amp; Stream IMU</div>
+                <div style="font-weight:700;font-size:12px">Scan on iPhone · Tap Link on Watch</div>
                 <a class="mono" data-live="url" target="_blank" rel="noopener" style="font-size:10.5px;color:var(--cyan);word-break:break-all"></a>
-                <div class="row" style="margin-top:2px">
+                <div class="row wrap" style="margin-top:2px;gap:4px">
+                  <a class="btn sm watch" id="sms-watch" href="#" title="Send clickable link to your Apple Watch via iMessage">💬 Text Link to Watch</a>
                   <span class="pill" id="team-pill">4D: 0 · 6D: 0</span>
                   <span class="mono" id="active-phones" style="font-size:10.5px;color:var(--cyan)"></span>
                 </div>
@@ -584,7 +585,7 @@
           <!-- STEP 2: APPLE WATCH SIM-TO-REAL SOURCE -->
           <div class="step-card">
             <div class="step-hdr">
-              <div class="step-title"><span class="step-num">2</span> Apple Watch IMU Data</div>
+              <div class="step-title"><span class="step-num">2</span> Apple Watch IMU Stream</div>
               <span id="watch-lag-pill" class="pill ok">Δt: 0.0 ms</span>
             </div>
             <div class="row wrap" style="gap:6px">
@@ -593,10 +594,11 @@
                 📂 Load Watch CSV <input type="file" id="watch-file" accept=".csv" style="display:none" />
               </label>
             </div>
-            <div class="row between" style="font-family:var(--mono);font-size:10.5px;color:var(--ink-2)">
-              <span id="watch-status">Live Sim + Synthetic Watch Twin</span>
+            <div class="row between" style="font-family:var(--mono);font-size:10px;color:var(--ink-3)">
+              <span title="Paste this URL into Sensor Logger HTTP Push on iPhone/Watch">HTTP Push: <b id="imu-push-url" style="color:var(--cyan);cursor:pointer">/api/room/OPERON/imu</b></span>
               <button class="btn sm" id="btn-export-imu" title="Download sim_imu.csv + watch.csv">⬇ CSVs</button>
             </div>
+            <div class="mono" id="watch-status" style="font-size:10.5px;color:var(--ink-2)">Live Sim + Synthetic Watch Twin</div>
           </div>
 
           <!-- COLLAPSIBLE: MANUAL POSE SLIDERS -->
