@@ -221,13 +221,75 @@ function handle(m) {
 
 $("team").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { team = +b.dataset.v; send({ t: "team", team }); render(); }));
 
-// ---------- pose: tilt + pad + live IMU + Wrist Clench / Flick Grip Detector ----------
+// ---------- pose: tilt + pad + live IMU + Wrist Clench / Flick Grip Detector + Watch Wake Lock ----------
 const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
 let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false, lastGestureAt = 0;
+let deskGain = 2.5; // Default 2.5x Desk Mode: +/-22 deg comfortable wrist movement in front of screen spans full robot workspace
+let fusedAtt = { yaw: 0, pitch: 0, roll: 0, lastT: 0 };
+let wakeLockSentinel = null, audioKeepAliveCtx = null;
+
+// Prevent Apple Watch / iOS Safari from sleeping, dimming, or freezing JS timers while wrist is held in front of screen
+async function acquireWatchWakeLock() {
+  // 1. Standard W3C Screen Wake Lock API (supported in modern iOS / watchOS WebKit)
+  try {
+    if ("wakeLock" in navigator && navigator.wakeLock?.request) {
+      wakeLockSentinel = await navigator.wakeLock.request("screen");
+    }
+  } catch {}
+  // 2. WebAudio silent oscillator keep-alive (prevents watchOS WebKit from suspending the JS event loop when wrist lowers slightly)
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC && !audioKeepAliveCtx) {
+      audioKeepAliveCtx = new AC();
+      const osc = audioKeepAliveCtx.createOscillator();
+      const gain = audioKeepAliveCtx.createGain();
+      gain.gain.value = 0.00001; // inaudible
+      osc.connect(gain);
+      gain.connect(audioKeepAliveCtx.destination);
+      osc.start();
+    } else if (audioKeepAliveCtx && audioKeepAliveCtx.state === "suspended") {
+      await audioKeepAliveCtx.resume();
+    }
+  } catch {}
+  // 3. Tiny 1x1 muted canvas stream video loop (prevents mobile Safari screen dim timeout)
+  try {
+    const vid = $("wake-video");
+    if (vid && !vid.srcObject) {
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = 2;
+      const ctx = cv.getContext("2d");
+      setInterval(() => { if (ctx) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 2, 2); } }, 1000);
+      if (cv.captureStream) {
+        vid.srcObject = cv.captureStream(1);
+        vid.play().catch(() => {});
+      }
+    }
+  } catch {}
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    acquireWatchWakeLock();
+    if (!useHttp && (!ws || ws.readyState !== 1)) connect();
+  }
+});
+
+// Gain selector on Watch / Phone (1x Full Arm, 2.5x Desk Mode, 4x Micro)
+if ($("gain-bar")) {
+  $("gain-bar").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    deskGain = parseFloat(b.dataset.g) || 2.5;
+    $("gain-bar").querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
+    touched = true;
+  }));
+}
 
 function onMotion(e) {
   const a = e.accelerationIncludingGravity || e.acceleration;
   const r = e.rotationRate;
+  const now = performance.now();
+  const dt = fusedAtt.lastT ? Math.min(0.1, Math.max(0.002, (now - fusedAtt.lastT) / 1000)) : 0.02;
+  fusedAtt.lastT = now;
+
   if (a && (a.x != null || a.y != null || a.z != null)) {
     pose.ax = +(a.x || 0).toFixed(3);
     pose.ay = +(a.y || 0).toFixed(3);
@@ -241,8 +303,34 @@ function onMotion(e) {
     pose.gy = +((r.gamma || 0) * d2r).toFixed(3);
     pose.gz = +((r.alpha || 0) * d2r).toFixed(3);
   }
+
+  // Fallback Attitude Integration from 6-Axis Accelerometer + Gyroscope when watchOS omits DeviceOrientationEvent:
+  // If DeviceOrientation hasn't fired recently, compute pitch/roll from gravity vector + gyro integration and yaw from gyro Z
+  if (!lastO || (now - (lastO.t || 0) > 250)) {
+    const r2d = 180 / Math.PI;
+    const accPitch = Math.atan2(-pose.ay, Math.hypot(pose.ax, pose.az)) * r2d;
+    const accRoll = Math.atan2(pose.ax, pose.az) * r2d;
+    fusedAtt.pitch = 0.92 * (fusedAtt.pitch + pose.gx * r2d * dt) + 0.08 * accPitch;
+    fusedAtt.roll = 0.92 * (fusedAtt.roll + pose.gy * r2d * dt) + 0.08 * accRoll;
+    fusedAtt.yaw = Math.max(-90, Math.min(90, fusedAtt.yaw + pose.gz * r2d * dt));
+    if (!zero) zero = { a: fusedAtt.yaw, b: fusedAtt.pitch, g: fusedAtt.roll };
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    pose.yaw = Math.round(clamp((fusedAtt.yaw - zero.a) * deskGain, -180, 180));
+    pose.pitch = Math.round(clamp((fusedAtt.pitch - zero.b) * deskGain, -90, 90));
+    pose.roll = Math.round(clamp((fusedAtt.roll - zero.g) * deskGain, -90, 90));
+    tiltOn = true;
+    readout();
+  }
+
+  // Push immediate pose + IMU packet on significant motion so watch never feels laggy or frozen between intervals
+  if (now - (onMotion.lastSent || 0) >= 45) {
+    onMotion.lastSent = now;
+    const tMs = Date.now();
+    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
+    pose.tap = 0;
+  }
+
   // Hands-free Wrist Clench / Double-Tap Impulse or Pronation Roll Flick -> Toggle Grip/Release
-  const now = performance.now();
   const aDelta = Math.abs(Math.hypot(pose.ax, pose.ay, pose.az) - 9.80665);
   const gMag = Math.hypot(pose.gx, pose.gy, pose.gz);
   if (now - lastGestureAt > 850 && ((aDelta > 3.6 && gMag < 1.9) || Math.abs(pose.gx) > 2.5)) {
@@ -253,30 +341,40 @@ function onMotion(e) {
     const gesture = Math.abs(pose.gx) > 2.5
       ? (pose.g ? "Wrist Roll Flick -> GRASP" : "Wrist Roll Flick -> RELEASE")
       : (pose.g ? "Clench Impulse -> GRASP" : "Tendon Impulse -> RELEASE");
-    // Right-handed joystick mapping: Drag Up (-jy) = Reach Forward (+vx), Drag Left (-jx) = Move Left (+vy), Drag Right (+jx) = Move Right (-vy)
-    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, gesture, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: 1 } });
+    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, gesture, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: 1 } });
     if (navigator.vibrate) navigator.vibrate([40, 30, 50]);
   }
 }
 
 function onOrient(e) {
   if (e.alpha == null && e.beta == null) return;
-  lastO = { a: e.alpha || 0, b: e.beta || 0, g: e.gamma || 0 };
+  lastO = { a: e.alpha || 0, b: e.beta || 0, g: e.gamma || 0, t: performance.now() };
   if (!zero) zero = { ...lastO };
-  // Right-handed ergonomic mapping:
-  // - Turning phone/wrist Left (+alpha) -> +Yaw (rotates arm Left / CCW)
-  // - Tilting phone nose Up (+beta) -> +Pitch (tilts gripper nose Up)
-  // - Rolling phone Right (+gamma) -> +Roll (twists gripper wrist CW)
+  // Apply Desk Motion Gain (default 2.5x) so small comfortable wrist rotations right in front of your screen cover the full workspace
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   let yaw = lastO.a - zero.a; while (yaw > 180) yaw -= 360; while (yaw < -180) yaw += 360;
-  pose.yaw = Math.round(yaw);
-  pose.pitch = Math.round(Math.max(-90, Math.min(90, lastO.b - zero.b)));
-  pose.roll = Math.round(Math.max(-90, Math.min(90, lastO.g - zero.g)));
+  pose.yaw = Math.round(clamp(yaw * deskGain, -180, 180));
+  pose.pitch = Math.round(clamp((lastO.b - zero.b) * deskGain, -90, 90));
+  pose.roll = Math.round(clamp((lastO.g - zero.g) * deskGain, -90, 90));
+  tiltOn = true;
   readout();
 }
 function readout() {
   $("r-yaw").textContent = pose.yaw + "°"; $("r-pitch").textContent = pose.pitch + "°"; $("r-roll").textContent = pose.roll + "°";
 }
+
+// Auto-bind motion/orientation listeners immediately on devices that don't require explicit permission prompt
+try {
+  if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission !== "function") {
+    window.addEventListener("deviceorientation", onOrient);
+  }
+  if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission !== "function") {
+    window.addEventListener("devicemotion", onMotion);
+  }
+} catch {}
+
 $("enable-tilt").addEventListener("click", async () => {
+  await acquireWatchWakeLock();
   try {
     if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
       const r = await DeviceOrientationEvent.requestPermission();
@@ -288,20 +386,24 @@ $("enable-tilt").addEventListener("click", async () => {
     if (!window.isSecureContext) throw new Error("needs https");
     window.addEventListener("deviceorientation", onOrient);
     window.addEventListener("devicemotion", onMotion);
-    tiltOn = true; zero = null;
-    // Automatically switch aim mode from "auto" to "tilt" so wrist/phone yaw, pitch, and roll immediately steer the arm!
+    tiltOn = true; zero = null; fusedAtt = { yaw: 0, pitch: 0, roll: 0, lastT: 0 };
     aim = "tilt";
     $("aim")?.querySelectorAll("button").forEach(x => x.classList.toggle("sel", x.dataset.v === "tilt"));
     $("tilt-box")?.classList.remove("hide");
-    $("enable-tilt").textContent = T("Tilt on ✓", "Inclinación activa ✓");
+    $("enable-tilt").textContent = T("Wrist IMU + Screen Wake Lock Active ✓", "IMU + Pantalla Activa ✓");
     $("enable-tilt").classList.add("light");
-    setTimeout(() => { if (!lastO) { $("enable-tilt").textContent = T("No tilt sensor: use sliders", "Sin sensor: usa deslizadores"); openManual(); } }, 1500);
   } catch (err) {
     $("enable-tilt").textContent = T(`Tilt unavailable (${err.message}): use sliders`, `Sin inclinación (${err.message}): usa deslizadores`);
     openManual();
   }
 });
-$("zero").addEventListener("click", () => { zero = lastO ? { ...lastO } : null; pose.yaw = pose.pitch = pose.roll = 0; readout(); });
+$("zero").addEventListener("click", () => {
+  acquireWatchWakeLock();
+  zero = lastO ? { ...lastO } : { a: fusedAtt.yaw, b: fusedAtt.pitch, g: fusedAtt.roll };
+  pose.yaw = pose.pitch = pose.roll = 0;
+  readout();
+  send({ t: "pose", v: { vx: 0, vy: 0, vz: 0, g: pose.g, aim, gain: deskGain, yaw: 0, pitch: 0, roll: 0, recenter: 1 } });
+});
 function openManual() { manualOn = true; $("manual-box").classList.remove("hide"); }
 $("manual").addEventListener("click", () => { if (manualOn) { manualOn = false; $("manual-box").classList.add("hide"); } else openManual(); });
 for (const k of ["yaw", "pitch", "roll"]) $("m-" + k).addEventListener("input", (e) => { pose[k] = +e.target.value; $("mv-" + k).textContent = pose[k] + "°"; readout(); });
@@ -329,29 +431,30 @@ paintGrab();
 
 // Joystick (springs back to center) = hand velocity in the top view; ▲/▼ = height velocity.
 const stick = $("stick"), knob = $("knob");
-let jx = 0, jy = 0, vz = 0, aim = "auto";
+let jx = 0, jy = 0, vz = 0, aim = "tilt";
 function stickMove(e) {
   const r = stick.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, R = r.width * 0.36;
   let dx = (e.clientX - cx) / R, dy = (e.clientY - cy) / R; const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
   jx = dx; jy = dy; knob.style.left = `${33 + dx * 33}%`; knob.style.top = `${33 + dy * 33}%`;
 }
 const stickEnd = () => { jx = jy = 0; knob.style.left = knob.style.top = "33%"; };
-stick.addEventListener("pointerdown", (e) => { touched = true; stick.setPointerCapture(e.pointerId); stickMove(e); });
+stick.addEventListener("pointerdown", (e) => { touched = true; acquireWatchWakeLock(); stick.setPointerCapture(e.pointerId); stickMove(e); });
 stick.addEventListener("pointermove", (e) => { if (e.buttons || e.pointerType === "touch") stickMove(e); });
 stick.addEventListener("pointerup", stickEnd); stick.addEventListener("pointercancel", stickEnd);
 for (const [id, v] of [["up", 1], ["down", -1]]) {
   const b = $(id);
-  b.addEventListener("pointerdown", (e) => { touched = true; b.setPointerCapture(e.pointerId); vz = v; });
+  b.addEventListener("pointerdown", (e) => { touched = true; acquireWatchWakeLock(); b.setPointerCapture(e.pointerId); vz = v; });
   for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => { vz = 0; });
 }
 $("aim").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
   aim = b.dataset.v; $("aim").querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
   $("tilt-box").classList.toggle("hide", aim !== "tilt"); touched = true;
 }));
+// Stream continuously at 20 Hz even without screen touches so Apple Watch IMU drives the arms hands-free
 setInterval(() => {
-  if (slide === "teleop" && mode === "pose" && (tiltOn || manualOn || touched)) {
+  if (slide === "teleop" && mode === "pose") {
     const tMs = Date.now();
-    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
+    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
     pose.tap = 0;
   }
 }, 50);

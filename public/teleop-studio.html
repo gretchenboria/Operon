@@ -767,6 +767,15 @@
               <div class="slider-row" data-axis-hover="roll" title="Roll (Tool Axis Twist): Rotates the wrist flange around the tool approach vector"><span style="color:#c084fc;font-weight:700">roll</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
               <div class="slider-row" data-axis-hover="z" title="Z Height (Meters): Raises (+Z) or lowers (-Z) the tool above the workbench surface"><span style="color:#60a5fa;font-weight:700">z (m)</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
             </div>
+            <div class="row between" style="margin-top:2px;padding-top:5px;border-top:1px solid var(--border)">
+              <span class="sub-label" title="Compact Desk Mode maps +/-22 deg of comfortable wrist movement right in front of your screen to the full X/Y/Z robot workspace">Wrist Motion Scale</span>
+              <div class="seg" id="studio-gain-bar">
+                <button data-sg="1.0" title="1x Full Reach: Wide arm swings">1x Full</button>
+                <button data-sg="2.5" class="sel" title="2.5x Desk Mode: Small wrist tilts in front of screen cover the full X/Y/Z workspace">2.5x Desk</button>
+                <button data-sg="4.0" title="4x Micro: Finger/wrist micro-movements cover the entire workspace">4x Micro</button>
+              </div>
+              <button class="btn sm" id="btn-recenter-wrist" title="Zero / Recenter: Anchors the robot tool at (0.15, 0.00, 0.12) m relative to your current hand posture">Zero Here</button>
+            </div>
           </div>
 
           <!-- FOREARM 6-AXIS IMU SOURCE & YAML TRAJECTORY LOADER -->

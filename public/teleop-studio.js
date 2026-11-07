@@ -299,6 +299,8 @@ const st = {
   watchLagMs: 0.0,
   estimatedR: [1, 0, 0, 0, 1, 0, 0, 0, 1],
   selectedTraj: "imu_calibration",
+  studioGain: 2.5,
+  deskBasePos: [0.15, 0.0, 0.11],
   hwStreamer: {
     lastSentMs: 0,
     lastSentServoDeg: [90, 90, 90, 90, 90, 90],
@@ -1273,9 +1275,17 @@ onLive((m) => {
       if (s.id === "valve" && st.closed) tweenTo(s.ypr, s.p, 950);
     }
     if (v.snap && (!st.pilot || st.pilot === m.from)) snapToStation();
+    if (v.recenter && (!st.pilot || st.pilot === m.from)) {
+      const t = armTarget(st.arm[6].held ? 6 : 4);
+      st.deskBasePos = [t.p[0], t.p[1], Math.max(0.08, t.p[2])];
+      st.cmd.x = st.deskBasePos[0]; st.cmd.y = st.deskBasePos[1]; st.cmd.z = st.deskBasePos[2];
+      st.cmd.yaw = 0; st.cmd.pitch = 0; st.cmd.roll = 0;
+      $("watch-status").textContent = "Wrist Recentered: Desk anchor set to current hand pose";
+    }
     p.pose = {
       vx: num(v.vx, -1, 1, 0), vy: num(v.vy, -1, 1, 0), vz: num(v.vz, -1, 1, 0),
       aim: v.aim === "tilt" ? "tilt" : "auto",
+      gain: num(v.gain, 0.5, 6.0, st.studioGain),
       yaw: num(v.yaw, -180, 180, 0), pitch: num(v.pitch, -90, 90, 0), roll: num(v.roll, -90, 90, 0)
     };
     if (v.ax !== undefined || v.gx !== undefined) {
@@ -1653,6 +1663,25 @@ if ($("btn-gizmo-toggle")) {
     st.showGizmos = !st.showGizmos;
     $("btn-gizmo-toggle").textContent = `3D Axes: ${st.showGizmos ? "ON" : "OFF"}`;
     $("btn-gizmo-toggle").classList.toggle("on", st.showGizmos);
+  };
+}
+
+if ($("studio-gain-bar")) {
+  $("studio-gain-bar").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    st.studioGain = parseFloat(b.dataset.sg) || 2.5;
+    $("studio-gain-bar").querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
+  }));
+}
+if ($("btn-recenter-wrist")) {
+  $("btn-recenter-wrist").onclick = () => {
+    const t = armTarget(st.arm[6].held ? 6 : 4);
+    st.deskBasePos = [t.p[0], t.p[1], Math.max(0.08, t.p[2])];
+    st.cmd = { yaw: t.ypr[0], pitch: t.ypr[1], roll: t.ypr[2], x: st.deskBasePos[0], y: st.deskBasePos[1], z: st.deskBasePos[2] };
+    const R = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
+    st.q4 = ik4(p, R).q;
+    st.q6 = ik6(p, R, st.q6).q;
+    showCmd(st.cmd);
+    $("watch-status").textContent = "Centered at station desk origin (0.15, 0.00, 0.11 m)";
   };
 }
 
@@ -2227,23 +2256,32 @@ function tick(now) {
       $("cmd-src").textContent = "Command: Auto Trajectory";
     } else if (c) {
       const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-      let vxCmd = c.vx, vyCmd = c.vy, vzCmd = c.vz;
-      if (c.aim === "tilt" && Math.hypot(c.vx, c.vy) < 0.04) {
-        vxCmd = cl(c.pitch / 42, -0.85, 0.85);
-        vyCmd = cl(-c.roll / 42, -0.85, 0.85);
+      const gainScale = (st.studioGain || 2.5) / 2.5;
+      if (c.aim === "tilt" && Math.hypot(c.vx, c.vy, c.vz) < 0.04) {
+        // COMPACT DESK WORKSPACE MODE (Position-Proportional):
+        // Small comfortable wrist rotations right in front of your screen (+/-22 deg before gain)
+        // directly position the robot end-effector across the entire X/Y workspace without reaching your arm far out!
+        // - Tilting wrist forward/back (pitch) -> X reach (0.06m to 0.21m)
+        // - Tilting/turning wrist left/right (yaw & roll) -> Y lateral (-0.13m to +0.13m)
+        const targetX = cl(0.145 + (c.pitch / 55) * 0.065 * gainScale, 0.055, 0.215);
+        const targetY = cl(((c.yaw * 0.55 - c.roll * 0.45) / 55) * 0.115 * gainScale, -0.135, 0.135);
+        const kp = Math.min(1, dt * 14);
+        st.cmd.x += (targetX - st.cmd.x) * kp;
+        st.cmd.y += (targetY - st.cmd.y) * kp;
+      } else {
+        st.cmd.x = cl(st.cmd.x + c.vx * SPEED * gainScale * dt, 0.05, 0.22);
+        st.cmd.y = cl(st.cmd.y + c.vy * SPEED * gainScale * dt, -0.14, 0.14);
+        st.cmd.z = cl(st.cmd.z + c.vz * SPEED * gainScale * dt, 0.01, 0.25);
       }
-      st.cmd.x = cl(st.cmd.x + vxCmd * SPEED * dt, 0.05, 0.22);
-      st.cmd.y = cl(st.cmd.y + vyCmd * SPEED * dt, -0.14, 0.14);
-      st.cmd.z = cl(st.cmd.z + vzCmd * SPEED * dt, 0.01, 0.25);
 
       const want = c.aim === "tilt" ? [c.yaw, c.pitch, c.roll] : activeT.ypr;
-      const k = c.aim === "tilt" ? Math.min(1, dt * 16) : Math.min(1, dt * 6);
+      const k = c.aim === "tilt" ? Math.min(1, dt * 18) : Math.min(1, dt * 6);
       for (const [i, key] of ["yaw", "pitch", "roll"].entries()) {
         let d = want[i] - st.cmd[key];
         if (key === "yaw") { while (d > 180) d -= 360; while (d < -180) d += 360; }
         st.cmd[key] += d * k;
       }
-      $("cmd-src").textContent = st.drive === "pilot" ? "Live Pilot (1:1 Frame)" : `Crowd Average (${c.n})`;
+      $("cmd-src").textContent = st.drive === "pilot" ? `Live Pilot (${st.studioGain}x Desk)` : `Live Watch/Phone (${st.studioGain}x Desk)`;
     } else {
       $("cmd-src").textContent = "Studio Sliders (60Hz)";
     }
