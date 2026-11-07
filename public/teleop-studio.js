@@ -115,12 +115,12 @@ function yprOf(R) {
 const PICK_P = [0.15, -0.075, 0.032], PICK_R = poseR(-25, 0, 0);
 const PLACE_P = [0.15, 0.075, 0.032], PLACE_R = poseR(25, 0, 0);
 const ST = [
-  { id: "battery", icon: "🔋", name: "Pick & place battery", p: PICK_P, R: PICK_R, placeP: PLACE_P, placeR: PLACE_R },
-  { id: "charger", icon: "🔌", name: "Side charger slot", p: [0.10, 0.13, 0.12], R: fromZX([0, 0.9, -0.42], [1, 0, 0]) },
-  { id: "valve", icon: "🚰", name: "Turn valve 90°", p: [0.17, 0, 0.14], R: fromZX([1, 0, 0], [0, 1, 0]), grip: fromZX([1, 0, 0], [0, 0, -1]) }
+  { id: "battery", icon: "[1]", name: "Pick & place cell", p: PICK_P, R: PICK_R, placeP: PLACE_P, placeR: PLACE_R },
+  { id: "charger", icon: "[2]", name: "Side charger dock", p: [0.10, 0.13, 0.12], R: fromZX([0, 0.9, -0.42], [1, 0, 0]) },
+  { id: "valve", icon: "[3]", name: "Turn valve 90°", p: [0.17, 0, 0.14], R: fromZX([1, 0, 0], [0, 1, 0]), grip: fromZX([1, 0, 0], [0, 0, -1]) }
 ];
 ST.forEach(s => { s.ypr = yprOf(s.R); if (s.grip) s.yprGrip = yprOf(s.grip); });
-const POS_TOL = 0.042, ORI_TOL = 25, SPEED = 0.22, ASSIST_R = 0.070;
+const POS_TOL = 0.052, ORI_TOL = 32, SPEED = 0.34, ASSIST_R = 0.088;
 
 // ── 4. Studio State ──
 const st = {
@@ -152,7 +152,7 @@ const st = {
   uploadedWatchIdx: 0,
   nemoTeacherCalls: 0,
   nemoProb: 0.94,
-  nemoTier: "System 1 · Local Reflex",
+  nemoTier: "On-Robot ReflexPolicy",
   licensed: false,
   recoilUntil: 0,
   lastGestureBanner: ""
@@ -165,10 +165,10 @@ function syncLicenseUI() {
   if (!b) return;
   if (st.licensed) {
     b.className = "pill ok";
-    b.textContent = "✓ Pro Licensed";
+    b.innerHTML = `<svg class="ico sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span>Pro Licensed</span>`;
   } else {
     b.className = "pill warn";
-    b.textContent = "🔒 Activate License";
+    b.innerHTML = `<svg class="ico sm" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Activate License</span>`;
   }
 }
 try {
@@ -242,17 +242,17 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0d1118);
+scene.background = new THREE.Color(0x0f121c);
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
 
-const camera = new THREE.PerspectiveCamera(42, cv.width / cv.height, 0.05, 3.5);
-camera.position.set(0.88, 0.56, 0.0);
+const camera = new THREE.PerspectiveCamera(40, cv.width / cv.height, 0.04, 3.5);
+camera.position.set(0.84, 0.52, 0.0);
 const controls = new OrbitControls(camera, cv);
 controls.target.set(0.08, 0.11, 0);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.48;
-controls.minDistance = 0.28;
+controls.minDistance = 0.25;
 controls.maxDistance = 2.2;
 controls.update();
 
@@ -272,34 +272,37 @@ function syncViewportSize() {
 window.addEventListener("resize", syncViewportSize);
 setTimeout(syncViewportSize, 50);
 
-const sun = new THREE.DirectionalLight(0xffffff, 2.8);
-sun.position.set(0.55, 1.3, 0.65);
+const sun = new THREE.DirectionalLight(0xf8faff, 3.1);
+sun.position.set(0.60, 1.35, 0.65);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.bias = -0.0003;
-Object.assign(sun.shadow.camera, { left: -0.8, right: 0.8, top: 0.8, bottom: -0.8, near: 0.1, far: 3 });
-const hemi = new THREE.HemisphereLight(0xddeeff, 0x1b2230, 0.75);
-const rimLight = new THREE.SpotLight(0x57caff, 2.2, 3.0, Math.PI / 3, 0.5, 1.2);
-rimLight.position.set(-0.65, 0.95, -0.55);
-const warmFill = new THREE.PointLight(0xffb74d, 0.85, 2.0);
-warmFill.position.set(0.45, 0.45, -0.45);
+sun.shadow.bias = -0.00025;
+Object.assign(sun.shadow.camera, { left: -0.7, right: 0.7, top: 0.7, bottom: -0.7, near: 0.1, far: 3 });
+const hemi = new THREE.HemisphereLight(0xe6eeff, 0x1a1e2e, 0.85);
+const rimLight = new THREE.SpotLight(0x9d72ff, 2.6, 3.2, Math.PI / 3, 0.45, 1.1);
+rimLight.position.set(-0.68, 0.98, -0.55);
+const warmFill = new THREE.PointLight(0x60a5fa, 1.25, 2.4);
+warmFill.position.set(0.50, 0.48, 0.48);
 scene.add(sun, hemi, rimLight, warmFill);
 
-// Studio floor grid + workbench with Omniverse RTX Physical Clearcoat shaders
+// Studio floor grid + workbench with UR5e Brushed Silver, Metallic Purple & Cobalt Blue Clearcoat Shaders
 const MAT = {
-  alu: new THREE.MeshPhysicalMaterial({ color: 0xd8dee6, metalness: 0.88, roughness: 0.22, clearcoat: 0.45, clearcoatRoughness: 0.18 }),
-  carbon: new THREE.MeshPhysicalMaterial({ color: 0x1e2430, metalness: 0.65, roughness: 0.32, clearcoat: 0.65, clearcoatRoughness: 0.15 }),
-  dark: new THREE.MeshPhysicalMaterial({ color: 0x20252e, metalness: 0.55, roughness: 0.36, clearcoat: 0.35 }),
-  steel: new THREE.MeshPhysicalMaterial({ color: 0xb0b8c4, metalness: 0.94, roughness: 0.16, clearcoat: 0.5 }),
-  copper: new THREE.MeshPhysicalMaterial({ color: 0xd9822b, metalness: 0.88, roughness: 0.24, clearcoat: 0.3 }),
-  rubber: new THREE.MeshStandardMaterial({ color: 0x16181d, metalness: 0.05, roughness: 0.88 }),
-  bench: new THREE.MeshPhysicalMaterial({ color: 0x141923, metalness: 0.35, roughness: 0.38, clearcoat: 0.55, clearcoatRoughness: 0.22 }),
-  white: new THREE.MeshPhysicalMaterial({ color: 0xf4f6f8, metalness: 0.08, roughness: 0.35, clearcoat: 0.4 }),
-  slot: new THREE.MeshStandardMaterial({ color: 0x0b0e13, roughness: 0.5 }),
-  red: new THREE.MeshPhysicalMaterial({ color: 0xe53935, metalness: 0.35, roughness: 0.3, clearcoat: 0.5 }),
-  green: new THREE.MeshPhysicalMaterial({ color: 0x34a853, metalness: 0.25, roughness: 0.35, clearcoat: 0.4 }),
-  watch: new THREE.MeshPhysicalMaterial({ color: 0xd7dce2, metalness: 0.9, roughness: 0.2, clearcoat: 0.6 }),
-  watchScreen: new THREE.MeshStandardMaterial({ color: 0x05101a, emissive: 0x00b4d8, emissiveIntensity: 0.75, roughness: 0.1 })
+  alu: new THREE.MeshPhysicalMaterial({ color: 0xe3e8f0, metalness: 0.91, roughness: 0.17, clearcoat: 0.65, clearcoatRoughness: 0.12 }),
+  urSilver: new THREE.MeshPhysicalMaterial({ color: 0xdce2ec, metalness: 0.89, roughness: 0.19, clearcoat: 0.70, clearcoatRoughness: 0.14 }),
+  urBlueCap: new THREE.MeshPhysicalMaterial({ color: 0x3b82f6, metalness: 0.68, roughness: 0.20, clearcoat: 0.85, clearcoatRoughness: 0.10 }),
+  urPurpleCap: new THREE.MeshPhysicalMaterial({ color: 0x9d72ff, metalness: 0.68, roughness: 0.20, clearcoat: 0.85, clearcoatRoughness: 0.10 }),
+  carbon: new THREE.MeshPhysicalMaterial({ color: 0x1e2330, metalness: 0.70, roughness: 0.26, clearcoat: 0.72, clearcoatRoughness: 0.14 }),
+  dark: new THREE.MeshPhysicalMaterial({ color: 0x181c26, metalness: 0.62, roughness: 0.30, clearcoat: 0.45 }),
+  steel: new THREE.MeshPhysicalMaterial({ color: 0xc4ccd8, metalness: 0.95, roughness: 0.14, clearcoat: 0.60 }),
+  copper: new THREE.MeshPhysicalMaterial({ color: 0xb794f4, metalness: 0.86, roughness: 0.20, clearcoat: 0.50 }),
+  rubber: new THREE.MeshStandardMaterial({ color: 0x14171f, metalness: 0.08, roughness: 0.85 }),
+  bench: new THREE.MeshPhysicalMaterial({ color: 0x161a26, metalness: 0.45, roughness: 0.32, clearcoat: 0.65, clearcoatRoughness: 0.18 }),
+  white: new THREE.MeshPhysicalMaterial({ color: 0xeef2f8, metalness: 0.15, roughness: 0.28, clearcoat: 0.55 }),
+  slot: new THREE.MeshStandardMaterial({ color: 0x090b10, roughness: 0.45 }),
+  red: new THREE.MeshPhysicalMaterial({ color: 0x9d72ff, metalness: 0.55, roughness: 0.22, clearcoat: 0.65 }),
+  green: new THREE.MeshPhysicalMaterial({ color: 0x38bdf8, metalness: 0.52, roughness: 0.22, clearcoat: 0.65 }),
+  watch: new THREE.MeshPhysicalMaterial({ color: 0xdce2ec, metalness: 0.92, roughness: 0.16, clearcoat: 0.70 }),
+  watchScreen: new THREE.MeshStandardMaterial({ color: 0x060b16, emissive: 0x60a5fa, emissiveIntensity: 0.85, roughness: 0.08 })
 };
 
 const normalMat = new THREE.MeshNormalMaterial();
@@ -327,26 +330,32 @@ bench.position.set(0.12, -0.015, 0);
 tagSemantic(bench, 0x1b2230, 0x1b2230);
 scene.add(bench);
 
-const gridHelper = new THREE.GridHelper(1.5, 30, 0x3b4b66, 0x1e2636);
+const gridHelper = new THREE.GridHelper(1.5, 30, 0x3b486b, 0x1e2538);
 gridHelper.position.set(0.12, 0.001, 0);
 gridHelper.userData.isHelper = true;
 scene.add(gridHelper);
 
-// Procedural NVIDIA SimReady KLT Toolbox Prop (zero external MB download)
+// Detailed Industrial UR5e Control Cabinet & Teach Pendant Dock (replaces primitive yellow box)
 {
   const box = new THREE.Group();
-  const base = mesh(new THREE.BoxGeometry(0.11, 0.055, 0.075), MAT.dark);
-  base.position.y = 0.0275;
-  const lid = mesh(new THREE.BoxGeometry(0.114, 0.014, 0.079), new THREE.MeshStandardMaterial({ color: 0xfbbc04, metalness: 0.25, roughness: 0.35 }));
-  lid.position.y = 0.062;
-  const handle = mesh(new THREE.BoxGeometry(0.045, 0.012, 0.01), MAT.dark);
-  handle.position.y = 0.074;
-  box.add(base, lid, handle);
+  const chassis = mesh(new THREE.BoxGeometry(0.115, 0.064, 0.082), MAT.carbon);
+  chassis.position.y = 0.032;
+  const trim = mesh(new THREE.BoxGeometry(0.119, 0.010, 0.086), MAT.urSilver);
+  trim.position.y = 0.065;
+  const topCap = mesh(new THREE.BoxGeometry(0.116, 0.006, 0.083), MAT.urPurpleCap);
+  topCap.position.y = 0.071;
+  const screen = mesh(new THREE.BoxGeometry(0.056, 0.003, 0.042), MAT.watchScreen);
+  screen.position.set(0.015, 0.0745, 0);
+  const estopBase = mesh(new THREE.CylinderGeometry(0.009, 0.010, 0.005, 24), MAT.alu);
+  estopBase.position.set(-0.036, 0.075, 0.018);
+  const estopBtn = mesh(new THREE.CylinderGeometry(0.008, 0.006, 0.008, 24), new THREE.MeshPhysicalMaterial({ color: 0xf43f5e, metalness: 0.3, roughness: 0.25, clearcoat: 0.7 }));
+  estopBtn.position.set(-0.036, 0.080, 0.018);
+  box.add(chassis, trim, topCap, screen, estopBase, estopBtn);
   box.position.copy(T3([-0.15, 0.0, 0]));
   box.rotation.y = Math.PI / 2;
-  tagSemantic(box, 0xa142f4, 0xba68c8);
+  tagSemantic(box, 0x9d72ff, 0xb99aff);
   scene.add(box);
-  trackedObjects.push({ label: "simready_toolbox#60", clsId: 6, obj: box, color: "#a142f4" });
+  trackedObjects.push({ label: "ur5e_controller#60", clsId: 6, obj: box, color: "#9d72ff" });
 }
 
 function placeBetween(obj, a, b) {
@@ -362,35 +371,35 @@ function quatFromR(R) {
 
 function makeGripper(ghost = false) {
   const g = new THREE.Group();
-  const ghostMat = new THREE.MeshBasicMaterial({ color: 0xea4335, transparent: true, opacity: 0.28, depthWrite: false });
+  const ghostMat = new THREE.MeshBasicMaterial({ color: 0x9d72ff, transparent: true, opacity: 0.24, depthWrite: false });
   const m = (geo, mat) => {
     const ms = ghost ? new THREE.Mesh(geo, ghostMat) : mesh(geo, mat);
     if (ghost) ms.userData.isHelper = true;
     return ms;
   };
-  // ATI 6-Axis Force/Torque Wrist Sensor Collar + ISO 9409-1 Tool Flange
-  const ftSensor = m(new THREE.CylinderGeometry(0.017, 0.017, 0.008, 32), MAT.copper);
+  // UR5e Built-in 6-Axis Force/Torque Sensor Ring + ISO 9409-1-50-4-M6 Tool Flange
+  const ftSensor = m(new THREE.CylinderGeometry(0.0175, 0.0175, 0.009, 36), MAT.copper);
   ftSensor.rotation.x = Math.PI / 2; ftSensor.position.z = -0.058; g.add(ftSensor);
-  const flange = m(new THREE.CylinderGeometry(0.015, 0.016, 0.007, 32), MAT.steel);
-  flange.rotation.x = Math.PI / 2; flange.position.z = -0.051; g.add(flange);
+  const flange = m(new THREE.CylinderGeometry(0.016, 0.0165, 0.008, 36), MAT.steel);
+  flange.rotation.x = Math.PI / 2; flange.position.z = -0.050; g.add(flange);
 
-  // Robotiq / Schunk Industrial Parallel Servo Gripper Chassis
-  const body = m(new THREE.BoxGeometry(0.072, 0.030, 0.026), MAT.carbon);
-  body.position.z = -0.038; g.add(body);
-  const bezel = m(new THREE.BoxGeometry(0.074, 0.012, 0.028), MAT.alu);
-  bezel.position.z = -0.038; g.add(bezel);
+  // Robotiq 2F-85 / Schunk Parallel Servo Gripper Housing
+  const body = m(new THREE.BoxGeometry(0.072, 0.028, 0.026), MAT.carbon);
+  body.position.z = -0.037; g.add(body);
+  const bezel = m(new THREE.BoxGeometry(0.074, 0.011, 0.028), MAT.urSilver);
+  bezel.position.z = -0.037; g.add(bezel);
   const rail = m(new THREE.BoxGeometry(0.076, 0.009, 0.007), MAT.steel);
   rail.position.set(0, 0, -0.023); g.add(rail);
 
-  // Optical ToF Rangefinder Lens on Gripper Center
-  const tofLens = m(new THREE.CylinderGeometry(0.0045, 0.0045, 0.004, 20), MAT.watchScreen);
+  // Wrist Camera / Optical Rangefinder Module
+  const tofLens = m(new THREE.CylinderGeometry(0.0045, 0.0045, 0.004, 24), MAT.watchScreen);
   tofLens.rotation.x = Math.PI / 2; tofLens.position.set(0, 0.011, -0.024); g.add(tofLens);
 
   const fingers = [-1, 1].map(s => {
     const f = new THREE.Group();
-    const baseJaw = m(new THREE.BoxGeometry(0.011, 0.022, 0.016), MAT.steel);
+    const baseJaw = m(new THREE.BoxGeometry(0.011, 0.021, 0.016), MAT.steel);
     baseJaw.position.z = -0.014; f.add(baseJaw);
-    const a = m(new THREE.BoxGeometry(0.008, 0.020, 0.034), MAT.alu);
+    const a = m(new THREE.BoxGeometry(0.008, 0.019, 0.034), MAT.urSilver);
     a.position.z = -0.003; f.add(a);
     const pad = m(new THREE.BoxGeometry(0.0035, 0.018, 0.022), MAT.rubber);
     pad.position.set(-s * 0.0055, 0, 0.003); f.add(pad);
@@ -401,28 +410,32 @@ function makeGripper(ghost = false) {
   return g;
 }
 
-// Build an articulated industrial robot link (chamfered carbon/anodized-alu shell + stiffening ribs + power conduit)
-function makeIndustrialLink(r, isCarbon, accentMat) {
+// Build a photorealistic Universal Robots UR5e brushed aluminum tubular link + authentic UR5e CAD mesh overlay
+function makeUR5eLink(r, cadStlFile, capMat) {
   const grp = new THREE.Group();
-  grp.userData.r = 1; // sub-meshes are already built to radius r in X/Z
-  const core = mesh(new THREE.CylinderGeometry(r, r * 1.08, 1, 32), isCarbon ? MAT.carbon : MAT.alu);
-  grp.add(core);
-  // Twin machined structural side rails along link
-  for (const s of [-1, 1]) {
-    const rib = mesh(new THREE.BoxGeometry(r * 0.42, 0.76, r * 1.95), isCarbon ? MAT.alu : MAT.carbon);
-    rib.position.x = s * r * 0.72;
-    grp.add(rib);
+  grp.userData.r = 1;
+  // Brushed anodized aluminum UR5e cylindrical tube with dark seal rings at both ends
+  const tube = mesh(new THREE.CylinderGeometry(r, r, 0.86, 40), MAT.urSilver);
+  grp.add(tube);
+  for (const y of [-0.43, 0.43]) {
+    const seal = mesh(new THREE.CylinderGeometry(r * 1.07, r * 1.07, 0.055, 40), MAT.carbon);
+    seal.position.y = y;
+    grp.add(seal);
+    const trimRing = mesh(new THREE.CylinderGeometry(r * 1.09, r * 1.09, 0.018, 40), capMat);
+    trimRing.position.y = y * 0.90;
+    grp.add(trimRing);
   }
-  // Anodized collar bands near ends
-  for (const y of [-0.38, 0.38]) {
-    const collar = mesh(new THREE.CylinderGeometry(r * 1.16, r * 1.16, 0.09, 32), accentMat);
-    collar.position.y = y;
-    grp.add(collar);
+  if (cadStlFile) {
+    stlLoader.load(`./models/ur5e/${cadStlFile}`, (geo) => {
+      geo.computeVertexNormals();
+      geo.center();
+      const cadMesh = mesh(geo, MAT.urSilver);
+      // UR5e upperarm/forearm STL is ~0.425m long along Z; rotate Z->Y and normalize length to 0.92 so it scales cleanly with link
+      cadMesh.rotation.x = Math.PI / 2;
+      cadMesh.scale.set(0.22, 0.22, 1.85);
+      grp.add(cadMesh);
+    });
   }
-  // Braided servo umbilical conduit along spine
-  const conduit = mesh(new THREE.CylinderGeometry(r * 0.24, r * 0.24, 0.88, 16), MAT.rubber);
-  conduit.position.set(0, 0, r * 1.05);
-  grp.add(conduit);
   return grp;
 }
 
@@ -437,64 +450,79 @@ function makeRig(dof, offsetY, accentHex) {
   const armGroup = new THREE.Group();
   rig.add(armGroup);
 
-  const accent = new THREE.MeshPhysicalMaterial({ color: accentHex, metalness: 0.55, roughness: 0.22, clearcoat: 0.65 });
-  const ledRingMat = new THREE.MeshStandardMaterial({ color: accentHex, emissive: accentHex, emissiveIntensity: 0.65, roughness: 0.2 });
+  const capMat = dof === 4 ? MAT.urPurpleCap : MAT.urBlueCap;
+  const ledRingMat = new THREE.MeshStandardMaterial({ color: accentHex, emissive: accentHex, emissiveIntensity: 0.75, roughness: 0.15 });
 
-  // Multi-tiered bolted CNC pedestal base
-  const plinth = mesh(new THREE.CylinderGeometry(0.056, 0.062, 0.010, 48), MAT.dark); plinth.position.y = 0.005; armGroup.add(plinth);
-  const flangeRing = mesh(new THREE.CylinderGeometry(0.048, 0.052, 0.012, 48), MAT.steel); flangeRing.position.y = 0.014; armGroup.add(flangeRing);
+  // CNC-machined UR5e mounting base plate
+  const plinth = mesh(new THREE.CylinderGeometry(0.054, 0.060, 0.010, 48), MAT.carbon); plinth.position.y = 0.005; armGroup.add(plinth);
+  const flangeRing = mesh(new THREE.CylinderGeometry(0.046, 0.050, 0.012, 48), MAT.steel); flangeRing.position.y = 0.013; armGroup.add(flangeRing);
   for (let b = 0; b < 8; b++) {
     const ang = (b / 8) * Math.PI * 2;
-    const bolt = mesh(new THREE.CylinderGeometry(0.0028, 0.0028, 0.006, 12), MAT.steel);
-    bolt.position.set(Math.cos(ang) * 0.053, 0.011, Math.sin(ang) * 0.053);
+    const bolt = mesh(new THREE.CylinderGeometry(0.0026, 0.0026, 0.006, 14), MAT.steel);
+    bolt.position.set(Math.cos(ang) * 0.052, 0.011, Math.sin(ang) * 0.052);
     armGroup.add(bolt);
   }
 
-  // Load real CAD turret housing (Spot Arm base_link.stl) onto pedestal
-  stlLoader.load("./models/spot_arm/base_link.stl", (geo) => {
+  // Official Universal Robots UR5e Base CAD Mesh (base.stl)
+  stlLoader.load("./models/ur5e/base.stl", (geo) => {
     geo.computeVertexNormals();
-    const cadBase = mesh(geo, dof === 4 ? MAT.dark : MAT.carbon);
-    cadBase.scale.set(0.00075, 0.00075, 0.00075);
+    const cadBase = mesh(geo, MAT.urSilver);
+    cadBase.scale.set(0.52, 0.52, 0.52);
     cadBase.rotation.x = -Math.PI / 2;
-    cadBase.position.y = 0.008;
-    tagSemantic(cadBase, dof === 4 ? 0xfbbc04 : 0x4285f4, dof === 4 ? 0xffd54f : 0x64b5f6);
+    cadBase.position.y = 0.012;
+    tagSemantic(cadBase, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa);
     armGroup.add(cadBase);
   });
 
-  // Articulated industrial links (4-DOF uses brushed anodized aluminum + gold harmonic collars; 6-DOF uses carbon-fiber UR-style tubes + cyan collars)
-  const radii = [0.025, 0.016, 0.0135, 0.011];
-  const links = radii.map((r, idx) => {
-    const l = makeIndustrialLink(r, dof === 6 && idx > 0, accent);
+  // Photorealistic UR5e brushed silver tubular links + official UR5e CAD shells
+  const linkConfigs = [
+    { r: 0.023, stl: null },
+    { r: 0.0165, stl: "upperarm.stl" },
+    { r: 0.014, stl: "forearm.stl" },
+    { r: 0.0115, stl: null }
+  ];
+  const links = linkConfigs.map((cfg) => {
+    const l = makeUR5eLink(cfg.r, cfg.stl, capMat);
     armGroup.add(l);
     return l;
   });
 
-  // Load real CAD wrist/shoulder shell onto upper arm link
-  stlLoader.load("./models/spot_arm/wrist.stl", (geo) => {
-    geo.computeVertexNormals();
-    geo.center();
-    const cadShell = mesh(geo, dof === 4 ? MAT.alu : MAT.carbon);
-    cadShell.scale.set(0.00038, 0.00045, 0.00038);
-    tagSemantic(cadShell, dof === 4 ? 0xfbbc04 : 0x4285f4, dof === 4 ? 0xffd54f : 0x64b5f6);
-    links[1].add(cadShell);
-  });
-
-  // Harmonic-drive servo actuator housings with anodized end-caps, bolt rings & illuminated LED status rings
+  // UR5e Modular Harmonic-Drive Joint Actuators with authentic UR5e CAD shells (shoulder.stl, wrist1.stl, wrist2.stl, wrist3.stl) + metallic blue/purple caps
+  const jointStls = ["shoulder.stl", "shoulder.stl", "wrist1.stl", "wrist2.stl", "wrist2.stl", "wrist3.stl"];
   const housings = Array.from({ length: dof }, (_, i) => {
     const g = new THREE.Group();
     const big = i < 3;
     const rad = big ? 0.022 : 0.0165;
-    const len = big ? 0.052 : 0.038;
-    const drum = mesh(new THREE.CylinderGeometry(rad, rad, len, 36), MAT.dark); g.add(drum);
-    const stator = mesh(new THREE.CylinderGeometry(rad * 1.04, rad * 1.04, len * 0.45, 36), MAT.steel); g.add(stator);
-    const ledTorus = mesh(new THREE.TorusGeometry(rad * 1.03, 0.0016, 12, 36), ledRingMat);
+    const len = big ? 0.050 : 0.038;
+    // UR5e silver actuator body
+    const body = mesh(new THREE.CylinderGeometry(rad, rad, len * 0.82, 40), MAT.urSilver);
+    g.add(body);
+    // Dark harmonic-drive collar band
+    const collar = mesh(new THREE.CylinderGeometry(rad * 1.03, rad * 1.03, len * 0.28, 40), MAT.carbon);
+    g.add(collar);
+    // Illuminated status ring
+    const ledTorus = mesh(new THREE.TorusGeometry(rad * 1.03, 0.0014, 12, 36), ledRingMat);
     ledTorus.rotation.x = Math.PI / 2;
-    ledTorus.position.y = len * 0.26;
+    ledTorus.position.y = len * 0.25;
     g.add(ledTorus);
+    // Signature UR5e curved metallic end-caps (Metallic Purple on 4-DOF, Metallic Cobalt Blue on 6-DOF)
     for (const s of [-1, 1]) {
-      const cap = mesh(new THREE.CylinderGeometry(rad * 0.88, rad * 0.96, 0.0045, 32), accent);
-      cap.position.y = s * (len * 0.5 + 0.002);
+      const cap = mesh(new THREE.CylinderGeometry(rad * 0.86, rad * 0.99, 0.007, 36), capMat);
+      cap.position.y = s * (len * 0.45);
       g.add(cap);
+    }
+    // Attach real UR5e joint CAD shell
+    const stlName = jointStls[i];
+    if (stlName) {
+      stlLoader.load(`./models/ur5e/${stlName}`, (geo) => {
+        geo.computeVertexNormals();
+        geo.center();
+        const cadJ = mesh(geo, MAT.urSilver);
+        const sc = big ? 0.34 : 0.28;
+        cadJ.scale.set(sc, sc, sc);
+        tagSemantic(cadJ, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa);
+        g.add(cadJ);
+      });
     }
     armGroup.add(g);
     return g;
@@ -503,84 +531,111 @@ function makeRig(dof, offsetY, accentHex) {
   const grip = makeGripper(false);
   armGroup.add(grip);
 
-  // Detailed Apple Watch Ultra 2 Forearm Mount on the 4-DOF Abel-Arm
+  // Detailed Apple Watch Ultra 2 Forearm Mount on the 4-DOF UR5e
   let watchSensor = null;
   if (dof === 4) {
     watchSensor = new THREE.Group();
-    const strap = mesh(new THREE.CylinderGeometry(0.0185, 0.0185, 0.022, 28), new THREE.MeshStandardMaterial({ color: 0xff5722, roughness: 0.65 }));
+    const strap = mesh(new THREE.CylinderGeometry(0.0175, 0.0175, 0.022, 32), new THREE.MeshPhysicalMaterial({ color: 0x6d28d9, roughness: 0.45, clearcoat: 0.3 }));
     strap.rotation.z = Math.PI / 2;
     watchSensor.add(strap);
-    const caseMesh = mesh(new THREE.BoxGeometry(0.028, 0.010, 0.034), MAT.watch);
+    const caseMesh = mesh(new THREE.BoxGeometry(0.028, 0.0095, 0.034), MAT.watch);
     caseMesh.position.y = 0.015;
     watchSensor.add(caseMesh);
     const screenMesh = mesh(new THREE.BoxGeometry(0.024, 0.002, 0.029), MAT.watchScreen);
     screenMesh.position.y = 0.0195;
     watchSensor.add(screenMesh);
-    const crown = mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.004, 16), MAT.red);
+    const crown = mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.004, 16), MAT.urPurpleCap);
     crown.rotation.z = Math.PI / 2;
     crown.position.set(0.015, 0.016, 0.006);
     watchSensor.add(crown);
     armGroup.add(watchSensor);
   }
 
-  tagSemantic(armGroup, dof === 4 ? 0xfbbc04 : 0x4285f4, dof === 4 ? 0xffd54f : 0x64b5f6);
-  if (watchSensor) tagSemantic(watchSensor, 0xff5d5d, 0xff8a80);
+  tagSemantic(armGroup, dof === 4 ? 0x9d72ff : 0x3b82f6, dof === 4 ? 0xb99aff : 0x60a5fa);
+  if (watchSensor) tagSemantic(watchSensor, 0xe879f9, 0xf0abfc);
 
   const ghost = makeGripper(true); rig.add(ghost);
-  const guideMat = new THREE.MeshBasicMaterial({ color: accentHex, transparent: true, opacity: 0.55 });
-  const guideLine = new THREE.Mesh(new THREE.CylinderGeometry(0.0018, 0.0018, 1, 8), guideMat);
+  const guideMat = new THREE.MeshBasicMaterial({ color: accentHex, transparent: true, opacity: 0.50 });
+  const guideLine = new THREE.Mesh(new THREE.CylinderGeometry(0.0016, 0.0016, 1, 8), guideMat);
   guideLine.userData.isHelper = true;
   rig.add(guideLine);
 
   let plane = null;
   if (dof === 4) {
-    plane = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.3), new THREE.MeshBasicMaterial({ color: 0xfbbc04, transparent: true, opacity: 0.11, side: THREE.DoubleSide, depthWrite: false }));
+    plane = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.3), new THREE.MeshBasicMaterial({ color: 0x9d72ff, transparent: true, opacity: 0.09, side: THREE.DoubleSide, depthWrite: false }));
     plane.userData.isHelper = true;
     rig.add(plane);
   }
 
-  // Workbench mission props
-  const pickPad = mesh(new THREE.CylinderGeometry(0.034, 0.036, 0.003, 32), MAT.dark);
-  pickPad.position.copy(T3([0.15, -0.075, 0.0015])); rig.add(pickPad);
-  const dropPad = mesh(new THREE.CylinderGeometry(0.038, 0.040, 0.004, 32), MAT.green);
-  dropPad.position.copy(T3([0.15, 0.075, 0.002])); rig.add(dropPad);
+  // Machined Workbench Fixture Pads (CNC Beveled Pedestals + Alignment Reticles)
+  const pickPad = new THREE.Group();
+  const pickBase = mesh(new THREE.CylinderGeometry(0.036, 0.040, 0.004, 40), MAT.carbon);
+  const pickRing = mesh(new THREE.TorusGeometry(0.033, 0.0018, 12, 40), MAT.steel);
+  pickRing.rotation.x = Math.PI / 2; pickRing.position.y = 0.0022;
+  pickPad.add(pickBase, pickRing);
+  pickPad.position.copy(T3([0.15, -0.075, 0.002])); rig.add(pickPad);
+
+  const dropPad = new THREE.Group();
+  const dropBase = mesh(new THREE.CylinderGeometry(0.038, 0.042, 0.0045, 40), MAT.carbon);
+  const dropSurface = mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.005, 40), MAT.green);
+  const dropRing = mesh(new THREE.TorusGeometry(0.035, 0.002, 12, 40), MAT.urBlueCap);
+  dropRing.rotation.x = Math.PI / 2; dropRing.position.y = 0.0026;
+  dropPad.add(dropBase, dropSurface, dropRing);
+  dropPad.position.copy(T3([0.15, 0.075, 0.0022])); rig.add(dropPad);
   tagSemantic(pickPad, 0x37474f, 0x455a64);
-  tagSemantic(dropPad, 0x2e7d32, 0x66bb6a);
+  tagSemantic(dropPad, 0x2563eb, 0x60a5fa);
 
+  // High-Detail 21700 Industrial Lithium Power Cell (Brushed Cobalt Jacket + Crimp Groove + Cathode Cap + Insulator Ring)
   const battery = new THREE.Group();
-  const cell = mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.05, 28), MAT.green); cell.rotation.z = Math.PI / 2; battery.add(cell);
-  const tip = mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.006, 16), MAT.steel); tip.rotation.z = Math.PI / 2; tip.position.x = 0.028; battery.add(tip);
+  const cellSleeve = mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.048, 36), MAT.urBlueCap);
+  cellSleeve.rotation.z = Math.PI / 2; battery.add(cellSleeve);
+  const cellBand = mesh(new THREE.CylinderGeometry(0.0123, 0.0123, 0.014, 36), MAT.urSilver);
+  cellBand.rotation.z = Math.PI / 2; battery.add(cellBand);
+  const negCap = mesh(new THREE.CylinderGeometry(0.0118, 0.0118, 0.003, 32), MAT.steel);
+  negCap.rotation.z = Math.PI / 2; negCap.position.x = -0.025; battery.add(negCap);
+  const posCollar = mesh(new THREE.CylinderGeometry(0.0118, 0.0118, 0.003, 32), MAT.carbon);
+  posCollar.rotation.z = Math.PI / 2; posCollar.position.x = 0.025; battery.add(posCollar);
+  const tip = mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.006, 24), MAT.steel);
+  tip.rotation.z = Math.PI / 2; tip.position.x = 0.0285; battery.add(tip);
   rig.add(battery);
-  tagSemantic(battery, 0x34a853, dof === 4 ? 0x81c995 : 0x00e676);
+  tagSemantic(battery, 0x38bdf8, dof === 4 ? 0x7dd3fc : 0x0284c7);
 
+  // Industrial Charger Dock Station
   const charger = new THREE.Group(); rig.add(charger);
-  const panel = mesh(new THREE.BoxGeometry(0.11, 0.1, 0.014), MAT.white); charger.add(panel);
-  const slot = mesh(new THREE.BoxGeometry(0.062, 0.03, 0.016), MAT.slot); slot.position.z = 0.002; charger.add(slot);
-  const ledMat = new THREE.MeshStandardMaterial({ color: 0xea4335, emissive: 0xea4335, emissiveIntensity: 0.8 });
-  const led = mesh(new THREE.SphereGeometry(0.005, 12, 8), ledMat); led.position.set(0.04, 0.038, 0.009); charger.add(led);
-  const stand = mesh(new THREE.CylinderGeometry(0.005, 0.005, 1, 12), MAT.steel); rig.add(stand);
-  tagSemantic(charger, 0x57caff, dof === 4 ? 0x29b6f6 : 0x00b0ff);
-  tagSemantic(stand, 0x57caff, 0x0288d1);
+  const panel = mesh(new THREE.BoxGeometry(0.112, 0.102, 0.016), MAT.urSilver); charger.add(panel);
+  const bezelFrame = mesh(new THREE.BoxGeometry(0.072, 0.040, 0.018), MAT.carbon); bezelFrame.position.z = 0.001; charger.add(bezelFrame);
+  const slot = mesh(new THREE.BoxGeometry(0.062, 0.030, 0.019), MAT.slot); slot.position.z = 0.002; charger.add(slot);
+  const ledMat = new THREE.MeshStandardMaterial({ color: 0x9d72ff, emissive: 0x9d72ff, emissiveIntensity: 0.9 });
+  const led = mesh(new THREE.SphereGeometry(0.005, 16, 12), ledMat); led.position.set(0.042, 0.038, 0.010); charger.add(led);
+  const stand = mesh(new THREE.CylinderGeometry(0.006, 0.007, 1, 20), MAT.steel); rig.add(stand);
+  tagSemantic(charger, 0x60a5fa, dof === 4 ? 0x3b82f6 : 0x2563eb);
+  tagSemantic(stand, 0x60a5fa, 0x1d4ed8);
 
-  const post = mesh(new THREE.CylinderGeometry(0.007, 0.007, 1, 16), MAT.steel); rig.add(post);
+  // Precision Industrial Process Valve Wheel
+  const post = mesh(new THREE.CylinderGeometry(0.0075, 0.0085, 1, 20), MAT.steel); rig.add(post);
   const valve = new THREE.Group(); rig.add(valve);
-  valve.add(mesh(new THREE.TorusGeometry(0.03, 0.005, 14, 48), MAT.red));
-  for (const r of [0, Math.PI / 2]) { const sp = mesh(new THREE.BoxGeometry(0.058, 0.006, 0.006), MAT.red); sp.rotation.z = r; valve.add(sp); }
-  const hub = mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.012, 20), MAT.steel); hub.rotation.x = Math.PI / 2; valve.add(hub);
-  tagSemantic(valve, 0xea4335, dof === 4 ? 0xef5350 : 0xff1744);
-  tagSemantic(post, 0xea4335, 0xc62828);
+  valve.add(mesh(new THREE.TorusGeometry(0.031, 0.0055, 20, 56), MAT.urPurpleCap));
+  for (const r of [0, Math.PI / 3, (2 * Math.PI) / 3]) {
+    const sp = mesh(new THREE.CylinderGeometry(0.0032, 0.0032, 0.060, 16), MAT.steel);
+    sp.rotation.z = r;
+    valve.add(sp);
+  }
+  const hub = mesh(new THREE.CylinderGeometry(0.0095, 0.0095, 0.014, 24), MAT.urSilver);
+  hub.rotation.x = Math.PI / 2; valve.add(hub);
+  tagSemantic(valve, 0x9d72ff, dof === 4 ? 0xc084fc : 0x7c3aed);
+  tagSemantic(post, 0x9d72ff, 0x6d28d9);
 
   trackedObjects.push(
-    { label: `robot_arm_${dof}dof#${dof === 4 ? 10 : 20}`, clsId: dof === 4 ? 1 : 2, obj: armGroup, color: dof === 4 ? "#fbbc04" : "#57caff" },
-    { label: `battery_cell#${dof === 4 ? 30 : 31}`, clsId: 3, obj: battery, color: "#34a853" }
+    { label: `ur5e_arm_${dof}dof#${dof === 4 ? 10 : 20}`, clsId: dof === 4 ? 1 : 2, obj: armGroup, color: dof === 4 ? "#9d72ff" : "#60a5fa" },
+    { label: `power_cell#${dof === 4 ? 30 : 31}`, clsId: 3, obj: battery, color: "#38bdf8" }
   );
 
   return { rig, armGroup, links, housings, grip, watchSensor, ghost, guideLine, guideMat, plane, pickPad, dropPad, battery, charger, ledMat, stand, post, valve };
 }
 
 const rigs = {
-  4: makeRig(4, -0.18, 0xfbbc04),
-  6: makeRig(6, 0.18, 0x4285f4)
+  4: makeRig(4, -0.18, 0x9d72ff),
+  6: makeRig(6, 0.18, 0x3b82f6)
 };
 
 const poseObj = (obj, p, R) => { obj.position.copy(T3(p)); obj.quaternion.copy(quatFromR(R)); };
@@ -735,7 +790,9 @@ function setClosed(v, lift = true) {
   const next = !!v;
   if (st.closed !== next) st.recoilUntil = performance.now() + 340;
   st.closed = next;
-  $("btn-grab").innerHTML = next ? "✋ Release" : "✊ Grab";
+  $("btn-grab").innerHTML = next
+    ? `<svg class="ico sm" viewBox="0 0 24 24"><path d="M5 12h14"/></svg><span>Release</span>`
+    : `<svg class="ico sm" viewBox="0 0 24 24"><path d="M7 4v8l3 3v5M17 4v8l-3 3v5M4 8h4M16 8h4"/></svg><span>Grasp</span>`;
   $("btn-grab").classList.toggle("on", next);
   send({ t: "grip", g: next ? 1 : 0 });
   const fks = { 4: fk4(st.q4), 6: fk6(st.q6) };
@@ -746,7 +803,7 @@ function setClosed(v, lift = true) {
     if (next) {
       const dxy = Math.hypot(f.tip[0] - a.battP[0], f.tip[1] - a.battP[1]);
       const dz = Math.abs(f.tip[2] - 0.032);
-      if (!a.held && !a.inserted && dxy < 0.068 && dz < 0.12 && oriError(f.R, a.battR) < 45) {
+      if (!a.held && !a.inserted && dxy < 0.088 && dz < 0.14 && oriError(f.R, a.battR) < 65) {
         a.held = true;
         a.dest = a.battP[1] > 0.02 ? "pick" : "place";
         grabbedAny = true;
@@ -758,11 +815,11 @@ function setClosed(v, lift = true) {
       const dPlace = Math.hypot(f.tip[0] - PLACE_P[0], f.tip[1] - PLACE_P[1]);
       const dPick = Math.hypot(f.tip[0] - PICK_P[0], f.tip[1] - PICK_P[1]);
       const dCharger = Math.hypot(f.tip[0] - ST[1].p[0], f.tip[1] - ST[1].p[1], f.tip[2] - ST[1].p[2]);
-      if (st.station === 0 && dPlace < 0.044) {
+      if (st.station === 0 && dPlace < 0.062) {
         a.battP = [PLACE_P[0], PLACE_P[1], 0.013]; a.battR = PLACE_R; a.done[0] = true;
-      } else if (st.station === 0 && dPick < 0.044 && a.dest === "pick") {
+      } else if (st.station === 0 && dPick < 0.062 && a.dest === "pick") {
         a.battP = [PICK_P[0], PICK_P[1], 0.013]; a.battR = PICK_R; a.done[0] = true;
-      } else if (st.station === 1 && dCharger < POS_TOL * 1.35 && oriError(f.R, ST[1].R) < ORI_TOL * 1.25) {
+      } else if (st.station === 1 && dCharger < POS_TOL * 1.45 && oriError(f.R, ST[1].R) < ORI_TOL * 1.35) {
         a.inserted = { p: [...ST[1].p], R: [...ST[1].R] }; a.done[1] = true;
       } else {
         a.battP = [cl(f.tip[0], 0.06, 0.22), cl(f.tip[1], -0.14, 0.14), 0.013];
@@ -771,7 +828,7 @@ function setClosed(v, lift = true) {
       }
     }
   }
-  if (grabbedAny && st.station === 0 && lift && !st.tween) st.cmd.z = Math.max(st.cmd.z, 0.055);
+  if (grabbedAny && st.station === 0 && lift && !st.tween) st.cmd.z = Math.max(st.cmd.z, 0.060);
   if (releasedAny && lift && !st.tween) st.cmd.z = 0.135;
 }
 
@@ -784,15 +841,15 @@ function evaluateArm(dof, f, dt) {
   const posMm = Math.round(pos * 1000);
   if (s.id === "battery") {
     const oriDeg = Math.round(oriError(f.R, tgt.R));
-    const aligned = pos < POS_TOL * 1.25 && oriDeg < ORI_TOL * 1.25;
+    const aligned = pos < POS_TOL * 1.3 && oriDeg < ORI_TOL * 1.3;
     if (!a.held) {
-      if (aligned && closed) { a.held = true; a.done[0] = false; return { msg: "📦 Picked! Move to green pad → RELEASE", cls: "warn", aligned: false, posMm, oriDeg }; }
-      if (a.done[0]) return { msg: "✓ PICK & PLACE DONE!", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 };
-      return { msg: aligned ? "🎯 OVER BATTERY → GRAB!" : `4D/6D → battery · ${posMm} mm · ${oriDeg}°`, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
+      if (aligned && closed) { a.held = true; a.done[0] = false; return { msg: "Cell Grasped · Move to Target Pad -> Release", cls: "warn", aligned: false, posMm, oriDeg }; }
+      if (a.done[0]) return { msg: "Pick & Place Complete", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 };
+      return { msg: aligned ? "Aligned Over Cell -> Click Grasp" : `To Cell · ${posMm} mm · ${oriDeg}°`, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
     }
-    return { msg: aligned ? "🎯 OVER PAD → RELEASE!" : `📦 holding · to pad · ${posMm} mm`, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
+    return { msg: aligned ? "Over Target Pad -> Click Release" : `Carrying Cell · ${posMm} mm to Pad`, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
   }
-  if (a.done[i]) return { msg: "✓ MISSION DONE!", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 };
+  if (a.done[i]) return { msg: "Station Task Complete", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 };
   if (s.id === "valve") {
     const z = [f.R[2], f.R[5], f.R[8]], x = [f.R[0], f.R[3], f.R[6]], off = angleBetween(z, [1, 0, 0]);
     const oriDeg = Math.round(off);
@@ -800,14 +857,14 @@ function evaluateArm(dof, f, dt) {
     a.gripping = aligned && closed;
     const ang = Math.abs(Math.atan2(x[1], -x[2])) / D2R, folded = ang > 90 ? 180 - ang : ang;
     if (a.gripping) a.valve = Math.max(a.valve, folded);
-    if (a.gripping && a.valve >= 75) { a.done[i] = true; return { msg: "✓ VALVE TURNED 90°!", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 }; }
-    const msg = !aligned ? `steer to wheel · ${posMm} mm · ${oriDeg}°` : !closed ? "🎯 LOCKED ON → GRAB!" : dof === 4 ? `gripping · 4-DOF can't twist (${a.valve.toFixed(0)}°)` : `twisting valve… ${a.valve.toFixed(0)}°/90°`;
+    if (a.gripping && a.valve >= 75) { a.done[i] = true; return { msg: "Valve Rotated 90°", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 }; }
+    const msg = !aligned ? `To Valve · ${posMm} mm · ${oriDeg}°` : !closed ? "Aligned -> Click Grasp" : dof === 4 ? `Grasping · 4-DOF No Wrist Roll (${a.valve.toFixed(0)}°)` : `Rotating Valve… ${a.valve.toFixed(0)}°/90°`;
     return { msg, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
   }
   const oriDeg = Math.round(oriError(f.R, s.R));
   const aligned = pos < POS_TOL && oriDeg < ORI_TOL;
-  if (aligned && !closed && a.inserted) { a.done[i] = true; return { msg: "✓ CHARGER SLOTTED!", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 }; }
-  const msg = aligned ? "🎯 IN SLOT → RELEASE!" : dof === 4 ? `4-DOF stuck in plane · ${oriDeg}° off` : `steer to slot · ${posMm} mm · ${oriDeg}°`;
+  if (aligned && !closed && a.inserted) { a.done[i] = true; return { msg: "Charger Dock Slotted", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 }; }
+  const msg = aligned ? "Aligned in Slot -> Click Release" : dof === 4 ? `4-DOF Planar Lock · ${oriDeg}° Off` : `To Charger · ${posMm} mm · ${oriDeg}°`;
   return { msg, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
 }
 
@@ -824,7 +881,7 @@ if ($("sms-watch")) {
 }
 if ($("imu-push-url")) {
   const pushUrl = `${location.origin}/api/room/${ROOM}/imu`;
-  $("imu-push-url").textContent = `/api/room/${ROOM}/imu 📋`;
+  $("imu-push-url").textContent = `/api/room/${ROOM}/imu (Copy)`;
   $("imu-push-url").onclick = () => {
     navigator.clipboard?.writeText(pushUrl);
     $("watch-status").textContent = `Copied HTTP Push URL: ${pushUrl}`;
@@ -970,9 +1027,46 @@ function snapToStation() {
 }
 $("btn-snap").onclick = snapToStation;
 $("btn-grab").onclick = () => {
-  setClosed(!st.closed);
   const s = ST[st.station];
-  if (s.id === "valve" && st.closed) tweenTo(s.ypr, s.p, 950);
+  if (!st.closed) {
+    // Check if either arm is already close enough to grasp directly
+    const f4 = fk4(st.q4), f6 = fk6(st.q6);
+    const d4 = Math.hypot(f4.tip[0] - st.arm[4].battP[0], f4.tip[1] - st.arm[4].battP[1]);
+    const d6 = Math.hypot(f6.tip[0] - st.arm[6].battP[0], f6.tip[1] - st.arm[6].battP[1]);
+    if (s.id === "battery" && !st.arm[4].held && !st.arm[6].held && Math.min(d4, d6) > 0.065) {
+      // Auto-approach cell, grasp, and lift so Grasp always works on first click!
+      const bp = [st.arm[6].battP[0], st.arm[6].battP[1], 0.032];
+      $("watch-status").textContent = "Auto-aligning to cell -> Grasping…";
+      tweenTo([-25, 0, 0], bp, 380, () => {
+        setClosed(true, true);
+        $("watch-status").textContent = "Cell grasped! Click Pick & Place or Align -> Release.";
+      });
+      return;
+    }
+    if (s.id === "valve") {
+      const dv = Math.hypot(f6.tip[0] - s.p[0], f6.tip[1] - s.p[1], f6.tip[2] - s.p[2]);
+      if (dv > POS_TOL) {
+        tweenTo(s.yprGrip, s.p, 380, () => {
+          setClosed(true);
+          later(250, () => tweenTo(s.ypr, s.p, 850));
+        });
+        return;
+      }
+    }
+  } else if (s.id === "battery" && (st.arm[4].held || st.arm[6].held)) {
+    const f6 = fk6(st.q6);
+    const dPlace = Math.hypot(f6.tip[0] - PLACE_P[0], f6.tip[1] - PLACE_P[1]);
+    if (dPlace > 0.055) {
+      $("watch-status").textContent = "Moving to target pad -> Releasing…";
+      tweenTo([25, 0, 0], PLACE_P, 420, () => {
+        setClosed(false, true);
+        $("watch-status").textContent = "Cell placed on target pad!";
+      });
+      return;
+    }
+  }
+  setClosed(!st.closed);
+  if (s.id === "valve" && st.closed) tweenTo(s.ypr, s.p, 850);
 };
 $("btn-reset").onclick = () => {
   st.arm = { 4: freshArm(), 6: freshArm() };
@@ -993,19 +1087,19 @@ function runPickAndPlaceCycle() {
     st.arm[d].dest = "place";
   }
   setClosed(false, false);
-  $("watch-status").textContent = "📦 Executing Pick & Place cycle (Approach -> Grasp -> Lift -> Place -> Release)";
+  $("watch-status").textContent = "Executing Pick & Place (Approach -> Grasp -> Lift -> Place -> Release)";
   const abovePick = [PICK_P[0], PICK_P[1], PICK_P[2] + 0.07];
   const abovePlace = [PLACE_P[0], PLACE_P[1], PLACE_P[2] + 0.09];
-  tweenTo([-25, 0, 0], abovePick, 650, () =>
-    tweenTo([-25, 0, 0], PICK_P, 550, () =>
-      later(250, () => {
+  tweenTo([-25, 0, 0], abovePick, 480, () =>
+    tweenTo([-25, 0, 0], PICK_P, 420, () =>
+      later(180, () => {
         setClosed(true, false);
-        later(250, () => tweenTo([-25, 0, 0], abovePick, 500, () =>
-          tweenTo([25, 0, 0], abovePlace, 700, () =>
-            tweenTo([25, 0, 0], PLACE_P, 550, () =>
-              later(250, () => {
+        later(180, () => tweenTo([-25, 0, 0], abovePick, 400, () =>
+          tweenTo([25, 0, 0], abovePlace, 540, () =>
+            tweenTo([25, 0, 0], PLACE_P, 420, () =>
+              later(180, () => {
                 setClosed(false, false);
-                later(200, () => tweenTo([25, 0, 0], abovePlace, 500));
+                later(160, () => tweenTo([25, 0, 0], abovePlace, 400));
               })
             )
           )
@@ -1120,6 +1214,11 @@ document.querySelectorAll("[data-p]").forEach(inp => inp.addEventListener("input
   st.cmd[inp.dataset.p] = parseFloat(inp.value);
   st.tween = null; st.quinticPlan = null;
   st.holdCrowd = performance.now() + 1200;
+  // Instant zero-latency kinematic solve on slider drag
+  const R = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
+  st.q4 = ik4(p, R).q;
+  st.q6 = ik6(p, R).q;
+  showCmd(st.cmd);
 }));
 
 $("drive-mode").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
@@ -1409,14 +1508,14 @@ function drawCharts() {
       ctx1.stroke();
       ctx1.setLineDash([]);
     };
-    strokeTrace(sAcc, mapA, "#00b4d8", 2.0);          // Sim Accel |a| (cyan)
-    strokeTrace(wAcc, mapA, "#ff5d5d", 1.5, [4, 2]);  // Watch Accel |a| (coral dashed)
-    strokeTrace(sGyr, mapG, "#fbbc04", 1.9);          // Sim Gyro |w| (yellow)
-    strokeTrace(wGyr, mapG, "#81c995", 1.4, [3, 2]);  // Watch Gyro |w| (green dashed)
+    strokeTrace(sAcc, mapA, "#60a5fa", 2.0);          // Sim Accel |a| (cobalt blue)
+    strokeTrace(wAcc, mapA, "#e879f9", 1.5, [4, 2]);  // Watch Accel |a| (magenta-violet dashed)
+    strokeTrace(sGyr, mapG, "#b99aff", 1.9);          // Sim Gyro |w| (metallic purple)
+    strokeTrace(wGyr, mapG, "#38bdf8", 1.4, [3, 2]);  // Watch Gyro |w| (cyan dashed)
 
-    ctx1.fillStyle = "#8ab4f8"; ctx1.font = "10px 'Roboto Mono', monospace";
-    ctx1.fillText("L: |a| m/s² (gravity+recoil)", 8, 11);
-    ctx1.fillStyle = "#fde293";
+    ctx1.fillStyle = "#93c5fd"; ctx1.font = "10px 'Roboto Mono', monospace";
+    ctx1.fillText("L: |a| m/s² (gravity+impulse)", 8, 11);
+    ctx1.fillStyle = "#d8b4fe";
     ctx1.fillText("R: |ω| rad/s (joint rotation)", W1 - 176, 11);
   } else {
     const isAcc = st.imuChartMode === "acc";
@@ -1427,7 +1526,7 @@ function drawCharts() {
     const mapY = (v) => H1 - 10 - ((v - minV) / Math.max(0.1, maxV - minV)) * (H1 - 20);
 
     // Shaded residual band between Sim and Watch
-    ctx1.fillStyle = "rgba(181, 23, 158, 0.24)";
+    ctx1.fillStyle = "rgba(157, 114, 255, 0.22)";
     ctx1.beginPath();
     sVals.forEach((sv, i) => {
       const x = (i / Math.max(1, sVals.length - 1)) * W1;
@@ -1449,8 +1548,8 @@ function drawCharts() {
       });
       ctx1.stroke();
     };
-    strokeArr(sVals, "#00b4d8", 2.0);
-    strokeArr(wVals, "#ff5d5d", 1.5);
+    strokeArr(sVals, "#60a5fa", 2.0);
+    strokeArr(wVals, "#e879f9", 1.5);
   }
 
   // Chart 2: 4-DOF vs 6-DOF Orientation Divergence + Quintic Peak Joint Velocity
@@ -1467,9 +1566,9 @@ function drawCharts() {
     });
     ctx2.stroke();
   };
-  plotMetric(h => h.oriErr4, 90, "#fbbc04"); // 4-DOF orientation error (yellow)
-  plotMetric(h => h.oriErr6, 90, "#00b4d8"); // 6-DOF orientation error (cyan)
-  plotMetric(h => h.dqPeak * R2D, 140, "#81c995"); // joint velocity deg/s (green)
+  plotMetric(h => h.oriErr4, 90, "#b99aff"); // 4-DOF orientation error (metallic purple)
+  plotMetric(h => h.oriErr6, 90, "#60a5fa"); // 6-DOF orientation error (cobalt blue)
+  plotMetric(h => h.dqPeak * R2D, 140, "#cbd5e1"); // joint velocity deg/s (silver grey)
 }
 
 function computeImuComparisonMetrics() {
@@ -1577,14 +1676,14 @@ function tick(now) {
         const a = Math.min(1, dt * 4.5);
         st.cmd.x += dx * a; st.cmd.y += dy * a; st.cmd.z += dz * a;
       }
-      $("cmd-src").textContent = st.drive === "pilot" ? "Command: Live Pilot Phone" : `Command: Crowd Average (${c.n})`;
+      $("cmd-src").textContent = st.drive === "pilot" ? "Live Pilot Phone" : `Crowd Average (${c.n})`;
     } else {
-      $("cmd-src").textContent = "Command: Studio Sliders";
+      $("cmd-src").textContent = "Studio Sliders (60Hz)";
     }
     showCmd(st.cmd);
     const R = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
-    st.q4 = smooth(st.q4, ik4(p, R).q, 0.25);
-    st.q6 = smooth(st.q6, ik6(p, R).q, 0.25);
+    st.q4 = smooth(st.q4, ik4(p, R).q, 0.72);
+    st.q6 = smooth(st.q6, ik6(p, R).q, 0.72);
   } else {
     for (const team of [4, 6]) {
       const qv = team === 4 ? st.q4 : st.q6, tgt = qv.slice();
@@ -1592,10 +1691,10 @@ function tick(now) {
         const vals = [...phones.values()].filter(p => p.team === team && p.joints[j] !== undefined).map(p => p.joints[j]);
         if (vals.length) tgt[j] = (vals.reduce((a, b) => a + b, 0) / vals.length) * D2R;
       }
-      const nq = smooth(qv, tgt, 0.2);
+      const nq = smooth(qv, tgt, 0.65);
       if (team === 4) st.q4 = nq; else st.q6 = nq;
     }
-    $("cmd-src").textContent = "Command: Individual Phone Motors";
+    $("cmd-src").textContent = "Direct Joint Motors";
   }
 
   st.dq4 = st.q4.map((q, i) => (q - prevQ4[i]) / dt);
@@ -1644,7 +1743,7 @@ function tick(now) {
     watchAcc = [simAcc[0] + nA() + servoHunt, simAcc[1] + nA(), simAcc[2] + nA() + recoilSpike];
     watchGyro = [simGyro[0] + nG() + (inRecoil ? 0.45 : 0), simGyro[1] + nG(), simGyro[2] + nG()];
     if (inRecoil) {
-      $("watch-status").textContent = st.closed ? "⌚ Forearm IMU: ✊ Grip Contact Recoil + 24Hz Servo Stall" : "⌚ Forearm IMU: ✋ Release Step Transient";
+      $("watch-status").textContent = st.closed ? "Forearm IMU: Grip Contact Recoil + 24Hz Servo Stall" : "Forearm IMU: Release Step Transient";
     }
   }
 
@@ -1737,26 +1836,26 @@ function tick(now) {
     updateRecBadge();
   }
 
-  // NemoFleet Action-Probability Gate evaluation
+  // Action-Confidence Policy Gate evaluation (System 1 Local Reflex vs System 2 Foundation Fallback)
   const oriDivergence = Math.abs(v4.oriDeg - v6.oriDeg);
   const prob = Math.max(0.18, Math.min(0.98, 0.96 - (oriDivergence / 110) - (dqPeak > 2.2 ? 0.25 : 0)));
   st.nemoProb = prob;
   if (prob < 0.78) {
-    if (st.nemoTier.startsWith("System 1")) st.nemoTeacherCalls++;
-    st.nemoTier = "System 2 · Escalate Teacher";
+    if (st.nemoTier.startsWith("On-Robot")) st.nemoTeacherCalls++;
+    st.nemoTier = "Foundation VLM Fallback";
     $("nemo-tier").className = "pill warn";
-    $("nemo-rationale").textContent = `Out-of-plane 4-DOF kinematic lock (${oriDivergence}° divergence, p=${prob.toFixed(2)} < τ=0.78) → escalated to teacher model.`;
+    $("nemo-rationale").textContent = `Out-of-plane 4-DOF kinematic lock (${oriDivergence}° divergence, p=${prob.toFixed(2)} < τ=0.78) -> escalated to foundation policy.`;
   } else {
-    st.nemoTier = "System 1 · Local Reflex";
+    st.nemoTier = "On-Robot ReflexPolicy";
     $("nemo-tier").className = "pill ok";
-    $("nemo-rationale").textContent = `Trajectory within calibrated envelope (p=${prob.toFixed(2)} ≥ τ=0.78) → settled locally on-robot (0 cloud tokens).`;
+    $("nemo-rationale").textContent = `Trajectory within calibrated kinematic envelope (p=${prob.toFixed(2)} ≥ τ=0.78) -> executed locally on-robot.`;
   }
 
   if (now - lastUi > 180) {
     lastUi = now;
     if ($("utc-pill")) {
       const sign = st.utcOffsetMs >= 0 ? "+" : "";
-      $("utc-pill").textContent = `🕒 ${utcIso.slice(11, 23)}Z · Δ${sign}${st.utcOffsetMs.toFixed(1)}ms`;
+      $("utc-pill").innerHTML = `<svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg><span>${utcIso.slice(11, 23)}Z · Δ${sign}${st.utcOffsetMs.toFixed(1)}ms</span>`;
     }
     if ($("watch-lag-pill")) {
       const sign = st.utcOffsetMs >= 0 ? "+" : "";

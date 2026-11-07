@@ -3,35 +3,44 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Operon · Sim-to-Real Teleop &amp; Apple Watch IMU Comparator</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌚</text></svg>" />
+  <title>Operon · Sim-to-Real UR5e Teleop &amp; Watch IMU Comparator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239d72ff' stroke-width='2'><rect x='6' y='4' width='12' height='16' rx='3'/><circle cx='12' cy='12' r='3'/></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto+Mono:wght@400;500;700&display=swap" />
   <style>
     :root {
-      --bg: #080b10;
-      --panel: #10151f;
-      --panel-2: #161d2b;
-      --panel-glass: rgba(16, 21, 31, 0.86);
-      --border: #232e42;
-      --border-hi: #364766;
-      --ink: #f0f4fa;
-      --ink-2: #9ca9bf;
-      --ink-3: #65748c;
-      --nv-green: #76b900;
-      --g-blue: #4285f4;
-      --g-yellow: #fbbc04;
-      --g-red: #ea4335;
-      --g-green: #34a853;
-      --cyan: #00b4d8;
-      --coral: #ff5d5d;
-      --magenta: #b5179e;
+      /* Metallic Purple, Cobalt Blue & Brushed Light Grey Palette */
+      --bg: #0f1119;
+      --panel: #161925;
+      --panel-2: #1d2232;
+      --panel-glass: rgba(22, 25, 37, 0.88);
+      --surface-grey: #dce2ee;
+      --border: #2c334a;
+      --border-hi: #475378;
+      --ink: #f3f6fc;
+      --ink-2: #c0cadc;
+      --ink-3: #8492ad;
+      --purple: #9d72ff;
+      --purple-hi: #b99aff;
+      --purple-glow: rgba(157, 114, 255, 0.20);
+      --blue: #3b82f6;
+      --blue-hi: #60a5fa;
+      --blue-glow: rgba(59, 130, 246, 0.20);
+      --silver: #cbd5e1;
+      --nv-green: #9d72ff;
+      --g-blue: #3b82f6;
+      --g-yellow: #c084fc;
+      --g-red: #f43f5e;
+      --g-green: #38bdf8;
+      --cyan: #60a5fa;
+      --coral: #e879f9;
+      --magenta: #9333ea;
       --sans: 'Google Sans', 'Inter', system-ui, -apple-system, sans-serif;
       --mono: 'Roboto Mono', ui-monospace, Menlo, monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
-      background: var(--bg);
+      background: linear-gradient(145deg, #0d0f17 0%, #151928 55%, #111420 100%);
       color: var(--ink);
       font-family: var(--sans);
       height: 100vh;
@@ -39,6 +48,19 @@
       font-size: 13px;
       -webkit-font-smoothing: antialiased;
     }
+
+    /* Clean Vector Icons */
+    .ico {
+      width: 13.5px;
+      height: 13.5px;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      flex-shrink: 0;
+    }
+    .ico.sm { width: 12px; height: 12px; }
 
     /* ── TOP LEVEL LAYOUT: Clean 2-Row Studio ── */
     .studio {
@@ -51,8 +73,8 @@
 
     /* ── HEADER BAR ── */
     .topbar {
-      background: var(--panel);
-      border: 1px solid var(--border);
+      background: linear-gradient(90deg, #181c2b 0%, #1e2336 50%, #181c2b 100%);
+      border: 1px solid var(--border-hi);
       border-radius: 12px;
       display: flex;
       align-items: center;
@@ -60,11 +82,12 @@
       padding: 0 12px;
       gap: 8px;
       overflow-x: auto;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
     }
     .brand {
       display: flex;
       align-items: center;
-      gap: 7px;
+      gap: 8px;
       font-weight: 700;
       font-size: 13.5px;
       letter-spacing: -0.2px;
@@ -72,9 +95,9 @@
       flex-shrink: 0;
     }
     .nv-badge {
-      background: rgba(118, 185, 0, 0.16);
-      color: #a6f026;
-      border: 1px solid var(--nv-green);
+      background: linear-gradient(135deg, rgba(157, 114, 255, 0.25), rgba(59, 130, 246, 0.25));
+      color: #e2d4ff;
+      border: 1px solid var(--purple);
       border-radius: 6px;
       padding: 3px 9px;
       font-family: var(--mono);
@@ -82,16 +105,11 @@
       font-weight: 700;
       letter-spacing: 0.5px;
     }
-    .brand-sub {
-      color: var(--ink-2);
-      font-weight: 400;
-      font-size: 13.5px;
-    }
 
     /* ── MAIN WORKSPACE: 3-Column Balanced Grid ── */
     .workspace {
       display: grid;
-      grid-template-columns: 310px 1fr 370px;
+      grid-template-columns: 318px 1fr 376px;
       gap: 10px;
       min-height: 0;
     }
@@ -104,11 +122,12 @@
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
     }
     .ph {
-      background: var(--panel-2);
+      background: linear-gradient(90deg, #1d2233 0%, #23293e 100%);
       border-bottom: 1px solid var(--border);
-      padding: 9px 14px;
+      padding: 9px 13px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -118,6 +137,12 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: var(--ink-2);
+    }
+    .ph-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--surface-grey);
     }
     .pb {
       padding: 9px 10px;
@@ -133,9 +158,9 @@
     .wrap { flex-wrap: wrap; }
     .between { justify-content: space-between; }
 
-    /* ── STEP CARDS (Progressive Disclosure) ── */
+    /* ── STEP CARDS & HELPER DESCRIPTIONS ── */
     .step-card {
-      background: #0c1018;
+      background: #121520;
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 8px 10px;
@@ -155,33 +180,38 @@
       align-items: center;
       gap: 7px;
       font-weight: 700;
-      font-size: 12.5px;
-      color: var(--ink);
+      font-size: 12px;
+      color: var(--surface-grey);
     }
     .step-num {
-      width: 20px;
-      height: 20px;
+      width: 19px;
+      height: 19px;
       border-radius: 50%;
-      background: rgba(66, 133, 244, 0.2);
-      border: 1px solid var(--g-blue);
-      color: #8ab4f8;
+      background: var(--purple-glow);
+      border: 1px solid var(--purple);
+      color: var(--purple-hi);
       font-family: var(--mono);
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 700;
       display: inline-flex;
       align-items: center;
       justify-content: center;
     }
+    .help-line {
+      font-size: 11px;
+      color: var(--ink-3);
+      line-height: 1.3;
+    }
 
     /* ── COLLAPSIBLE DRAWERS FOR ADVANCED TOOLS ── */
     details.drawer {
-      background: #0c1018;
+      background: #121520;
       border: 1px solid var(--border);
       border-radius: 10px;
       flex-shrink: 0;
     }
     details.drawer > summary {
-      padding: 8px 11px;
+      padding: 8px 10px;
       cursor: pointer;
       list-style: none;
       display: flex;
@@ -201,12 +231,12 @@
     }
     details.drawer[open] > summary {
       border-bottom: 1px solid var(--border);
-      color: var(--ink);
-      background: rgba(255, 255, 255, 0.02);
+      color: var(--surface-grey);
+      background: rgba(157, 114, 255, 0.05);
     }
     details.drawer[open] > summary::after { transform: rotate(180deg); }
     .drawer-body {
-      padding: 9px 11px;
+      padding: 8px 10px;
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -220,30 +250,51 @@
     /* ── BUTTONS & SEGMENTED CONTROLS ── */
     .btn {
       background: var(--panel-2);
-      color: var(--ink);
+      color: var(--surface-grey);
       border: 1px solid var(--border-hi);
       border-radius: 8px;
-      padding: 6px 11px;
-      font: 500 12px var(--sans);
+      padding: 5px 10px;
+      font: 500 11.5px var(--sans);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 5px;
       transition: all 0.14s ease;
       white-space: nowrap;
       text-decoration: none;
     }
-    .btn:hover { border-color: var(--cyan); background: #1e283a; }
-    .btn.primary { background: var(--g-blue); border-color: #6ea4ff; color: #fff; font-weight: 700; }
-    .btn.primary:hover { background: #357ae8; }
-    .btn.nv { background: rgba(118, 185, 0, 0.18); border-color: var(--nv-green); color: #c7ff6b; font-weight: 700; }
-    .btn.watch { background: rgba(255, 93, 93, 0.16); border-color: var(--coral); color: #ffadad; font-weight: 700; }
-    .btn.watch:hover { background: rgba(255, 93, 93, 0.28); }
-    .btn.rec { background: rgba(234, 67, 53, 0.16); border-color: var(--g-red); color: #ff8a80; font-weight: 700; }
+    .btn:hover { border-color: var(--purple-hi); background: #262d42; color: #fff; }
+    .btn.primary {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      border-color: #60a5fa;
+      color: #fff;
+      font-weight: 700;
+    }
+    .btn.primary:hover { filter: brightness(1.1); }
+    .btn.nv {
+      background: linear-gradient(135deg, rgba(157, 114, 255, 0.28), rgba(59, 130, 246, 0.22));
+      border-color: var(--purple);
+      color: #e9d5ff;
+      font-weight: 700;
+    }
+    .btn.nv:hover { background: rgba(157, 114, 255, 0.38); }
+    .btn.watch {
+      background: rgba(192, 132, 252, 0.16);
+      border-color: #c084fc;
+      color: #f3e8ff;
+      font-weight: 700;
+    }
+    .btn.watch:hover { background: rgba(192, 132, 252, 0.28); }
+    .btn.rec {
+      background: rgba(244, 63, 94, 0.16);
+      border-color: var(--g-red);
+      color: #fda4af;
+      font-weight: 700;
+    }
     .btn.rec.active { background: var(--g-red); color: #fff; animation: pulse-rec 1.1s infinite; }
-    .btn.sm { padding: 4px 9px; font-size: 11.5px; border-radius: 7px; }
-    .btn.on { background: rgba(52, 168, 83, 0.24); border-color: var(--g-green); color: #81c995; }
+    .btn.sm { padding: 4px 8.5px; font-size: 11px; border-radius: 7px; }
+    .btn.on { background: rgba(56, 189, 248, 0.24); border-color: var(--g-green); color: #bae6fd; }
     @keyframes pulse-rec { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
 
     .seg {
@@ -251,21 +302,24 @@
       border: 1px solid var(--border-hi);
       border-radius: 8px;
       overflow: hidden;
-      background: #090c12;
+      background: #0d1018;
     }
     .seg button {
       background: transparent;
       color: var(--ink-2);
       border: none;
-      padding: 5px 10px;
-      font: 500 11.5px var(--sans);
+      padding: 5px 9px;
+      font: 500 11px var(--sans);
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       transition: background 0.12s;
     }
     .seg button:hover { color: var(--ink); }
     .seg button + button { border-left: 1px solid var(--border); }
-    .seg button.sel { background: var(--g-blue); color: #fff; font-weight: 700; }
-    .seg.nv button.sel { background: var(--nv-green); color: #081100; font-weight: 700; }
+    .seg button.sel { background: var(--blue); color: #fff; font-weight: 700; }
+    .seg.nv button.sel { background: var(--purple); color: #0f0a1c; font-weight: 700; }
 
     .pill {
       font-family: var(--mono);
@@ -276,17 +330,20 @@
       background: var(--panel-2);
       color: var(--ink-2);
       white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
     }
-    .pill.ok { background: rgba(52, 168, 83, 0.18); border-color: var(--g-green); color: #81c995; }
-    .pill.warn { background: rgba(251, 188, 4, 0.18); border-color: var(--g-yellow); color: #fde293; }
-    .pill.no { background: rgba(234, 67, 53, 0.18); border-color: var(--g-red); color: #f28b82; }
+    .pill.ok { background: rgba(56, 189, 248, 0.16); border-color: #38bdf8; color: #bae6fd; }
+    .pill.warn { background: rgba(192, 132, 252, 0.18); border-color: #c084fc; color: #f3e8ff; }
+    .pill.no { background: rgba(244, 63, 94, 0.18); border-color: var(--g-red); color: #fecdd3; }
 
     /* ── CENTER HERO 3D VIEWPORT ── */
     .viewport-wrap {
       position: relative;
       flex: 1;
       min-height: 0;
-      background: radial-gradient(circle at 50% 42%, #151e2e 0%, #090c12 100%);
+      background: radial-gradient(circle at 50% 38%, #23293d 0%, #121521 68%, #0b0d14 100%);
       display: flex;
       flex-direction: column;
     }
@@ -328,13 +385,13 @@
     .glass-bar {
       background: var(--panel-glass);
       border: 1px solid var(--border-hi);
-      backdrop-filter: blur(10px);
+      backdrop-filter: blur(12px);
       padding: 4px 6px;
       border-radius: 10px;
       display: flex;
       align-items: center;
       gap: 6px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
     }
 
     /* Arm Status Overlay Pills at Bottom of Viewport */
@@ -352,7 +409,7 @@
     .arm-badge {
       background: var(--panel-glass);
       border: 1px solid var(--border-hi);
-      backdrop-filter: blur(10px);
+      backdrop-filter: blur(12px);
       border-radius: 10px;
       padding: 8px 12px;
       display: flex;
@@ -360,7 +417,7 @@
       gap: 4px;
       min-width: 0;
       overflow: hidden;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.38);
     }
     .arm-badge-hdr {
       display: flex;
@@ -391,7 +448,7 @@
       display: flex;
       gap: 9px;
       align-items: center;
-      background: #080b10;
+      background: #0d1018;
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 6px 8px;
@@ -417,7 +474,7 @@
     }
     input[type="range"] {
       width: 100%;
-      accent-color: var(--cyan);
+      accent-color: var(--purple);
       height: 5px;
       cursor: pointer;
     }
@@ -429,25 +486,25 @@
       gap: 6px;
     }
     .kpi-card {
-      background: #090d14;
+      background: #10131d;
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 8px 10px;
+      padding: 7px 9px;
       display: flex;
       flex-direction: column;
       gap: 2px;
     }
     .kpi-lbl {
       font-family: var(--mono);
-      font-size: 10px;
+      font-size: 9.5px;
       color: var(--ink-3);
       text-transform: uppercase;
     }
     .kpi-val {
       font-family: var(--mono);
-      font-size: 16px;
+      font-size: 15.5px;
       font-weight: 700;
-      color: var(--ink);
+      color: var(--surface-grey);
     }
     .kpi-sub {
       font-family: var(--mono);
@@ -457,80 +514,80 @@
 
     .chart-cv {
       width: 100%;
-      height: 118px;
-      background: #070a0f;
+      height: 112px;
+      background: #0b0d14;
       border: 1px solid var(--border);
       border-radius: 8px;
       display: block;
     }
-    .chart-cv.sm { height: 82px; }
+    .chart-cv.sm { height: 78px; }
 
     .sub-label {
       font-family: var(--mono);
-      font-size: 10.5px;
+      font-size: 10px;
       color: var(--ink-3);
       text-transform: uppercase;
       letter-spacing: 0.4px;
     }
-      .term-box {
-        background: #070a0f;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 8px;
-        font-family: var(--mono);
-        font-size: 10.5px;
-        line-height: 1.4;
-        color: #b7c5dd;
-        white-space: pre-wrap;
-        overflow-y: auto;
-        max-height: 150px;
-      }
-      .mono { font-family: var(--mono); }
+    .term-box {
+      background: #0b0d14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      line-height: 1.4;
+      color: #c5d1e8;
+      white-space: pre-wrap;
+      overflow-y: auto;
+      max-height: 145px;
+    }
+    .mono { font-family: var(--mono); }
 
-      /* ── COMMERCIAL LICENSE GATE MODAL ── */
-      .lic-backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(6, 9, 14, 0.78);
-        backdrop-filter: blur(8px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 100;
-      }
-      .lic-backdrop.hide { display: none; }
-      .lic-modal {
-        background: var(--panel);
-        border: 1px solid var(--border-hi);
-        border-radius: 14px;
-        width: 440px;
-        max-width: 92vw;
-        padding: 20px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-      .lic-inp {
-        width: 100%;
-        background: #080b10;
-        border: 1px solid var(--border-hi);
-        border-radius: 8px;
-        padding: 9px 12px;
-        color: var(--ink);
-        font-family: var(--mono);
-        font-size: 12.5px;
-      }
-      .lic-tier {
-        background: #0b0f17;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 9px 11px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-size: 12px;
-      }
+    /* ── COMMERCIAL LICENSE GATE MODAL ── */
+    .lic-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 12, 19, 0.80);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .lic-backdrop.hide { display: none; }
+    .lic-modal {
+      background: var(--panel);
+      border: 1px solid var(--border-hi);
+      border-radius: 14px;
+      width: 440px;
+      max-width: 92vw;
+      padding: 20px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .lic-inp {
+      width: 100%;
+      background: #0c0e16;
+      border: 1px solid var(--border-hi);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 12.5px;
+    }
+    .lic-tier {
+      background: #111420;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
   </style>
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
@@ -539,24 +596,56 @@
     <!-- ── TOP NAVIGATION & PRIMARY ACTIONS ── -->
     <header class="topbar">
       <div class="brand">
-        <span class="nv-badge">OPERON PRO</span>
-        <span>Sim-to-Real Teleop &amp; Watch IMU</span>
-        <span class="pill ok" id="utc-pill" title="IEEE-1588 / NTP UTC Clock Synchronized between Watch, Phone &amp; Omniverse Studio">🕒 UTC Sync · +0.0ms</span>
-        <button class="pill warn" id="btn-license" style="cursor:pointer" title="Activate Commercial License Key">🔒 License</button>
+        <span class="nv-badge">OPERON</span>
+        <span>UR5e Sim-to-Real Studio</span>
+        <span class="pill ok" id="utc-pill" title="IEEE-1588 / NTP UTC Clock Synchronized between Watch, Phone &amp; Studio">
+          <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+          <span>UTC Sync</span>
+        </span>
+        <button class="pill warn" id="btn-license" style="cursor:pointer" title="Activate Commercial License Key">
+          <svg class="ico sm" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          <span>License</span>
+        </button>
       </div>
 
       <div class="row" style="gap:5px;flex-shrink:0">
-        <div class="seg" id="st-bar" title="Choose a manipulation task">
-          <button class="sel" data-st="0">🔋 Battery</button>
-          <button data-st="1">🔌 Charger</button>
-          <button data-st="2">🚰 Valve 90°</button>
+        <div class="seg" id="st-bar" title="Select manipulation benchmark station">
+          <button class="sel" data-st="0">
+            <svg class="ico sm" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2"/><line x1="10" y1="2" x2="14" y2="2"/></svg>
+            <span>1. Cell</span>
+          </button>
+          <button data-st="1">
+            <svg class="ico sm" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <span>2. Charger</span>
+          </button>
+          <button data-st="2">
+            <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="21"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
+            <span>3. Valve</span>
+          </button>
         </div>
-        <button class="btn sm nv" id="btn-pick-place" title="Execute full autonomous Pick &amp; Place cycle (approach -> grasp battery -> lift -> place on target pad -> release)">📦 Pick &amp; Place</button>
-        <button class="btn sm primary" id="btn-auto" title="Run autonomous station trajectory">▶ Auto</button>
-        <button class="btn sm watch" id="btn-quintic" title="Run canonical 5th-order firmware quintic sweep (imu_calibration.yaml)">⌚ Watch Sweep</button>
-        <button class="btn sm" id="btn-snap" title="Align gripper to station target">🎯 Snap</button>
-        <button class="btn sm" id="btn-grab" title="Open or close gripper">✊ Grab</button>
-        <button class="btn sm" id="btn-reset" title="Reset scene">↺</button>
+        <button class="btn sm nv" id="btn-pick-place" title="Automatically pick up the cell from the black pad and place it on the target pad">
+          <svg class="ico sm" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          <span>Pick &amp; Place</span>
+        </button>
+        <button class="btn sm primary" id="btn-auto" title="Run autonomous trajectory for the selected station">
+          <svg class="ico sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
+          <span>Auto</span>
+        </button>
+        <button class="btn sm watch" id="btn-quintic" title="Run 5th-order firmware quintic calibration sweep to benchmark Watch IMU vs Simulated IMU">
+          <svg class="ico sm" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span>IMU Sweep</span>
+        </button>
+        <button class="btn sm" id="btn-snap" title="Move gripper directly over the active station target">
+          <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+          <span>Align</span>
+        </button>
+        <button class="btn sm" id="btn-grab" title="Close gripper jaws (automatically grasps cell if nearby) or open jaws to release">
+          <svg class="ico sm" viewBox="0 0 24 24"><path d="M7 4v8l3 3v5M17 4v8l-3 3v5M4 8h4M16 8h4"/></svg>
+          <span>Grasp</span>
+        </button>
+        <button class="btn sm" id="btn-reset" title="Reset arms and objects to starting positions">
+          <svg class="ico sm" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        </button>
       </div>
     </header>
 
@@ -566,7 +655,10 @@
       <!-- ── LEFT COLUMN: 1-2-3 GUIDED CONTROLS ── -->
       <section class="panel">
         <div class="ph">
-          <span>🎮 Controller &amp; Sensor Input</span>
+          <span class="ph-title">
+            <svg class="ico" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="3"/><circle cx="7" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/></svg>
+            <span>Teleop &amp; Sensor Input</span>
+          </span>
           <span class="pill" data-live="status">connecting…</span>
         </div>
         <div class="pb">
@@ -574,29 +666,34 @@
           <!-- STEP 1: PHONE / WATCH INPUT -->
           <div class="step-card">
             <div class="step-hdr">
-              <div class="step-title"><span class="step-num">1</span> Pair iPhone or Watch</div>
+              <div class="step-title"><span class="step-num">1</span> Connect Phone or Watch</div>
               <span class="pill" id="room-pill">Room OPERON</span>
             </div>
+            <div class="help-line">Stream live wrist tilt &amp; 6-axis IMU from iPhone or Apple Watch.</div>
             <div class="qr-card">
               <div class="qr-box" data-live="qr"></div>
               <div class="col" style="gap:4px;min-width:0">
-                <div style="font-weight:700;font-size:12px">Scan on iPhone · Tap Link on Watch</div>
-                <a class="mono" data-live="url" target="_blank" rel="noopener" style="font-size:10.5px;color:var(--cyan);word-break:break-all"></a>
+                <div style="font-weight:700;font-size:11.5px;color:var(--surface-grey)">Scan QR on iPhone · Tap Link on Watch</div>
+                <a class="mono" data-live="url" target="_blank" rel="noopener" style="font-size:10px;color:var(--cyan);word-break:break-all"></a>
                 <div class="row wrap" style="margin-top:2px;gap:4px">
-                  <a class="btn sm watch" id="sms-watch" href="#" title="Send clickable link to your Apple Watch via iMessage">💬 Text Link to Watch</a>
+                  <a class="btn sm watch" id="sms-watch" href="#" title="Send clickable URL to your Apple Watch via iMessage">
+                    <svg class="ico sm" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <span>iMessage Watch Link</span>
+                  </a>
                   <span class="pill" id="team-pill">4D: 0 · 6D: 0</span>
-                  <span class="mono" id="active-phones" style="font-size:10.5px;color:var(--cyan)"></span>
                 </div>
               </div>
             </div>
             <div class="row between">
-              <span class="sub-label">Mode</span>
+              <span class="sub-label">Control</span>
               <div class="seg" id="drive-mode">
-                <button class="sel" data-v="crowd">👥 Crowd</button>
-                <button data-v="pilot">🎮 Pilot</button>
-                <button data-v="joints">🔧 Motors</button>
+                <button class="sel" data-v="crowd" title="Blend all connected phones/watches">Crowd</button>
+                <button data-v="pilot" title="Single active operator">Single Pilot</button>
+                <button data-v="joints" title="Direct per-joint motor control">Joints</button>
               </div>
-              <button class="btn sm" id="btn-dice" title="Pick random pilot">🎲</button>
+              <button class="btn sm" id="btn-dice" title="Select random connected pilot">
+                <svg class="ico sm" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+              </button>
             </div>
             <div id="pilot-list" class="row wrap" style="gap:4px"></div>
           </div>
@@ -604,29 +701,42 @@
           <!-- STEP 2: APPLE WATCH SIM-TO-REAL SOURCE -->
           <div class="step-card">
             <div class="step-hdr">
-              <div class="step-title"><span class="step-num">2</span> Apple Watch 6-Axis IMU</div>
+              <div class="step-title"><span class="step-num">2</span> Forearm 6-Axis IMU Stream</div>
               <span id="watch-lag-pill" class="pill ok">UTC Δt: 0.0 ms</span>
             </div>
+            <div class="help-line">Compares simulated forearm IMU against Apple Watch accelerometer + gyroscope.</div>
             <div class="row wrap" style="gap:6px">
-              <button class="btn sm watch" id="btn-synth-watch" style="flex:1">⌚ Synth Watch Run</button>
-              <label class="btn sm" style="cursor:pointer;flex:1" title="Upload real Apple Watch SensorLog or Sensor Logger CSV">
-                📂 Load Watch CSV <input type="file" id="watch-file" accept=".csv" style="display:none" />
+              <button class="btn sm watch" id="btn-synth-watch" style="flex:1" title="Run synthetic watch calibration trajectory">
+                <svg class="ico sm" viewBox="0 0 24 24"><rect x="7" y="4" width="10" height="16" rx="2"/><line x1="9" y1="2" x2="15" y2="2"/><line x1="9" y1="22" x2="15" y2="22"/></svg>
+                <span>Synth Watch Run</span>
+              </button>
+              <label class="btn sm" style="cursor:pointer;flex:1" title="Upload recorded Apple Watch SensorLog or Sensor Logger CSV">
+                <svg class="ico sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>Load Watch CSV</span>
+                <input type="file" id="watch-file" accept=".csv" style="display:none" />
               </label>
             </div>
             <div class="row between" style="font-family:var(--mono);font-size:10px;color:var(--ink-3)">
-              <span title="Paste this URL into Sensor Logger HTTP Push on iPhone/Watch">HTTP Push: <b id="imu-push-url" style="color:var(--cyan);cursor:pointer">/api/room/OPERON/imu</b></span>
-              <button class="btn sm" id="btn-export-imu" title="Download UTC-stamped sim_imu.csv + watch.csv">⬇ CSVs</button>
+              <span title="Click to copy HTTP Push URL for Sensor Logger app">Push: <b id="imu-push-url" style="color:var(--cyan);cursor:pointer">/api/room/OPERON/imu</b></span>
+              <button class="btn sm" id="btn-export-imu" title="Download UTC-synchronized sim_imu.csv + watch.csv">
+                <svg class="ico sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>CSVs</span>
+              </button>
             </div>
-            <div class="mono" id="watch-status" style="font-size:10.5px;color:var(--ink-2)">Live 6-Axis (Accel+Gyro) · UTC Synced</div>
+            <div class="mono" id="watch-status" style="font-size:10px;color:var(--ink-2)">Live 6-Axis (Accel+Gyro) · UTC Synced</div>
           </div>
 
           <!-- COLLAPSIBLE: MANUAL POSE SLIDERS -->
           <details class="drawer" open>
             <summary>
-              <span>🕹️ Manual Gripper Pose</span>
-              <span class="mono" id="cmd-src" style="font-size:10px;color:var(--cyan)">Sliders</span>
+              <span class="row" style="gap:6px">
+                <svg class="ico sm" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                <span>Manual 6-DOF Gripper Pose</span>
+              </span>
+              <span class="mono" id="cmd-src" style="font-size:10px;color:var(--purple-hi)">Direct 60Hz</span>
             </summary>
             <div class="drawer-body" id="pose-sliders">
+              <div class="help-line">Drag sliders to steer tool position (x,y,z) and wrist orientation (yaw,pitch,roll).</div>
               <div class="pose-grid">
                 <div class="slider-row"><span>yaw</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
                 <div class="slider-row"><span>x (m)</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
@@ -640,18 +750,23 @@
 
           <!-- COLLAPSIBLE: OMNIVERSE DOMAIN RANDOMIZATION -->
           <details class="drawer" open>
-            <summary><span>🎲 Omniverse Domain Randomization</span></summary>
+            <summary>
+              <span class="row" style="gap:6px">
+                <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+                <span>Omniverse Domain Randomization</span>
+              </span>
+            </summary>
             <div class="drawer-body">
               <div class="row between">
-                <span class="sub-label">Lighting &amp; PBR Surface</span>
-                <button class="btn sm nv" id="btn-dr-rand">⚡ Randomize</button>
+                <span class="sub-label">RTX Lighting &amp; PBR Roughness</span>
+                <button class="btn sm nv" id="btn-dr-rand">Randomize</button>
               </div>
-              <div class="slider-row"><span>Light</span><input type="range" id="dr-light" min="0.3" max="4.5" step="0.1" value="2.6"><span id="drv-light">2.6x</span></div>
+              <div class="slider-row"><span>Light</span><input type="range" id="dr-light" min="0.3" max="4.5" step="0.1" value="2.8"><span id="drv-light">2.8x</span></div>
               <div class="slider-row"><span>Sun°</span><input type="range" id="dr-azi" min="-180" max="180" step="5" value="35"><span id="drv-azi">35°</span></div>
-              <div class="slider-row"><span>Rough</span><input type="range" id="dr-rough" min="0.05" max="0.95" step="0.05" value="0.28"><span id="drv-rough">0.28</span></div>
+              <div class="slider-row"><span>Rough</span><input type="range" id="dr-rough" min="0.05" max="0.95" step="0.05" value="0.22"><span id="drv-rough">0.22</span></div>
               <div class="row between" style="margin-top:4px">
-                <button class="btn sm" id="btn-dr-pose">🔀 Perturb Target</button>
-                <button class="btn sm" id="btn-bboxes">2D/3D BBoxes: OFF</button>
+                <button class="btn sm" id="btn-dr-pose" title="Randomly jitter target object position on workbench">Perturb Pose</button>
+                <button class="btn sm" id="btn-bboxes" title="Overlay 2D/3D Replicator bounding boxes">2D/3D BBoxes: OFF</button>
               </div>
             </div>
           </details>
@@ -665,18 +780,18 @@
           <!-- Floating Top Toolbar: AOV Passes & Camera -->
           <div class="vp-dock-top">
             <div class="glass-bar">
-              <span class="sub-label" style="padding:0 6px">AOV Pass</span>
+              <span class="sub-label" style="padding:0 6px">Replicator AOV</span>
               <div class="seg nv" id="aov-bar">
-                <button class="sel" data-aov="rtx">✨ RTX Lit</button>
-                <button data-aov="depth">📏 Depth</button>
-                <button data-aov="normal">🧭 Normals</button>
-                <button data-aov="semantic">🎨 Semantic</button>
-                <button data-aov="instance">🧩 Instance</button>
+                <button class="sel" data-aov="rtx">RTX Lit</button>
+                <button data-aov="depth">Depth Z</button>
+                <button data-aov="normal">Normals</button>
+                <button data-aov="semantic">Semantic</button>
+                <button data-aov="instance">Instance</button>
               </div>
             </div>
             <div class="glass-bar">
-              <button class="btn sm" id="btn-cam-reset" title="Reset 3D camera">🎥 Reset View</button>
-              <button class="btn sm" id="btn-snap-png" title="Save current AOV frame as PNG">📸 Snapshot</button>
+              <button class="btn sm" id="btn-cam-reset" title="Reset 3D camera orbit">Reset Camera</button>
+              <button class="btn sm" id="btn-snap-png" title="Save current AOV pass as PNG">Snapshot PNG</button>
             </div>
           </div>
 
@@ -686,23 +801,23 @@
             <canvas id="bbox-overlay" width="1120" height="720"></canvas>
           </div>
 
-          <!-- Floating Bottom HUD: Left = 4-DOF Abel-Arm, Right = 6-DOF Spherical Wrist -->
+          <!-- Floating Bottom HUD: Left = 4-DOF Planar Locked UR5e, Right = 6-DOF Full Spherical UR5e -->
           <div class="vp-dock-bottom">
-            <div class="arm-badge" style="border-left: 3px solid var(--g-yellow)">
+            <div class="arm-badge" style="border-left: 3px solid var(--purple)">
               <div class="arm-badge-hdr">
-                <span><b style="color:var(--g-yellow)">4-DOF</b> Abel-Arm + ⌚ Watch IMU</span>
+                <span><b style="color:var(--purple-hi)">4-DOF Planar UR5e</b> + Forearm Watch IMU</span>
                 <span id="verdict-4"></span>
               </div>
-              <div class="arm-joints">Joints: <span id="j4-str">0°, 0°, 0°, 0°</span></div>
-              <div class="arm-joints" id="aov-desc" style="color:var(--ink-3)">Pass: RTX PBR + Soft Shadows</div>
+              <div class="arm-joints">Joints (q1..q4): <span id="j4-str">0°, 0°, 0°, 0°</span></div>
+              <div class="arm-joints" id="aov-desc" style="color:var(--ink-3)">Pass: RTX PBR Clearcoat + Soft Shadows</div>
             </div>
 
-            <div class="arm-badge" style="border-right: 3px solid var(--cyan); text-align: right">
+            <div class="arm-badge" style="border-right: 3px solid var(--blue-hi); text-align: right">
               <div class="arm-badge-hdr" style="flex-direction: row-reverse">
-                <span><b style="color:var(--cyan)">6-DOF</b> Spherical Wrist</span>
+                <span><b style="color:var(--blue-hi)">6-DOF Spherical UR5e</b> (Full Wrist Roll)</span>
                 <span id="verdict-6"></span>
               </div>
-              <div class="arm-joints">Joints: <span id="j6-str">0°, 0°, 0°, 0°, 0°, 0°</span></div>
+              <div class="arm-joints">Joints (q1..q6): <span id="j6-str">0°, 0°, 0°, 0°, 0°, 0°</span></div>
               <div class="arm-joints" id="fps-tag" style="color:var(--ink-3)">Drag to orbit · Scroll to zoom</div>
             </div>
           </div>
@@ -712,26 +827,29 @@
       <!-- ── RIGHT COLUMN: SIM-VS-WATCH TELEMETRY & EXPORT ── -->
       <section class="panel">
         <div class="ph">
-          <span>📊 Sim-vs-Watch Telemetry</span>
+          <span class="ph-title">
+            <svg class="ico" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span>Sim-vs-Watch Telemetry</span>
+          </span>
           <span class="pill" id="rec-badge">IDLE · 0 frames</span>
         </div>
         <div class="pb">
 
           <!-- 3 CLEAR KPI SCORECARDS -->
           <div class="kpi-grid">
-            <div class="kpi-card">
+            <div class="kpi-card" title="Pearson correlation r between Simulated Forearm IMU and Apple Watch IMU">
               <span class="kpi-lbl">Watch Correlation</span>
-              <span class="kpi-val" id="m-acc-r" style="color:#81c995">0.998</span>
+              <span class="kpi-val" id="m-acc-r" style="color:#38bdf8">0.998</span>
               <span class="kpi-sub">Gyro r: <b id="m-gyr-r">0.999</b></span>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card" title="Root Mean Square Error between Simulated and Watch Accelerometer / Gyroscope">
               <span class="kpi-lbl">Accel / Gyro RMSE</span>
               <span class="kpi-val" id="m-acc-rmse">0.031</span>
               <span class="kpi-sub">m/s² · <b id="m-gyr-rmse">0.012</b> rad/s</span>
             </div>
-            <div class="kpi-card">
-              <span class="kpi-lbl">4D vs 6D Gap</span>
-              <span class="kpi-val" id="m-dof-ori" style="color:var(--g-yellow)">0° / 0°</span>
+            <div class="kpi-card" title="Orientation and position error comparing 4-DOF vs 6-DOF kinematics">
+              <span class="kpi-lbl">4D vs 6D Error</span>
+              <span class="kpi-val" id="m-dof-ori" style="color:var(--purple-hi)">0° / 0°</span>
               <span class="kpi-sub" id="m-dof-pos">0 / 0 mm</span>
             </div>
           </div>
@@ -744,61 +862,70 @@
           <!-- CHART 1: FOREARM 6-AXIS IMU FUSION OVERLAY -->
           <div class="step-card">
             <div class="row between" style="gap:4px">
-              <span class="sub-label" style="white-space:nowrap"><b style="color:var(--cyan)">■ |a|</b> + <b style="color:var(--g-yellow)">■ |ω|</b> · <b style="color:var(--coral)">Watch</b></span>
+              <span class="sub-label" style="white-space:nowrap"><b style="color:var(--blue-hi)">■ |a|</b> + <b style="color:var(--purple-hi)">■ |ω|</b> · <b style="color:#e879f9">Watch</b></span>
               <div class="seg" id="imu-chart-mode" style="flex-shrink:0">
-                <button class="sel" data-ic="fused" title="6-Axis Complementary Sensor Fusion: Accel anchors gravity tilt + linear recoil, Gyro integrates fast joint rotation">6-Axis Fused</button>
-                <button data-ic="acc">Accel</button>
-                <button data-ic="gyro">Gyro</button>
-                <button data-ic="psd">PSD</button>
+                <button class="sel" data-ic="fused" title="6-Axis Complementary Sensor Fusion: Accel measures gravity tilt + grip impulse, Gyro measures fast joint rotation">6-Axis</button>
+                <button data-ic="acc" title="Linear proper acceleration magnitude (m/s²)">Accel</button>
+                <button data-ic="gyro" title="Angular velocity magnitude (rad/s)">Gyro</button>
+                <button data-ic="psd" title="Welch Power Spectral Density (frequency domain)">PSD</button>
               </div>
             </div>
             <div class="row between" style="font-family:var(--mono);font-size:10px;color:var(--ink-2)">
               <span id="fusion-att">6-Axis Attitude: Pitch 0.0° · Roll 0.0°</span>
-              <span id="fusion-explain" style="color:var(--ink-3)">Gyro=ω · Accel=g+recoil</span>
+              <span id="fusion-explain" style="color:var(--ink-3)">Gyro=ω · Accel=g+impulse</span>
             </div>
-            <canvas class="chart-cv" id="chart-imu" width="600" height="118"></canvas>
+            <canvas class="chart-cv" id="chart-imu" width="600" height="112"></canvas>
           </div>
 
           <!-- CHART 2: 4-DOF VS 6-DOF DIVERGENCE -->
           <div class="step-card">
             <div class="row between">
-              <span class="sub-label"><b style="color:var(--g-yellow)">■ 4D Err</b> vs <b style="color:var(--cyan)">■ 6D Err</b></span>
-              <span class="mono" id="div-readout" style="font-size:10.5px;color:var(--ink-2)">Δori: 0° · |dq|: 0°/s</span>
+              <span class="sub-label"><b style="color:var(--purple-hi)">■ 4-DOF Ori Err</b> vs <b style="color:var(--blue-hi)">■ 6-DOF Ori Err</b></span>
+              <span class="mono" id="div-readout" style="font-size:10px;color:var(--ink-2)">Δori: 0° · |dq|: 0°/s</span>
             </div>
-            <canvas class="chart-cv sm" id="chart-err" width="480" height="82"></canvas>
+            <div class="help-line">Shows where 4-DOF locks out of plane while 6-DOF spherical wrist aligns cleanly.</div>
+            <canvas class="chart-cv sm" id="chart-err" width="480" height="78"></canvas>
           </div>
 
-          <!-- NEMOFLEET SYSTEM 1 / SYSTEM 2 GATE -->
+          <!-- ACTION-CONFIDENCE POLICY GATE (FORMERLY NEMOFLEET, ZERO NEMO BRANDING) -->
           <div class="step-card">
             <div class="row between">
-              <span class="sub-label" style="color:#a6f026">🧠 NemoFleet Gate</span>
-              <span class="pill ok" id="nemo-tier">System 1 · Local Reflex</span>
+              <span class="sub-label" style="color:var(--purple-hi)">Action-Confidence Policy Gate</span>
+              <span class="pill ok" id="nemo-tier">On-Robot ReflexPolicy</span>
             </div>
             <div class="row between" style="font-family:var(--mono);font-size:11px">
-              <span>p(action): <b id="nemo-prob">0.94</b> (τ=0.78)</span>
-              <span>Teacher: <b id="nemo-cost">$0.0000</b></span>
+              <span title="Confidence probability that current action succeeds within kinematic limits">Confidence p(a): <b id="nemo-prob">0.94</b> (τ=0.78)</span>
+              <span title="Cumulative foundation VLM fallback compute cost">Fallback Compute: <b id="nemo-cost">$0.0000</b></span>
             </div>
-            <div class="mono" id="nemo-rationale" style="font-size:10.5px;color:var(--ink-2);line-height:1.35">
-              Within calibrated envelope → settled locally on-robot.
+            <div class="mono" id="nemo-rationale" style="font-size:10px;color:var(--ink-2);line-height:1.35">
+              Trajectory within calibrated kinematic envelope → executed locally on-robot.
             </div>
           </div>
 
           <!-- EPISODE RECORDER & ONE-CLICK EXPORTS -->
           <div class="step-card">
             <div class="row" style="gap:6px">
-              <button class="btn rec" id="btn-rec" style="flex:1">⏺ Record Episode (30 Hz)</button>
-              <button class="btn sm" id="btn-clear-ep" title="Clear buffer">🗑</button>
+              <button class="btn rec" id="btn-rec" style="flex:1">
+                <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>
+                <span>Record 30Hz Episode</span>
+              </button>
+              <button class="btn sm" id="btn-clear-ep" title="Clear recorded episode buffer">Clear</button>
             </div>
             <div class="row wrap" style="gap:5px">
-              <button class="btn sm primary" id="exp-lerobot" style="flex:1">⬇ LeRobot (.jsonl)</button>
-              <button class="btn sm nv" id="exp-usd" style="flex:1">⬇ OpenUSD (.usda)</button>
-              <button class="btn sm" id="exp-coco" style="flex:1">⬇ COCO (.json)</button>
+              <button class="btn sm primary" id="exp-lerobot" style="flex:1" title="Export HuggingFace LeRobot / RLDS episode (.jsonl)">LeRobot (.jsonl)</button>
+              <button class="btn sm nv" id="exp-usd" style="flex:1" title="Export OpenUSD PhysicsArticulation stage (.usda)">OpenUSD (.usda)</button>
+              <button class="btn sm" id="exp-coco" style="flex:1" title="Export Omniverse Replicator 2D/3D annotations (.json)">COCO (.json)</button>
             </div>
           </div>
 
           <!-- COLLAPSIBLE RAW SCHEMA INSPECTOR -->
           <details class="drawer">
-            <summary><span>🔍 Raw Schema &amp; compare.py Inspector</span></summary>
+            <summary>
+              <span class="row" style="gap:6px">
+                <svg class="ico sm" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                <span>Live Schema &amp; compare.py Inspector</span>
+              </span>
+            </summary>
             <div class="drawer-body">
               <div class="seg" id="schema-tabs" style="width:100%">
                 <button class="sel" data-s="lerobot" style="flex:1">LeRobot</button>
@@ -832,15 +959,15 @@
       <div class="col" style="gap:6px">
         <div class="lic-tier">
           <div><b>Operon Researcher / Indie</b><div style="font-size:11px;color:var(--ink-3)">Single seat · Unlimited Watch CSV + LeRobot exports</div></div>
-          <span class="mono" style="color:#a6f026;font-weight:700">$49 / mo</span>
+          <span class="mono" style="color:var(--purple-hi);font-weight:700">$49 / mo</span>
         </div>
         <div class="lic-tier">
-          <div><b>Operon Robotics Lab &amp; Fleet</b><div style="font-size:11px;color:var(--ink-3)">OpenUSD stages · Replicator AOVs · NemoFleet Teacher API</div></div>
-          <span class="mono" style="color:var(--cyan);font-weight:700">$249 / mo</span>
+          <div><b>Operon Robotics Lab &amp; Fleet</b><div style="font-size:11px;color:var(--ink-3)">OpenUSD stages · Replicator AOVs · Policy Gate API</div></div>
+          <span class="mono" style="color:var(--blue-hi);font-weight:700">$249 / mo</span>
         </div>
       </div>
       <input class="lic-inp" id="lic-input" type="password" placeholder="Enter License Key (e.g. OPERON-PRO-...)" autocomplete="off" />
-      <div class="mono" id="lic-msg" style="font-size:11px;color:var(--g-yellow);min-height:14px"></div>
+      <div class="mono" id="lic-msg" style="font-size:11px;color:var(--purple-hi);min-height:14px"></div>
       <div class="row between">
         <span class="mono" style="font-size:10.5px;color:var(--ink-3)">© 2026 Gretchen Boria, PhD · All Rights Reserved</span>
         <button class="btn primary" id="lic-activate">Activate License</button>
