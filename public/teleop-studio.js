@@ -938,8 +938,8 @@ function updateRig(dof, fk, props) {
 
 const AOV_EXPLAIN = {
   rtx: {
-    title: "RTX Lit Pass · Photorealistic PBR + 3D Yaw/Pitch/Roll Gizmo",
-    desc: "Physically-based clearcoat & brushed metallic UR5e shaders with soft shadows. Hover any 3D object to inspect its live Semantic Class, Instance ID, Surface Normal, and Metric Depth.",
+    title: "WebGL2 PBR Shaded Pass · 3D Yaw / Pitch / Roll Gizmo",
+    desc: "Browser-native Three.js WebGL2 metallic-roughness shading with fixture collision clamping (no remote Omniverse RTX stream required). Export OpenUSD (.usda) for Isaac Sim PhysX/RTX.",
     legend: `
       <span class="swatch" title="Yaw rotates horizontally around Z"><i style="background:#60a5fa"></i>Yaw (Z-Turn)</span>
       <span class="swatch" title="Pitch tilts nose up/down"><i style="background:#34d399"></i>Pitch (Tilt)</span>
@@ -948,7 +948,7 @@ const AOV_EXPLAIN = {
   },
   depth: {
     title: "Depth Z Pass · Metric Distance-to-Camera Buffer",
-    desc: "Encodes exact metric distance Z (in meters) from the camera pinhole to every surface pixel. Used by depth-conditioned imitation policies and 3D point-cloud back-projection.",
+    desc: "Encodes linear metric distance Z (in meters) from the camera pinhole to every surface pixel.",
     legend: `
       <span class="swatch"><i style="background:#f8fafc"></i>Near (0.35 m)</span>
       <span class="swatch"><i style="background:#64748b"></i>Mid (0.85 m)</span>
@@ -957,7 +957,7 @@ const AOV_EXPLAIN = {
   },
   normal: {
     title: "Surface Normals Pass · View-Space XYZ Unit Vectors",
-    desc: "Maps 3D surface orientation vectors N = (Nx, Ny, Nz) into RGB channels so grasp planners know the exact perpendicular contact angle of every curved surface.",
+    desc: "Maps 3D surface orientation vectors N = (Nx, Ny, Nz) into RGB channels.",
     legend: `
       <span class="swatch"><i style="background:#f43f5e"></i>Red = +X (Right)</span>
       <span class="swatch"><i style="background:#34d399"></i>Green = +Y (Up)</span>
@@ -966,10 +966,10 @@ const AOV_EXPLAIN = {
   },
   semantic: {
     title: "Semantic Segmentation Pass · Per-Pixel Category Class IDs (1..6)",
-    desc: "Assigns a deterministic class color to every pixel by object category so vision transformers and segmentation masks separate robot links from manipulation targets.",
+    desc: "Assigns a deterministic class color to every pixel by object category.",
     legend: `
-      <span class="swatch"><i style="background:#9d72ff"></i>1: 4-DOF Arm</span>
-      <span class="swatch"><i style="background:#3b82f6"></i>2: 6-DOF Arm</span>
+      <span class="swatch"><i style="background:#9d72ff"></i>1: Left Arm</span>
+      <span class="swatch"><i style="background:#3b82f6"></i>2: Right Arm</span>
       <span class="swatch"><i style="background:#38bdf8"></i>3: Power Cell</span>
       <span class="swatch"><i style="background:#60a5fa"></i>4: Charger</span>
       <span class="swatch"><i style="background:#c084fc"></i>5: Valve</span>
@@ -977,10 +977,10 @@ const AOV_EXPLAIN = {
   },
   instance: {
     title: "Instance Segmentation Pass · Unique OpenUSD Prim IDs",
-    desc: "Assigns a unique color hash to each individual object instance (e.g., separating Power Cell #30 on the 4-DOF bench from Power Cell #31 on the 6-DOF bench).",
+    desc: "Assigns a unique color hash to each individual object instance.",
     legend: `
-      <span class="swatch"><i style="background:#b99aff"></i>#10: UR5e_4D</span>
-      <span class="swatch"><i style="background:#60a5fa"></i>#20: UR5e_6D</span>
+      <span class="swatch"><i style="background:#b99aff"></i>#10: Left_Rig</span>
+      <span class="swatch"><i style="background:#60a5fa"></i>#20: Right_Rig</span>
       <span class="swatch"><i style="background:#f0abfc"></i>#15: Watch_IMU</span>
       <span class="swatch"><i style="background:#7dd3fc"></i>#30/#31: Cells</span>
     `
@@ -1012,11 +1012,11 @@ function applyAOVPass(mode) {
     });
   }
   const descMap = {
-    rtx: "Pass: RTX PBR Metallic-Roughness + Soft Shadows + Env IBL",
-    depth: "Pass: Omniverse Replicator DistanceToCamera (Linear Depth Z)",
-    normal: "Pass: Omniverse Replicator Normals AOV (View-Space XYZ)",
-    semantic: "Pass: Omniverse Replicator Semantic Segmentation (Class IDs 1..6)",
-    instance: "Pass: Omniverse Replicator Instance Segmentation (Unique Prim IDs)"
+    rtx: "Pass: WebGL2 PBR Metallic-Roughness + Soft Shadows",
+    depth: "Pass: Linear Metric Depth Z Shader",
+    normal: "Pass: View-Space Surface Normals Shader",
+    semantic: "Pass: Per-Class Semantic ID Shader (Classes 1..6)",
+    instance: "Pass: Per-Prim Instance ID Shader"
   };
   $("aov-desc").textContent = descMap[mode] || descMap.rtx;
   renderAOVBanner(mode);
@@ -2129,9 +2129,10 @@ function computeImuComparisonMetrics() {
   const paired = hist.filter(h => h.watchAccRaw && h.watchGyroRaw);
 
   if (paired.length < 5) {
-    // No real Watch data connected or uploaded: report honest N/A for Watch comparison KPIs
-    ["m-acc-rmse", "m-acc-mae", "m-acc-r", "m-gyr-rmse", "m-gyr-mae", "m-gyr-r"].forEach(id => {
-      if ($(id)) $(id).textContent = "N/A";
+    // No real Watch data connected or uploaded: report clear status
+    if ($("m-acc-r")) $("m-acc-r").textContent = "No Watch";
+    ["m-acc-rmse", "m-acc-mae", "m-gyr-rmse", "m-gyr-mae", "m-gyr-r"].forEach(id => {
+      if ($(id)) $(id).textContent = "--";
     });
     const lastH = hist[hist.length - 1];
     const simAmag = Math.hypot(...lastH.simAcc).toFixed(4);
@@ -2286,6 +2287,32 @@ function tick(now) {
       $("cmd-src").textContent = "Studio Sliders (60Hz)";
     }
     showCmd(st.cmd);
+    // Rigid-Body Fixture & Table Collision Clamp:
+    // Prevents the gripper from penetrating the optical table floor (z < 0.018 m),
+    // the valve wheel/post assembly (Station 3 at x > 0.172 m near y=0),
+    // or the charger dock panel (Station 2 at y > 0.132 m near x=0.10 m).
+    let clampedCollision = false;
+    if (st.cmd.z < 0.018) { st.cmd.z = 0.018; clampedCollision = true; }
+    if (st.station === 2) {
+      // Valve wheel plane is at x = 0.184m, radius 0.036m around (y=0, z=0.14m). Stop tool tip at x <= 0.172m when within the wheel cylinder
+      const radialDistToValve = Math.hypot(st.cmd.y - 0.0, st.cmd.z - 0.14);
+      if (radialDistToValve < 0.045 && st.cmd.x > 0.171) {
+        st.cmd.x = 0.171;
+        clampedCollision = true;
+      }
+      // Also prevent passing through the vertical valve support post at (x=0.20, y=0)
+      if (Math.abs(st.cmd.y) < 0.022 && st.cmd.x > 0.178) {
+        st.cmd.x = 0.178;
+        clampedCollision = true;
+      }
+    } else if (st.station === 1) {
+      // Charger dock backplate prevents pushing past y > 0.132m in the dock zone
+      if (Math.abs(st.cmd.x - 0.10) < 0.055 && st.cmd.z < 0.16 && st.cmd.y > 0.132) {
+        st.cmd.y = 0.132;
+        clampedCollision = true;
+      }
+    }
+    if (clampedCollision) showCmd(st.cmd);
     const R = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
     const raw4 = ik4(p, R).q;
     const raw6 = ik6(p, R, st.q6).q;
@@ -2516,9 +2543,31 @@ function tick(now) {
     $("j6-str").textContent = qRightArr.map(a => `${Math.round(a * R2D)}°`).join(", ");
     $("verdict-4").innerHTML = `<span class="pill ${vLeft.cls}">${vLeft.msg}</span>`;
     $("verdict-6").innerHTML = `<span class="pill ${vRight.cls}">${vRight.msg}</span>`;
-    $("m-dof-pos").textContent = is4v6 ? `${vLeft.posMm} / ${vRight.posMm} mm` : `${vLeft.posMm} / ${vRight.posMm} mm (Δ${sim2realPosMm})`;
-    $("m-dof-ori").textContent = is4v6 ? `${vLeft.oriDeg}° / ${vRight.oriDeg}°` : `${vLeft.oriDeg}° / ${vRight.oriDeg}° (Δ${sim2realOriDeg}°)`;
+    $("m-dof-pos").textContent = is4v6 ? `${vLeft.posMm} vs ${vRight.posMm} mm` : `${sim2realPosMm} mm`;
+    $("m-dof-ori").textContent = is4v6 ? `${vLeft.oriDeg}° vs ${vRight.oriDeg}°` : `${sim2realOriDeg}°`;
     $("m-dof-w").textContent = `w=${wLeft.toFixed(2)}/${wRight.toFixed(2)}`;
+    if ($("s2r-verdict-pill")) {
+      const lagHigh = sim2realPosMm > 8.0 || sim2realOriDeg > 4.0;
+      $("s2r-verdict-pill").className = `pill ${lagHigh ? "warn" : "ok"}`;
+      $("s2r-verdict-pill").textContent = is4v6
+        ? `4D vs 6D Diff: ${Math.abs(vLeft.oriDeg - vRight.oriDeg).toFixed(0)}°`
+        : lagHigh
+          ? `Hardware Lagging (${sim2realPosMm} mm)`
+          : `Synced (${sim2realPosMm} mm lag)`;
+    }
+    if ($("s2r-plain-summary")) {
+      if (is4v6) {
+        $("s2r-plain-summary").innerHTML =
+          `<b>Left Arm (4-DOF Planar)</b> lacks wrist roll/yaw (${vLeft.oriDeg}° off target).<br/>` +
+          `<b>Right Arm (6-DOF Spherical Wrist)</b> aligns all 3 orientation axes (${vRight.oriDeg}° off target).`;
+      } else {
+        const hasW = st.imuHistory.some(h => h.watchAccRaw !== null);
+        $("s2r-plain-summary").innerHTML =
+          `<b>Left (Ideal Sim)</b>: Instantaneous 6-DOF inverse kinematics.<br/>` +
+          `<b>Right (Hardware Twin)</b>: Trails Sim by <b>${sim2realPosMm} mm / ${sim2realOriDeg}°</b> due to ROS2 1.0° servo deadband + 150 ms quintic smoothing. ` +
+          (hasW ? `<span style="color:#38bdf8">Watch IMU active &amp; Kabsch-aligned.</span>` : `<span>Connect Watch or load CSV to compare real IMU.</span>`);
+      }
+    }
     $("div-readout").textContent = is4v6
       ? `Δori: ${Math.abs(vLeft.oriDeg - vRight.oriDeg).toFixed(0)}° · peak |dq|: ${Math.round(dqPeak * R2D)}°/s`
       : `Sim-Real Δp: ${sim2realPosMm}mm · ΔR: ${sim2realOriDeg}° · |dq|: ${Math.round(dqPeak * R2D)}°/s`;

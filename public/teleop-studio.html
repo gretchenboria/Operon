@@ -59,7 +59,7 @@
     /* TOP LEVEL LAYOUT */
     .studio {
       display: grid;
-      grid-template-rows: 50px 1fr;
+      grid-template-rows: auto 1fr;
       height: 100vh;
       gap: 8px;
       padding: 8px;
@@ -73,17 +73,19 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 12px;
-      gap: 8px;
-      overflow-x: auto;
+      flex-wrap: wrap;
+      min-height: 48px;
+      padding: 6px 12px;
+      gap: 6px 10px;
+      overflow: hidden;
       box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
     }
     .brand {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       font-weight: 700;
-      font-size: 13px;
+      font-size: 12.5px;
       letter-spacing: -0.2px;
       white-space: nowrap;
       flex-shrink: 0;
@@ -697,23 +699,23 @@
     <header class="topbar">
       <div class="brand">
         <span class="nv-badge">OPERON</span>
-        <span>6-DOF Sim-to-Real Workbench</span>
+        <span>6-DOF Sim-to-Real</span>
         <span class="pill ok" id="utc-pill" title="UTC Clock Offset: Synchronizes browser telemetry timestamps with server UTC so exported Watch and Sim CSVs share a common timebase">
           <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
           <span>UTC Sync</span>
         </span>
         <button class="btn sm nv" id="btn-tech-scope" title="Technical Scope &amp; Engineering Reality: View exact equations, physical utility, and hardware scope limitations">
           <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          <span>What This Does / Scope</span>
+          <span>Scope</span>
         </button>
       </div>
 
-      <div class="row" style="gap:6px;flex-shrink:0">
+      <div class="row wrap" style="gap:5px;justify-content:flex-end">
         <!-- RIG COMPARISON SELECTOR -->
         <div class="seg nv" id="rig-mode-bar" title="Rig Comparison Mode: Compare 6-DOF Ideal Sim vs 6-DOF Real/Watch Twin side by side, inspect a Single 6-DOF rig, or enable the 4-DOF planar baseline">
-          <button class="sel" data-rm="6d_sim2real" title="6-DOF Sim vs 6-DOF Real: Left rig runs ideal zero-noise 6-DOF IK; Right rig runs 6-DOF Real/Watch Twin with actuator lag, backlash, gravity droop, and IMU coupling">6D Sim vs 6D Real</button>
-          <button data-rm="6d_single" title="Single 6-DOF Rig: Focus the viewport on one 6-DOF UR5e manipulator with forearm IMU telemetry">Single 6-DOF</button>
-          <button data-rm="4d_vs_6d" title="4-DOF vs 6-DOF Baseline: Compare a 4-DOF planar-constrained arm (no wrist roll) against a 6-DOF spherical-wrist arm">4-DOF vs 6-DOF</button>
+          <button class="sel" data-rm="6d_sim2real" title="6-DOF Sim vs 6-DOF Real: Left rig runs ideal zero-noise 6-DOF IK; Right rig runs 6-DOF Real/Watch Twin with ROS2 hardware streamer deadband + 150ms quintic interpolation">6D Sim vs Real</button>
+          <button data-rm="6d_single" title="Single 6-DOF Rig: Focus the viewport on one 6-DOF UR5e manipulator with forearm IMU telemetry">Single 6D</button>
+          <button data-rm="4d_vs_6d" title="4-DOF vs 6-DOF Baseline: Compare a 4-DOF planar-constrained arm (no wrist roll) against a 6-DOF spherical-wrist arm">4D vs 6D</button>
         </div>
 
         <!-- STATION SELECTOR -->
@@ -729,7 +731,7 @@
         </button>
         <button class="btn sm watch" id="btn-quintic" title="5th-Order Quintic IMU Sweep: Execute minimum-jerk polynomial joint trajectories (max vel 120 deg/s, max acc 200 deg/s^2) to benchmark Sim vs Watch IMU">
           <svg class="ico sm" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          <span>IMU Sweep</span>
+          <span>YAML Sweep</span>
         </button>
         <button class="btn sm" id="btn-snap" title="Align to Target: Move gripper to the active station target pose">Align</button>
         <button class="btn sm" id="btn-grab" title="Grasp / Release: Close parallel jaws to grasp the 21700 cell (auto-approaches if away) or open jaws to release">Grasp</button>
@@ -891,10 +893,10 @@
           <div class="aov-explain-banner" id="aov-explain-banner">
             <div class="aov-explain-main">
               <div class="aov-explain-title" id="aov-banner-title">
-                <span>PBR Lit Pass | 6-DOF Ideal Sim (Left) vs 6-DOF Real/Watch Twin (Right)</span>
+                <span>WebGL2 PBR Pass | 6-DOF Ideal Sim (Left) vs 6-DOF Real Streamer Twin (Right)</span>
               </div>
               <div class="aov-explain-desc" id="aov-banner-desc">
-                Hover over any 3D link, actuator, watch sensor, or fixture in the viewport to inspect its Semantic Class, Instance Prim path, Surface Normal vector, and Metric Depth.
+                Browser kinematic &amp; analytic IMU twin with fixture collision clamping (table floor, charger dock, and valve hub). Export OpenUSD (.usda) to run full PhysX / RTX raytracing in NVIDIA Isaac Sim.
               </div>
             </div>
             <div class="aov-legend" id="aov-banner-legend">
@@ -944,22 +946,34 @@
         </div>
         <div class="pb">
 
-          <!-- 3 TECHNICAL KPI CARDS -->
+          <!-- PLAIN-ENGLISH SIM VS REAL SUMMARY CARD -->
+          <div class="step-card" style="border-color:var(--border-hi);background:#141826">
+            <div class="row between">
+              <span class="sub-label" style="color:var(--surface-grey)">Sim vs. Real Plain Summary</span>
+              <span class="pill ok" id="s2r-verdict-pill">Synced (0.0 mm lag)</span>
+            </div>
+            <div id="s2r-plain-summary" style="font-size:11px;line-height:1.42;color:var(--ink-2)">
+              <b>Left Arm (Ideal Sim)</b> moves instantaneously via analytical IK.<br/>
+              <b>Right Arm (Real Streamer Twin)</b> runs the ROS2 <code>AbelArmHardwareInterface</code> (1.0° servo deadband, 10 Hz packet rate, 150 ms quintic smoothing).
+            </div>
+          </div>
+
+          <!-- 3 CLEAR KPI CARDS -->
           <div class="kpi-grid">
-            <div class="kpi-card" title="Pearson correlation coefficient r between Simulated Forearm IMU and Real/Watch IMU waveforms (computed only when real Watch CSV or live stream is active)">
-              <span class="kpi-lbl">IMU Correlation</span>
-              <span class="kpi-val" id="m-acc-r" style="color:#38bdf8">N/A</span>
-              <span class="kpi-sub">Gyro r: <b id="m-gyr-r">N/A</b></span>
+            <div class="kpi-card" title="Position and angle lag between the Left Ideal Sim Arm and the Right Real Streamer Arm caused by 1.0 deg servo quantization and 150 ms quintic segment smoothing">
+              <span class="kpi-lbl" id="kpi-err-lbl">Sim vs Real Lag</span>
+              <span class="kpi-val" id="m-dof-pos" style="color:var(--purple-hi)">0.0 mm</span>
+              <span class="kpi-sub">Angle lag: <b id="m-dof-ori">0.0°</b></span>
             </div>
-            <div class="kpi-card" title="Root Mean Square Error between Simulated and Real/Watch linear acceleration (m/s^2) and angular velocity (rad/s)">
-              <span class="kpi-lbl">Accel / Gyro RMSE</span>
-              <span class="kpi-val" id="m-acc-rmse">N/A</span>
-              <span class="kpi-sub">m/s² | <b id="m-gyr-rmse">N/A</b> rad/s</span>
+            <div class="kpi-card" title="Pearson correlation coefficient r (-1 to +1) between Simulated Forearm IMU and Real Apple Watch IMU (requires Watch CSV or live stream)">
+              <span class="kpi-lbl">Watch IMU Match (r)</span>
+              <span class="kpi-val" id="m-acc-r" style="color:#38bdf8">Awaiting Watch</span>
+              <span class="kpi-sub">Gyro r: <b id="m-gyr-r">--</b></span>
             </div>
-            <div class="kpi-card" title="End-effector orientation and position discrepancy between Left and Right rigs">
-              <span class="kpi-lbl" id="kpi-err-lbl">Sim vs Real Gap</span>
-              <span class="kpi-val" id="m-dof-ori" style="color:var(--purple-hi)">0° / 0°</span>
-              <span class="kpi-sub" id="m-dof-pos">0 / 0 mm</span>
+            <div class="kpi-card" title="Root Mean Square Error between Simulated and Real Apple Watch linear acceleration (m/s^2) and angular velocity (rad/s)">
+              <span class="kpi-lbl">Watch IMU Error</span>
+              <span class="kpi-val" id="m-acc-rmse">--</span>
+              <span class="kpi-sub">m/s² | <b id="m-gyr-rmse">--</b> rad/s</span>
             </div>
           </div>
           <span id="m-acc-mae" style="display:none">N/A</span>
