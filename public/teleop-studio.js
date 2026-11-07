@@ -10,6 +10,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { poseR, oriError, ik4, ik6, fk4, fk6, JOINTS, G } from "./demos/arms3d.js";
 import { onLive, send, qrSVG, phoneUrl, ROOM } from "./live.js";
 
@@ -129,7 +131,10 @@ const st = {
   aov: "rtx",
   showBBoxes: false,
   schemaTab: "lerobot",
-  imuChartMode: "acc",
+  imuChartMode: "fused",
+  utcOffsetMs: 0.0,
+  fusedPitchDeg: 0.0,
+  fusedRollDeg: 0.0,
   cmd: { yaw: -15, pitch: 0, roll: 0, x: 0.15, y: 0.0, z: 0.12 },
   q4: [0, 0, 0, 0],
   q6: [0, 0, 0, 0, 0, 0],
@@ -160,10 +165,10 @@ function syncLicenseUI() {
   if (!b) return;
   if (st.licensed) {
     b.className = "pill ok";
-    b.textContent = "✓ Operon Pro Licensed";
+    b.textContent = "✓ Pro Licensed";
   } else {
     b.className = "pill warn";
-    b.textContent = "🔒 Evaluation · Activate License";
+    b.textContent = "🔒 Activate License";
   }
 }
 try {
@@ -267,27 +272,34 @@ function syncViewportSize() {
 window.addEventListener("resize", syncViewportSize);
 setTimeout(syncViewportSize, 50);
 
-const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+const sun = new THREE.DirectionalLight(0xffffff, 2.8);
 sun.position.set(0.55, 1.3, 0.65);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.bias = -0.0004;
+sun.shadow.bias = -0.0003;
 Object.assign(sun.shadow.camera, { left: -0.8, right: 0.8, top: 0.8, bottom: -0.8, near: 0.1, far: 3 });
-const hemi = new THREE.HemisphereLight(0xddeeff, 0x2b3240, 0.65);
-scene.add(sun, hemi);
+const hemi = new THREE.HemisphereLight(0xddeeff, 0x1b2230, 0.75);
+const rimLight = new THREE.SpotLight(0x57caff, 2.2, 3.0, Math.PI / 3, 0.5, 1.2);
+rimLight.position.set(-0.65, 0.95, -0.55);
+const warmFill = new THREE.PointLight(0xffb74d, 0.85, 2.0);
+warmFill.position.set(0.45, 0.45, -0.45);
+scene.add(sun, hemi, rimLight, warmFill);
 
-// Studio floor grid + workbench
+// Studio floor grid + workbench with Omniverse RTX Physical Clearcoat shaders
 const MAT = {
-  alu: new THREE.MeshStandardMaterial({ color: 0xdfe3e8, metalness: 0.85, roughness: 0.28 }),
-  dark: new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.35, roughness: 0.45 }),
-  steel: new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.9, roughness: 0.25 }),
-  rubber: new THREE.MeshStandardMaterial({ color: 0x1e1e1e, metalness: 0, roughness: 0.9 }),
-  bench: new THREE.MeshStandardMaterial({ color: 0x232a36, metalness: 0.15, roughness: 0.65 }),
-  white: new THREE.MeshStandardMaterial({ color: 0xf4f4f2, metalness: 0.05, roughness: 0.5 }),
-  slot: new THREE.MeshStandardMaterial({ color: 0x101318, roughness: 0.6 }),
-  red: new THREE.MeshStandardMaterial({ color: 0xd93025, metalness: 0.3, roughness: 0.4 }),
-  green: new THREE.MeshStandardMaterial({ color: 0x34a853, metalness: 0.2, roughness: 0.45 }),
-  watch: new THREE.MeshStandardMaterial({ color: 0xff5d5d, emissive: 0xff2a2a, emissiveIntensity: 0.35, metalness: 0.5, roughness: 0.3 })
+  alu: new THREE.MeshPhysicalMaterial({ color: 0xd8dee6, metalness: 0.88, roughness: 0.22, clearcoat: 0.45, clearcoatRoughness: 0.18 }),
+  carbon: new THREE.MeshPhysicalMaterial({ color: 0x1e2430, metalness: 0.65, roughness: 0.32, clearcoat: 0.65, clearcoatRoughness: 0.15 }),
+  dark: new THREE.MeshPhysicalMaterial({ color: 0x20252e, metalness: 0.55, roughness: 0.36, clearcoat: 0.35 }),
+  steel: new THREE.MeshPhysicalMaterial({ color: 0xb0b8c4, metalness: 0.94, roughness: 0.16, clearcoat: 0.5 }),
+  copper: new THREE.MeshPhysicalMaterial({ color: 0xd9822b, metalness: 0.88, roughness: 0.24, clearcoat: 0.3 }),
+  rubber: new THREE.MeshStandardMaterial({ color: 0x16181d, metalness: 0.05, roughness: 0.88 }),
+  bench: new THREE.MeshPhysicalMaterial({ color: 0x141923, metalness: 0.35, roughness: 0.38, clearcoat: 0.55, clearcoatRoughness: 0.22 }),
+  white: new THREE.MeshPhysicalMaterial({ color: 0xf4f6f8, metalness: 0.08, roughness: 0.35, clearcoat: 0.4 }),
+  slot: new THREE.MeshStandardMaterial({ color: 0x0b0e13, roughness: 0.5 }),
+  red: new THREE.MeshPhysicalMaterial({ color: 0xe53935, metalness: 0.35, roughness: 0.3, clearcoat: 0.5 }),
+  green: new THREE.MeshPhysicalMaterial({ color: 0x34a853, metalness: 0.25, roughness: 0.35, clearcoat: 0.4 }),
+  watch: new THREE.MeshPhysicalMaterial({ color: 0xd7dce2, metalness: 0.9, roughness: 0.2, clearcoat: 0.6 }),
+  watchScreen: new THREE.MeshStandardMaterial({ color: 0x05101a, emissive: 0x00b4d8, emissiveIntensity: 0.75, roughness: 0.1 })
 };
 
 const normalMat = new THREE.MeshNormalMaterial();
@@ -350,25 +362,72 @@ function quatFromR(R) {
 
 function makeGripper(ghost = false) {
   const g = new THREE.Group();
-  const ghostMat = new THREE.MeshBasicMaterial({ color: 0xea4335, transparent: true, opacity: 0.32, depthWrite: false });
+  const ghostMat = new THREE.MeshBasicMaterial({ color: 0xea4335, transparent: true, opacity: 0.28, depthWrite: false });
   const m = (geo, mat) => {
     const ms = ghost ? new THREE.Mesh(geo, ghostMat) : mesh(geo, mat);
     if (ghost) ms.userData.isHelper = true;
     return ms;
   };
-  const flange = m(new THREE.CylinderGeometry(0.014, 0.014, 0.008, 28), MAT.steel); flange.rotation.x = Math.PI / 2; flange.position.z = -0.056; g.add(flange);
-  const body = m(new THREE.BoxGeometry(0.07, 0.028, 0.026), MAT.dark); body.position.z = -0.04; g.add(body);
-  const rail = m(new THREE.BoxGeometry(0.074, 0.008, 0.006), MAT.steel); rail.position.set(0, 0, -0.025); g.add(rail);
+  // ATI 6-Axis Force/Torque Wrist Sensor Collar + ISO 9409-1 Tool Flange
+  const ftSensor = m(new THREE.CylinderGeometry(0.017, 0.017, 0.008, 32), MAT.copper);
+  ftSensor.rotation.x = Math.PI / 2; ftSensor.position.z = -0.058; g.add(ftSensor);
+  const flange = m(new THREE.CylinderGeometry(0.015, 0.016, 0.007, 32), MAT.steel);
+  flange.rotation.x = Math.PI / 2; flange.position.z = -0.051; g.add(flange);
+
+  // Robotiq / Schunk Industrial Parallel Servo Gripper Chassis
+  const body = m(new THREE.BoxGeometry(0.072, 0.030, 0.026), MAT.carbon);
+  body.position.z = -0.038; g.add(body);
+  const bezel = m(new THREE.BoxGeometry(0.074, 0.012, 0.028), MAT.alu);
+  bezel.position.z = -0.038; g.add(bezel);
+  const rail = m(new THREE.BoxGeometry(0.076, 0.009, 0.007), MAT.steel);
+  rail.position.set(0, 0, -0.023); g.add(rail);
+
+  // Optical ToF Rangefinder Lens on Gripper Center
+  const tofLens = m(new THREE.CylinderGeometry(0.0045, 0.0045, 0.004, 20), MAT.watchScreen);
+  tofLens.rotation.x = Math.PI / 2; tofLens.position.set(0, 0.011, -0.024); g.add(tofLens);
+
   const fingers = [-1, 1].map(s => {
     const f = new THREE.Group();
-    const a = m(new THREE.BoxGeometry(0.009, 0.022, 0.034), MAT.alu); a.position.z = -0.005; f.add(a);
-    const pad = m(new THREE.BoxGeometry(0.003, 0.018, 0.02), MAT.rubber); pad.position.set(-s * 0.006, 0, 0.002); f.add(pad);
+    const baseJaw = m(new THREE.BoxGeometry(0.011, 0.022, 0.016), MAT.steel);
+    baseJaw.position.z = -0.014; f.add(baseJaw);
+    const a = m(new THREE.BoxGeometry(0.008, 0.020, 0.034), MAT.alu);
+    a.position.z = -0.003; f.add(a);
+    const pad = m(new THREE.BoxGeometry(0.0035, 0.018, 0.022), MAT.rubber);
+    pad.position.set(-s * 0.0055, 0, 0.003); f.add(pad);
     g.add(f); f.userData.s = s; return f;
   });
   g.userData.setOpen = (o) => fingers.forEach(f => { f.position.x = f.userData.s * (0.009 + 0.022 * o); });
   g.userData.setOpen(1);
   return g;
 }
+
+// Build an articulated industrial robot link (chamfered carbon/anodized-alu shell + stiffening ribs + power conduit)
+function makeIndustrialLink(r, isCarbon, accentMat) {
+  const grp = new THREE.Group();
+  grp.userData.r = 1; // sub-meshes are already built to radius r in X/Z
+  const core = mesh(new THREE.CylinderGeometry(r, r * 1.08, 1, 32), isCarbon ? MAT.carbon : MAT.alu);
+  grp.add(core);
+  // Twin machined structural side rails along link
+  for (const s of [-1, 1]) {
+    const rib = mesh(new THREE.BoxGeometry(r * 0.42, 0.76, r * 1.95), isCarbon ? MAT.alu : MAT.carbon);
+    rib.position.x = s * r * 0.72;
+    grp.add(rib);
+  }
+  // Anodized collar bands near ends
+  for (const y of [-0.38, 0.38]) {
+    const collar = mesh(new THREE.CylinderGeometry(r * 1.16, r * 1.16, 0.09, 32), accentMat);
+    collar.position.y = y;
+    grp.add(collar);
+  }
+  // Braided servo umbilical conduit along spine
+  const conduit = mesh(new THREE.CylinderGeometry(r * 0.24, r * 0.24, 0.88, 16), MAT.rubber);
+  conduit.position.set(0, 0, r * 1.05);
+  grp.add(conduit);
+  return grp;
+}
+
+const stlLoader = new STLLoader();
+const gltfLoader = new GLTFLoader();
 
 function makeRig(dof, offsetY, accentHex) {
   const rig = new THREE.Group();
@@ -378,27 +437,89 @@ function makeRig(dof, offsetY, accentHex) {
   const armGroup = new THREE.Group();
   rig.add(armGroup);
 
-  const accent = new THREE.MeshStandardMaterial({ color: accentHex, metalness: 0.2, roughness: 0.4 });
-  const foot = mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.012, 40), MAT.dark); foot.position.y = 0.006; armGroup.add(foot);
-  const unitCyl = new THREE.CylinderGeometry(1, 1, 1, 32);
-  const tube = (r, mat) => { const m = mesh(unitCyl, mat); m.userData.r = r; armGroup.add(m); return m; };
-  const links = [tube(0.026, MAT.alu), tube(0.0135, MAT.alu), tube(0.0115, MAT.alu), tube(0.01, MAT.alu)];
+  const accent = new THREE.MeshPhysicalMaterial({ color: accentHex, metalness: 0.55, roughness: 0.22, clearcoat: 0.65 });
+  const ledRingMat = new THREE.MeshStandardMaterial({ color: accentHex, emissive: accentHex, emissiveIntensity: 0.65, roughness: 0.2 });
+
+  // Multi-tiered bolted CNC pedestal base
+  const plinth = mesh(new THREE.CylinderGeometry(0.056, 0.062, 0.010, 48), MAT.dark); plinth.position.y = 0.005; armGroup.add(plinth);
+  const flangeRing = mesh(new THREE.CylinderGeometry(0.048, 0.052, 0.012, 48), MAT.steel); flangeRing.position.y = 0.014; armGroup.add(flangeRing);
+  for (let b = 0; b < 8; b++) {
+    const ang = (b / 8) * Math.PI * 2;
+    const bolt = mesh(new THREE.CylinderGeometry(0.0028, 0.0028, 0.006, 12), MAT.steel);
+    bolt.position.set(Math.cos(ang) * 0.053, 0.011, Math.sin(ang) * 0.053);
+    armGroup.add(bolt);
+  }
+
+  // Load real CAD turret housing (Spot Arm base_link.stl) onto pedestal
+  stlLoader.load("./models/spot_arm/base_link.stl", (geo) => {
+    geo.computeVertexNormals();
+    const cadBase = mesh(geo, dof === 4 ? MAT.dark : MAT.carbon);
+    cadBase.scale.set(0.00075, 0.00075, 0.00075);
+    cadBase.rotation.x = -Math.PI / 2;
+    cadBase.position.y = 0.008;
+    tagSemantic(cadBase, dof === 4 ? 0xfbbc04 : 0x4285f4, dof === 4 ? 0xffd54f : 0x64b5f6);
+    armGroup.add(cadBase);
+  });
+
+  // Articulated industrial links (4-DOF uses brushed anodized aluminum + gold harmonic collars; 6-DOF uses carbon-fiber UR-style tubes + cyan collars)
+  const radii = [0.025, 0.016, 0.0135, 0.011];
+  const links = radii.map((r, idx) => {
+    const l = makeIndustrialLink(r, dof === 6 && idx > 0, accent);
+    armGroup.add(l);
+    return l;
+  });
+
+  // Load real CAD wrist/shoulder shell onto upper arm link
+  stlLoader.load("./models/spot_arm/wrist.stl", (geo) => {
+    geo.computeVertexNormals();
+    geo.center();
+    const cadShell = mesh(geo, dof === 4 ? MAT.alu : MAT.carbon);
+    cadShell.scale.set(0.00038, 0.00045, 0.00038);
+    tagSemantic(cadShell, dof === 4 ? 0xfbbc04 : 0x4285f4, dof === 4 ? 0xffd54f : 0x64b5f6);
+    links[1].add(cadShell);
+  });
+
+  // Harmonic-drive servo actuator housings with anodized end-caps, bolt rings & illuminated LED status rings
   const housings = Array.from({ length: dof }, (_, i) => {
     const g = new THREE.Group();
     const big = i < 3;
-    const drum = mesh(new THREE.CylinderGeometry(big ? 0.021 : 0.016, big ? 0.021 : 0.016, big ? 0.05 : 0.036, 32), MAT.dark); g.add(drum);
-    for (const s of [-1, 1]) { const cap = mesh(new THREE.CylinderGeometry(big ? 0.017 : 0.013, big ? 0.017 : 0.013, 0.003, 32), accent); cap.position.y = s * (big ? 0.026 : 0.019); g.add(cap); }
-    armGroup.add(g); return g;
+    const rad = big ? 0.022 : 0.0165;
+    const len = big ? 0.052 : 0.038;
+    const drum = mesh(new THREE.CylinderGeometry(rad, rad, len, 36), MAT.dark); g.add(drum);
+    const stator = mesh(new THREE.CylinderGeometry(rad * 1.04, rad * 1.04, len * 0.45, 36), MAT.steel); g.add(stator);
+    const ledTorus = mesh(new THREE.TorusGeometry(rad * 1.03, 0.0016, 12, 36), ledRingMat);
+    ledTorus.rotation.x = Math.PI / 2;
+    ledTorus.position.y = len * 0.26;
+    g.add(ledTorus);
+    for (const s of [-1, 1]) {
+      const cap = mesh(new THREE.CylinderGeometry(rad * 0.88, rad * 0.96, 0.0045, 32), accent);
+      cap.position.y = s * (len * 0.5 + 0.002);
+      g.add(cap);
+    }
+    armGroup.add(g);
+    return g;
   });
+
   const grip = makeGripper(false);
   armGroup.add(grip);
 
-  // Forearm Apple Watch / IMU sensor visual site on the 4-DOF Abel-Arm
+  // Detailed Apple Watch Ultra 2 Forearm Mount on the 4-DOF Abel-Arm
   let watchSensor = null;
   if (dof === 4) {
     watchSensor = new THREE.Group();
-    const caseMesh = mesh(new THREE.BoxGeometry(0.026, 0.009, 0.031), MAT.watch);
+    const strap = mesh(new THREE.CylinderGeometry(0.0185, 0.0185, 0.022, 28), new THREE.MeshStandardMaterial({ color: 0xff5722, roughness: 0.65 }));
+    strap.rotation.z = Math.PI / 2;
+    watchSensor.add(strap);
+    const caseMesh = mesh(new THREE.BoxGeometry(0.028, 0.010, 0.034), MAT.watch);
+    caseMesh.position.y = 0.015;
     watchSensor.add(caseMesh);
+    const screenMesh = mesh(new THREE.BoxGeometry(0.024, 0.002, 0.029), MAT.watchScreen);
+    screenMesh.position.y = 0.0195;
+    watchSensor.add(screenMesh);
+    const crown = mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.004, 16), MAT.red);
+    crown.rotation.z = Math.PI / 2;
+    crown.position.set(0.015, 0.016, 0.006);
+    watchSensor.add(crown);
     armGroup.add(watchSensor);
   }
 
@@ -861,30 +982,44 @@ $("btn-reset").onclick = () => {
 };
 
 const later = (ms, fn) => setTimeout(fn, ms);
+
+function runPickAndPlaceCycle() {
+  if (st.station !== 0) setStation(0);
+  for (const d of [4, 6]) {
+    st.arm[d].held = false;
+    st.arm[d].done[0] = false;
+    st.arm[d].battP = [PICK_P[0], PICK_P[1], 0.013];
+    st.arm[d].battR = PICK_R;
+    st.arm[d].dest = "place";
+  }
+  setClosed(false, false);
+  $("watch-status").textContent = "📦 Executing Pick & Place cycle (Approach -> Grasp -> Lift -> Place -> Release)";
+  const abovePick = [PICK_P[0], PICK_P[1], PICK_P[2] + 0.07];
+  const abovePlace = [PLACE_P[0], PLACE_P[1], PLACE_P[2] + 0.09];
+  tweenTo([-25, 0, 0], abovePick, 650, () =>
+    tweenTo([-25, 0, 0], PICK_P, 550, () =>
+      later(250, () => {
+        setClosed(true, false);
+        later(250, () => tweenTo([-25, 0, 0], abovePick, 500, () =>
+          tweenTo([25, 0, 0], abovePlace, 700, () =>
+            tweenTo([25, 0, 0], PLACE_P, 550, () =>
+              later(250, () => {
+                setClosed(false, false);
+                later(200, () => tweenTo([25, 0, 0], abovePlace, 500));
+              })
+            )
+          )
+        ));
+      })
+    )
+  );
+}
+if ($("btn-pick-place")) $("btn-pick-place").onclick = runPickAndPlaceCycle;
+
 $("btn-auto").onclick = () => {
   const s = ST[st.station];
   if (s.id === "battery") {
-    for (const d of [4, 6]) { st.arm[d].held = false; st.arm[d].done[0] = false; st.arm[d].battP = [PICK_P[0], PICK_P[1], 0.013]; st.arm[d].battR = PICK_R; st.arm[d].dest = "place"; }
-    setClosed(false, false);
-    const abovePick = [PICK_P[0], PICK_P[1], PICK_P[2] + 0.07];
-    const abovePlace = [PLACE_P[0], PLACE_P[1], PLACE_P[2] + 0.09];
-    tweenTo([-25, 0, 0], abovePick, 650, () =>
-      tweenTo([-25, 0, 0], PICK_P, 550, () =>
-        later(250, () => {
-          setClosed(true, false);
-          later(250, () => tweenTo([-25, 0, 0], abovePick, 500, () =>
-            tweenTo([25, 0, 0], abovePlace, 700, () =>
-              tweenTo([25, 0, 0], PLACE_P, 550, () =>
-                later(250, () => {
-                  setClosed(false, false);
-                  later(200, () => tweenTo([25, 0, 0], abovePlace, 500));
-                })
-              )
-            )
-          ));
-        })
-      )
-    );
+    runPickAndPlaceCycle();
   } else if (s.id === "charger") {
     for (const d of [4, 6]) { st.arm[d].inserted = null; st.arm[d].held = true; st.arm[d].done[1] = false; }
     setClosed(true);
@@ -952,19 +1087,21 @@ $("watch-file").addEventListener("change", async (e) => {
   }
 });
 
-// Export sim_imu.csv + watch.csv (compatible with `python compare.py --sim sim_imu.csv --watch watch.csv`)
+// Export sim_imu.csv + watch.csv (UTC-synchronized & compatible with `python compare.py --sim sim_imu.csv --watch watch.csv`)
 $("btn-export-imu").onclick = () => requireLicense("Full Sim + Watch IMU CSV Export", () => {
   const hist = st.imuHistory.length ? st.imuHistory : [];
   if (!hist.length) return;
   const t0 = hist[0].t;
-  const simLines = ["t,ax,ay,az,gx,gy,gz"];
-  const watchLines = ["loggingTime,accelerometerTimestamp_sinceReboot,accelerometerAccelerationX,accelerometerAccelerationY,accelerometerAccelerationZ,gyroRotationX,gyroRotationY,gyroRotationZ"];
+  const simLines = ["t,utc_iso,epoch_utc_ms,ax,ay,az,gx,gy,gz,fused_pitch_deg,fused_roll_deg"];
+  const watchLines = ["loggingTime,epoch_utc_ms,accelerometerTimestamp_sinceReboot,accelerometerAccelerationX,accelerometerAccelerationY,accelerometerAccelerationZ,gyroRotationX,gyroRotationY,gyroRotationZ"];
   hist.forEach(h => {
     const dt = (h.t - t0).toFixed(6);
-    simLines.push(`${dt},${h.simAcc.map(v => v.toFixed(6)).join(",")},${h.simGyro.map(v => v.toFixed(6)).join(",")}`);
+    const uIso = h.utcIso || new Date().toISOString();
+    const uMs = h.utcEpochMs || Date.now();
+    simLines.push(`${dt},${uIso},${uMs},${h.simAcc.map(v => v.toFixed(6)).join(",")},${h.simGyro.map(v => v.toFixed(6)).join(",")},${(h.fusedPitchDeg || 0).toFixed(2)},${(h.fusedRollDeg || 0).toFixed(2)}`);
     const rawWAcc = applyMat3(R_SIM_TO_WATCH, h.watchAcc).map(v => (v / G0).toFixed(6));
     const rawWGyro = applyMat3(R_SIM_TO_WATCH, h.watchGyro).map(v => (v * R2D).toFixed(6));
-    watchLines.push(`${dt},${dt},${rawWAcc.join(",")},${rawWGyro.join(",")}`);
+    watchLines.push(`${uIso},${uMs},${dt},${rawWAcc.join(",")},${rawWGyro.join(",")}`);
   });
   downloadText("sim_imu.csv", simLines.join("\n"), "text/csv");
   setTimeout(() => downloadText("watch.csv", watchLines.join("\n"), "text/csv"), 250);
@@ -1169,35 +1306,57 @@ let last = performance.now(), lastRec = 0, lastUi = 0, stepIdx = 0;
 let prevSiteP = null, prevSiteV = [0, 0, 0], prevSiteR = null;
 let latestBBoxes = [], latestStepRecord = {}, latestSim2RealReport = "";
 
+// NTP / IEEE-1588 UTC Clock Offset Calibration against Studio Server
+async function syncUtcClock() {
+  try {
+    const t0 = Date.now();
+    const r = await fetch("/api/health", { cache: "no-store" });
+    const t1 = Date.now();
+    if (r.ok) {
+      const d = await r.json();
+      if (d.epoch_utc_ms) {
+        const rtt = t1 - t0;
+        st.utcOffsetMs = +(d.epoch_utc_ms - (t0 + rtt * 0.5)).toFixed(1);
+      }
+    }
+  } catch {}
+}
+syncUtcClock();
+setInterval(syncUtcClock, 30000);
+
 function drawCharts() {
   const hist = st.imuHistory;
   if (hist.length < 2) return;
 
-  // Chart 1: Forearm IMU Overlay (Sim vs Watch + Residual or Welch PSD)
+  // Chart 1: Forearm 6-Axis IMU Fusion Overlay (Unified Accel + Gyro, Separate Accel/Gyro, or Welch PSD)
   const cv1 = $("chart-imu"), ctx1 = cv1.getContext("2d");
   const W1 = cv1.width, H1 = cv1.height;
   ctx1.clearRect(0, 0, W1, H1);
 
   if (st.imuChartMode === "psd") {
-    // Simple FFT magnitude spectrum of |accel|
+    // Simple FFT magnitude spectrum of |accel| and |gyro|
     const N = Math.min(128, hist.length);
     const slice = hist.slice(-N);
     const sSig = slice.map(h => Math.hypot(...h.simAcc));
     const wSig = slice.map(h => Math.hypot(...h.watchAcc));
+    const gSig = slice.map(h => Math.hypot(...h.watchGyro));
     const sMean = sSig.reduce((a, b) => a + b, 0) / N;
     const wMean = wSig.reduce((a, b) => a + b, 0) / N;
+    const gMean = gSig.reduce((a, b) => a + b, 0) / N;
     const bins = Math.floor(N / 2);
-    const sPsd = [], wPsd = [];
+    const sPsd = [], wPsd = [], gPsd = [];
     for (let k = 1; k < bins; k++) {
-      let sr = 0, si = 0, wr = 0, wi = 0;
+      let sr = 0, si = 0, wr = 0, wi = 0, gr = 0, gi = 0;
       for (let n = 0; n < N; n++) {
         const ang = (-2 * Math.PI * k * n) / N;
         const c = Math.cos(ang), s = Math.sin(ang);
         sr += (sSig[n] - sMean) * c; si += (sSig[n] - sMean) * s;
         wr += (wSig[n] - wMean) * c; wi += (wSig[n] - wMean) * s;
+        gr += (gSig[n] - gMean) * c; gi += (gSig[n] - gMean) * s;
       }
       sPsd.push(Math.log10(Math.hypot(sr, si) / N + 1e-4));
       wPsd.push(Math.log10(Math.hypot(wr, wi) / N + 1e-4));
+      gPsd.push(Math.log10(Math.hypot(gr, gi) / N + 1e-4));
     }
     const plotLine = (arr, col) => {
       ctx1.strokeStyle = col; ctx1.lineWidth = 1.8; ctx1.beginPath();
@@ -1210,8 +1369,55 @@ function drawCharts() {
     };
     plotLine(sPsd, "#00b4d8");
     plotLine(wPsd, "#ff5d5d");
+    plotLine(gPsd, "#fbbc04");
     ctx1.fillStyle = "#647187"; ctx1.font = "10px 'Roboto Mono', monospace";
-    ctx1.fillText("0 Hz", 10, H1 - 3); ctx1.fillText("30 Hz (Welch Log-PSD)", W1 - 135, H1 - 3);
+    ctx1.fillText("0 Hz", 10, H1 - 3); ctx1.fillText("30 Hz (Accel + Gyro Log-PSD)", W1 - 165, H1 - 3);
+  } else if (st.imuChartMode === "fused") {
+    // Unified 6-DOF Sensor Fusion View:
+    // Plots Linear Proper Acceleration |a| (m/s^2, cyan=Sim, coral=Watch) AND Angular Velocity |w| (rad/s, yellow=Sim, green=Watch) working together
+    const sAcc = hist.map(h => Math.hypot(...h.simAcc));
+    const wAcc = hist.map(h => Math.hypot(...h.watchAcc));
+    const sGyr = hist.map(h => Math.hypot(...h.simGyro));
+    const wGyr = hist.map(h => Math.hypot(...h.watchGyro));
+
+    const minA = 6.5, maxA = Math.max(14.0, ...sAcc, ...wAcc);
+    const minG = 0.0, maxG = Math.max(3.0, ...sGyr, ...wGyr);
+    const mapA = (v) => H1 - 14 - ((v - minA) / Math.max(0.1, maxA - minA)) * (H1 - 26);
+    const mapG = (v) => H1 - 14 - ((v - minG) / Math.max(0.1, maxG - minG)) * (H1 - 26);
+
+    // Shaded coupling band between Accel and Gyro activity
+    ctx1.fillStyle = "rgba(0, 180, 216, 0.10)";
+    ctx1.beginPath();
+    sAcc.forEach((sv, i) => {
+      const x = (i / Math.max(1, sAcc.length - 1)) * W1;
+      i ? ctx1.lineTo(x, mapA(sv)) : ctx1.moveTo(x, mapA(sv));
+    });
+    for (let i = sGyr.length - 1; i >= 0; i--) {
+      const x = (i / Math.max(1, sGyr.length - 1)) * W1;
+      ctx1.lineTo(x, mapG(sGyr[i]));
+    }
+    ctx1.closePath();
+    ctx1.fill();
+
+    const strokeTrace = (arr, mapper, col, lw, dash = []) => {
+      ctx1.strokeStyle = col; ctx1.lineWidth = lw; ctx1.setLineDash(dash); ctx1.beginPath();
+      arr.forEach((v, i) => {
+        const x = (i / Math.max(1, arr.length - 1)) * W1;
+        const y = mapper(v);
+        i ? ctx1.lineTo(x, y) : ctx1.moveTo(x, y);
+      });
+      ctx1.stroke();
+      ctx1.setLineDash([]);
+    };
+    strokeTrace(sAcc, mapA, "#00b4d8", 2.0);          // Sim Accel |a| (cyan)
+    strokeTrace(wAcc, mapA, "#ff5d5d", 1.5, [4, 2]);  // Watch Accel |a| (coral dashed)
+    strokeTrace(sGyr, mapG, "#fbbc04", 1.9);          // Sim Gyro |w| (yellow)
+    strokeTrace(wGyr, mapG, "#81c995", 1.4, [3, 2]);  // Watch Gyro |w| (green dashed)
+
+    ctx1.fillStyle = "#8ab4f8"; ctx1.font = "10px 'Roboto Mono', monospace";
+    ctx1.fillText("L: |a| m/s² (gravity+recoil)", 8, 11);
+    ctx1.fillStyle = "#fde293";
+    ctx1.fillText("R: |ω| rad/s (joint rotation)", W1 - 176, 11);
   } else {
     const isAcc = st.imuChartMode === "acc";
     const sVals = hist.map(h => isAcc ? Math.hypot(...h.simAcc) : Math.hypot(...h.simGyro));
@@ -1442,9 +1648,23 @@ function tick(now) {
     }
   }
 
+  // 6-Axis Complementary Filter Attitude Fusion (Gyro integrates fast rate, Accel anchors gravity vector)
+  const accPitch = Math.atan2(-watchAcc[0], Math.hypot(watchAcc[1], watchAcc[2])) * R2D;
+  const accRoll = Math.atan2(watchAcc[1], watchAcc[2]) * R2D;
+  const alpha = 0.96;
+  st.fusedPitchDeg = alpha * (st.fusedPitchDeg + watchGyro[1] * R2D * dt) + (1 - alpha) * accPitch;
+  st.fusedRollDeg = alpha * (st.fusedRollDeg + watchGyro[0] * R2D * dt) + (1 - alpha) * accRoll;
+
+  const utcNowMs = Date.now() + st.utcOffsetMs;
+  const utcIso = new Date(utcNowMs).toISOString();
+
   st.imuHistory.push({
     t: now / 1000,
+    utcIso,
+    utcEpochMs: Math.round(utcNowMs),
     simAcc, simGyro, watchAcc, watchGyro,
+    fusedPitchDeg: +st.fusedPitchDeg.toFixed(2),
+    fusedRollDeg: +st.fusedRollDeg.toFixed(2),
     posErr4: v4.posMm, posErr6: v6.posMm,
     oriErr4: v4.oriDeg, oriErr6: v6.oriDeg,
     dqPeak
@@ -1472,11 +1692,14 @@ function tick(now) {
   renderer.render(scene, camera);
   latestBBoxes = computeBBoxes();
 
-  // Build LeRobot / RLDS step record
+  // Build LeRobot / RLDS step record with UTC synchronization + 6-Axis Sensor Fusion
   const w4 = manipulability(st.q4, 4), w6 = manipulability(st.q6, 6);
   latestStepRecord = {
     step_index: stepIdx++,
     timestamp_s: +(now / 1000).toFixed(4),
+    utc_iso: utcIso,
+    utc_epoch_ms: Math.round(utcNowMs),
+    utc_sync_offset_ms: st.utcOffsetMs,
     station_id: ST[st.station].id,
     observation: {
       q4_rad: st.q4.map(v => +v.toFixed(4)),
@@ -1491,7 +1714,8 @@ function tick(now) {
         sim_acc_ms2: simAcc.map(v => +v.toFixed(3)),
         sim_gyro_rads: simGyro.map(v => +v.toFixed(3)),
         watch_acc_ms2: watchAcc.map(v => +v.toFixed(3)),
-        watch_gyro_rads: watchGyro.map(v => +v.toFixed(3))
+        watch_gyro_rads: watchGyro.map(v => +v.toFixed(3)),
+        fused_attitude_deg: { pitch: +st.fusedPitchDeg.toFixed(2), roll: +st.fusedRollDeg.toFixed(2) }
       }
     },
     action: {
@@ -1530,6 +1754,17 @@ function tick(now) {
 
   if (now - lastUi > 180) {
     lastUi = now;
+    if ($("utc-pill")) {
+      const sign = st.utcOffsetMs >= 0 ? "+" : "";
+      $("utc-pill").textContent = `🕒 ${utcIso.slice(11, 23)}Z · Δ${sign}${st.utcOffsetMs.toFixed(1)}ms`;
+    }
+    if ($("watch-lag-pill")) {
+      const sign = st.utcOffsetMs >= 0 ? "+" : "";
+      $("watch-lag-pill").textContent = `UTC Δt: ${sign}${st.utcOffsetMs.toFixed(1)} ms`;
+    }
+    if ($("fusion-att")) {
+      $("fusion-att").textContent = `6-Axis Fusion Attitude: Pitch ${st.fusedPitchDeg.toFixed(1)}° · Roll ${st.fusedRollDeg.toFixed(1)}°`;
+    }
     $("j4-str").textContent = st.q4.map(a => `${Math.round(a * R2D)}°`).join(", ");
     $("j6-str").textContent = st.q6.map(a => `${Math.round(a * R2D)}°`).join(", ");
     $("verdict-4").innerHTML = `<span class="pill ${v4.cls}">${v4.msg}</span>`;

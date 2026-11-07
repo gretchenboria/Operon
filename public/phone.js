@@ -341,7 +341,8 @@ $("aim").querySelectorAll("button").forEach(b => b.addEventListener("click", () 
 }));
 setInterval(() => {
   if (slide === "teleop" && mode === "pose" && (tiltOn || manualOn || touched)) {
-    send({ t: "pose", v: { vx: -jy, vy: jx, vz, g: pose.g, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap } });
+    const tMs = Date.now();
+    send({ t: "pose", v: { vx: -jy, vy: jx, vz, g: pose.g, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
     pose.tap = 0;
   }
 }, 90);

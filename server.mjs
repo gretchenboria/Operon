@@ -61,6 +61,7 @@ const MIME = {
   ".gif": "image/gif",
   ".ico": "image/x-icon",
   ".glb": "model/gltf-binary",
+  ".stl": "model/stl",
   ".woff": "font/woff",
   ".woff2": "font/woff2"
 };
@@ -233,7 +234,15 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
   if (url.pathname === "/api/health") {
-    const body = JSON.stringify({ ok: true, relay: true, vertex: true, model: "gemini-3.8-flash" });
+    const nowMs = Date.now();
+    const body = JSON.stringify({
+      ok: true,
+      relay: true,
+      vertex: true,
+      model: "gemini-3.8-flash",
+      utc_iso: new Date(nowMs).toISOString(),
+      epoch_utc_ms: nowMs
+    });
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store"

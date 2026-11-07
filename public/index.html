@@ -57,17 +57,19 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 16px;
-      gap: 12px;
+      padding: 0 12px;
+      gap: 8px;
+      overflow-x: auto;
     }
     .brand {
       display: flex;
       align-items: center;
-      gap: 9px;
+      gap: 7px;
       font-weight: 700;
-      font-size: 14.5px;
+      font-size: 13.5px;
       letter-spacing: -0.2px;
       white-space: nowrap;
+      flex-shrink: 0;
     }
     .nv-badge {
       background: rgba(118, 185, 0, 0.16);
@@ -118,16 +120,16 @@
       color: var(--ink-2);
     }
     .pb {
-      padding: 12px;
+      padding: 9px 10px;
       overflow-y: auto;
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
     }
 
-    .row { display: flex; align-items: center; gap: 8px; }
-    .col { display: flex; flex-direction: column; gap: 6px; }
+    .row { display: flex; align-items: center; gap: 6px; }
+    .col { display: flex; flex-direction: column; gap: 5px; }
     .wrap { flex-wrap: wrap; }
     .between { justify-content: space-between; }
 
@@ -136,10 +138,11 @@
       background: #0c1018;
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 11px 12px;
+      padding: 8px 10px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
+      flex-shrink: 0;
     }
     .step-hdr {
       display: flex;
@@ -175,10 +178,10 @@
       background: #0c1018;
       border: 1px solid var(--border);
       border-radius: 10px;
-      overflow: hidden;
+      flex-shrink: 0;
     }
     details.drawer > summary {
-      padding: 9px 12px;
+      padding: 8px 11px;
       cursor: pointer;
       list-style: none;
       display: flex;
@@ -203,10 +206,15 @@
     }
     details.drawer[open] > summary::after { transform: rotate(180deg); }
     .drawer-body {
-      padding: 10px 12px;
+      padding: 9px 11px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
+    }
+    .pose-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px 10px;
     }
 
     /* ── BUTTONS & SEGMENTED CONTROLS ── */
@@ -335,10 +343,9 @@
       bottom: 12px;
       left: 12px;
       right: 12px;
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
       pointer-events: none;
       z-index: 3;
     }
@@ -351,37 +358,47 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
-      min-width: 280px;
+      min-width: 0;
+      overflow: hidden;
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     }
     .arm-badge-hdr {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      gap: 8px;
       font-weight: 700;
       font-size: 12px;
-      white-space: nowrap;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    .arm-badge-hdr .pill {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .arm-joints {
       font-family: var(--mono);
       font-size: 10.5px;
       color: var(--ink-2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     /* ── QR CARD ── */
     .qr-card {
       display: flex;
-      gap: 11px;
+      gap: 9px;
       align-items: center;
       background: #080b10;
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 8px;
+      padding: 6px 8px;
     }
     .qr-box {
-      width: 76px;
-      height: 76px;
+      width: 64px;
+      height: 64px;
       background: #fff;
       padding: 4px;
       border-radius: 6px;
@@ -391,11 +408,11 @@
 
     .slider-row {
       display: grid;
-      grid-template-columns: 42px 1fr 48px;
+      grid-template-columns: 36px 1fr 40px;
       align-items: center;
-      gap: 8px;
+      gap: 5px;
       font-family: var(--mono);
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--ink-2);
     }
     input[type="range"] {
@@ -523,17 +540,19 @@
     <header class="topbar">
       <div class="brand">
         <span class="nv-badge">OPERON PRO</span>
-        <span>Sim-to-Real Teleop &amp; Watch IMU Studio</span>
-        <button class="pill warn" id="btn-license" style="cursor:pointer" title="Activate Commercial License Key">🔒 Evaluation · Activate License</button>
+        <span>Sim-to-Real Teleop &amp; Watch IMU</span>
+        <span class="pill ok" id="utc-pill" title="IEEE-1588 / NTP UTC Clock Synchronized between Watch, Phone &amp; Omniverse Studio">🕒 UTC Sync · +0.0ms</span>
+        <button class="pill warn" id="btn-license" style="cursor:pointer" title="Activate Commercial License Key">🔒 License</button>
       </div>
 
-      <div class="row" style="gap:6px">
+      <div class="row" style="gap:5px;flex-shrink:0">
         <div class="seg" id="st-bar" title="Choose a manipulation task">
-          <button class="sel" data-st="0">🔋 1. Battery</button>
-          <button data-st="1">🔌 2. Charger</button>
-          <button data-st="2">🚰 3. Valve 90°</button>
+          <button class="sel" data-st="0">🔋 Battery</button>
+          <button data-st="1">🔌 Charger</button>
+          <button data-st="2">🚰 Valve 90°</button>
         </div>
-        <button class="btn sm primary" id="btn-auto" title="Run autonomous pick/place or valve trajectory">▶ Auto Mission</button>
+        <button class="btn sm nv" id="btn-pick-place" title="Execute full autonomous Pick &amp; Place cycle (approach -> grasp battery -> lift -> place on target pad -> release)">📦 Pick &amp; Place</button>
+        <button class="btn sm primary" id="btn-auto" title="Run autonomous station trajectory">▶ Auto</button>
         <button class="btn sm watch" id="btn-quintic" title="Run canonical 5th-order firmware quintic sweep (imu_calibration.yaml)">⌚ Watch Sweep</button>
         <button class="btn sm" id="btn-snap" title="Align gripper to station target">🎯 Snap</button>
         <button class="btn sm" id="btn-grab" title="Open or close gripper">✊ Grab</button>
@@ -585,8 +604,8 @@
           <!-- STEP 2: APPLE WATCH SIM-TO-REAL SOURCE -->
           <div class="step-card">
             <div class="step-hdr">
-              <div class="step-title"><span class="step-num">2</span> Apple Watch IMU Stream</div>
-              <span id="watch-lag-pill" class="pill ok">Δt: 0.0 ms</span>
+              <div class="step-title"><span class="step-num">2</span> Apple Watch 6-Axis IMU</div>
+              <span id="watch-lag-pill" class="pill ok">UTC Δt: 0.0 ms</span>
             </div>
             <div class="row wrap" style="gap:6px">
               <button class="btn sm watch" id="btn-synth-watch" style="flex:1">⌚ Synth Watch Run</button>
@@ -596,9 +615,9 @@
             </div>
             <div class="row between" style="font-family:var(--mono);font-size:10px;color:var(--ink-3)">
               <span title="Paste this URL into Sensor Logger HTTP Push on iPhone/Watch">HTTP Push: <b id="imu-push-url" style="color:var(--cyan);cursor:pointer">/api/room/OPERON/imu</b></span>
-              <button class="btn sm" id="btn-export-imu" title="Download sim_imu.csv + watch.csv">⬇ CSVs</button>
+              <button class="btn sm" id="btn-export-imu" title="Download UTC-stamped sim_imu.csv + watch.csv">⬇ CSVs</button>
             </div>
-            <div class="mono" id="watch-status" style="font-size:10.5px;color:var(--ink-2)">Live Sim + Synthetic Watch Twin</div>
+            <div class="mono" id="watch-status" style="font-size:10.5px;color:var(--ink-2)">Live 6-Axis (Accel+Gyro) · UTC Synced</div>
           </div>
 
           <!-- COLLAPSIBLE: MANUAL POSE SLIDERS -->
@@ -608,17 +627,19 @@
               <span class="mono" id="cmd-src" style="font-size:10px;color:var(--cyan)">Sliders</span>
             </summary>
             <div class="drawer-body" id="pose-sliders">
-              <div class="slider-row"><span>yaw</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
-              <div class="slider-row"><span>pitch</span><input type="range" data-p="pitch" min="-90" max="90" step="1" value="0"><span data-pv="pitch">0°</span></div>
-              <div class="slider-row"><span>roll</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
-              <div class="slider-row"><span>x (m)</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
-              <div class="slider-row"><span>y (m)</span><input type="range" data-p="y" min="-0.15" max="0.15" step="0.002" value="0.000"><span data-pv="y">0.000</span></div>
-              <div class="slider-row"><span>z (m)</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
+              <div class="pose-grid">
+                <div class="slider-row"><span>yaw</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
+                <div class="slider-row"><span>x (m)</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
+                <div class="slider-row"><span>pitch</span><input type="range" data-p="pitch" min="-90" max="90" step="1" value="0"><span data-pv="pitch">0°</span></div>
+                <div class="slider-row"><span>y (m)</span><input type="range" data-p="y" min="-0.15" max="0.15" step="0.002" value="0.000"><span data-pv="y">0.000</span></div>
+                <div class="slider-row"><span>roll</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
+                <div class="slider-row"><span>z (m)</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
+              </div>
             </div>
           </details>
 
           <!-- COLLAPSIBLE: OMNIVERSE DOMAIN RANDOMIZATION -->
-          <details class="drawer">
+          <details class="drawer" open>
             <summary><span>🎲 Omniverse Domain Randomization</span></summary>
             <div class="drawer-body">
               <div class="row between">
@@ -720,15 +741,20 @@
           <span id="m-dof-w" style="display:none">w=0.05</span>
           <span id="wahba-ang" style="display:none">37.0°</span>
 
-          <!-- CHART 1: FOREARM IMU OVERLAY -->
+          <!-- CHART 1: FOREARM 6-AXIS IMU FUSION OVERLAY -->
           <div class="step-card">
-            <div class="row between">
-              <span class="sub-label"><b style="color:var(--cyan)">■ Sim IMU</b> vs <b style="color:var(--coral)">■ Watch IMU</b></span>
-              <div class="seg" id="imu-chart-mode">
-                <button class="sel" data-ic="acc">Accel</button>
+            <div class="row between" style="gap:4px">
+              <span class="sub-label" style="white-space:nowrap"><b style="color:var(--cyan)">■ |a|</b> + <b style="color:var(--g-yellow)">■ |ω|</b> · <b style="color:var(--coral)">Watch</b></span>
+              <div class="seg" id="imu-chart-mode" style="flex-shrink:0">
+                <button class="sel" data-ic="fused" title="6-Axis Complementary Sensor Fusion: Accel anchors gravity tilt + linear recoil, Gyro integrates fast joint rotation">6-Axis Fused</button>
+                <button data-ic="acc">Accel</button>
                 <button data-ic="gyro">Gyro</button>
-                <button data-ic="psd">Welch PSD</button>
+                <button data-ic="psd">PSD</button>
               </div>
+            </div>
+            <div class="row between" style="font-family:var(--mono);font-size:10px;color:var(--ink-2)">
+              <span id="fusion-att">6-Axis Attitude: Pitch 0.0° · Roll 0.0°</span>
+              <span id="fusion-explain" style="color:var(--ink-3)">Gyro=ω · Accel=g+recoil</span>
             </div>
             <canvas class="chart-cv" id="chart-imu" width="600" height="118"></canvas>
           </div>
