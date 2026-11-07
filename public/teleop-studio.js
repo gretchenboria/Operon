@@ -10,7 +10,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { poseR, oriError, ik4, ik6, fk4, fk6, JOINTS, G } from "./demos/arms3d.js";
 import { onLive, send, qrSVG, phoneUrl, ROOM } from "./live.js";
 
@@ -128,7 +127,7 @@ const st = {
   closed: false,
   openVis: 1,
   aov: "rtx",
-  showBBoxes: true,
+  showBBoxes: false,
   schemaTab: "lerobot",
   imuChartMode: "acc",
   cmd: { yaw: -15, pitch: 0, roll: 0, x: 0.15, y: 0.0, z: 0.12 },
@@ -190,15 +189,31 @@ scene.background = new THREE.Color(0x0d1118);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-const camera = new THREE.PerspectiveCamera(34, cv.width / cv.height, 0.08, 3.2);
-camera.position.set(0.84, 0.45, 0.0);
+const camera = new THREE.PerspectiveCamera(42, cv.width / cv.height, 0.05, 3.5);
+camera.position.set(0.88, 0.56, 0.0);
 const controls = new OrbitControls(camera, cv);
-controls.target.set(0.06, 0.08, 0);
+controls.target.set(0.08, 0.11, 0);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.48;
 controls.minDistance = 0.28;
-controls.maxDistance = 2.0;
+controls.maxDistance = 2.2;
 controls.update();
+
+function syncViewportSize() {
+  const stage = $("canvas-stage");
+  if (!stage) return;
+  const w = Math.max(320, stage.clientWidth);
+  const h = Math.max(240, stage.clientHeight);
+  if (cv.width !== w || cv.height !== h) {
+    renderer.setSize(w, h, false);
+    bboxCv.width = w;
+    bboxCv.height = h;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+}
+window.addEventListener("resize", syncViewportSize);
+setTimeout(syncViewportSize, 50);
 
 const sun = new THREE.DirectionalLight(0xffffff, 2.4);
 sun.position.set(0.55, 1.3, 0.65);
@@ -253,17 +268,22 @@ gridHelper.position.set(0.12, 0.001, 0);
 gridHelper.userData.isHelper = true;
 scene.add(gridHelper);
 
-// Load NVIDIA SimReady toolbox GLB
-new GLTFLoader().load("models/simready-toolbox.glb", (gltf) => {
-  const box = gltf.scene;
-  box.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  box.scale.setScalar(0.26);
-  box.position.copy(T3([-0.17, -0.06, 0]));
+// Procedural NVIDIA SimReady KLT Toolbox Prop (zero external MB download)
+{
+  const box = new THREE.Group();
+  const base = mesh(new THREE.BoxGeometry(0.11, 0.055, 0.075), MAT.dark);
+  base.position.y = 0.0275;
+  const lid = mesh(new THREE.BoxGeometry(0.114, 0.014, 0.079), new THREE.MeshStandardMaterial({ color: 0xfbbc04, metalness: 0.25, roughness: 0.35 }));
+  lid.position.y = 0.062;
+  const handle = mesh(new THREE.BoxGeometry(0.045, 0.012, 0.01), MAT.dark);
+  handle.position.y = 0.074;
+  box.add(base, lid, handle);
+  box.position.copy(T3([-0.15, 0.0, 0]));
   box.rotation.y = Math.PI / 2;
   tagSemantic(box, 0xa142f4, 0xba68c8);
   scene.add(box);
   trackedObjects.push({ label: "simready_toolbox#60", clsId: 6, obj: box, color: "#a142f4" });
-}, undefined, () => {});
+}
 
 function placeBetween(obj, a, b) {
   const A = T3(a), B = T3(b), dir = B.clone().sub(A), len = dir.length();
@@ -386,8 +406,8 @@ function makeRig(dof, offsetY, accentHex) {
 }
 
 const rigs = {
-  4: makeRig(4, -0.25, 0xfbbc04),
-  6: makeRig(6, 0.25, 0x4285f4)
+  4: makeRig(4, -0.18, 0xfbbc04),
+  6: makeRig(6, 0.18, 0x4285f4)
 };
 
 const poseObj = (obj, p, R) => { obj.position.copy(T3(p)); obj.quaternion.copy(quatFromR(R)); };
@@ -950,8 +970,8 @@ $("aov-bar").querySelectorAll("button").forEach(b => b.addEventListener("click",
   applyAOVPass(b.dataset.aov);
 }));
 $("btn-cam-reset").onclick = () => {
-  camera.position.set(0.84, 0.45, 0.0);
-  controls.target.set(0.06, 0.08, 0);
+  camera.position.set(0.88, 0.56, 0.0);
+  controls.target.set(0.08, 0.11, 0);
   controls.update();
 };
 $("btn-snap-png").onclick = () => {
@@ -1374,6 +1394,7 @@ function tick(now) {
   updateRig(4, f4, makeProps(4, v4));
   updateRig(6, f6, makeProps(6, v6));
 
+  syncViewportSize();
   controls.update();
   renderer.render(scene, camera);
   latestBBoxes = computeBBoxes();
@@ -1438,8 +1459,8 @@ function tick(now) {
     lastUi = now;
     $("j4-str").textContent = st.q4.map(a => `${Math.round(a * R2D)}°`).join(", ");
     $("j6-str").textContent = st.q6.map(a => `${Math.round(a * R2D)}°`).join(", ");
-    $("verdict-4").innerHTML = `<span class="pill ${v4.cls}">4-DOF: ${v4.msg}</span>`;
-    $("verdict-6").innerHTML = `<span class="pill ${v6.cls}">6-DOF: ${v6.msg}</span>`;
+    $("verdict-4").innerHTML = `<span class="pill ${v4.cls}">${v4.msg}</span>`;
+    $("verdict-6").innerHTML = `<span class="pill ${v6.cls}">${v6.msg}</span>`;
     $("m-dof-pos").textContent = `${v4.posMm} / ${v6.posMm} mm`;
     $("m-dof-ori").textContent = `${v4.oriDeg}° / ${v6.oriDeg}°`;
     $("m-dof-w").textContent = `w=${w4.toFixed(2)}/${w6.toFixed(2)}`;
