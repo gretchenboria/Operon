@@ -1,0 +1,26 @@
+# IMU calibration / sim-to-real validation trajectory.
+#
+# Purpose-built for the first Isaac-vs-AppleWatch comparison: large, well-
+# separated, single-joint sweeps with generous settle (dwell) between them.
+# Each sweep produces a clean, isolated accel+gyro signature that is easy to
+# frame-align and time-sync. Durations already respect the firmware limits
+# (120 deg/s, 200 deg/s^2) so neither side auto-lengthens them.
+#
+# Mount the Apple Watch on the FOREARM link. Start the run from a sharp TAP on
+# the watch (the impulse spike is the time-sync marker for compare.py).
+name: imu_calibration
+description: Large isolated single-joint sweeps for sim-to-real IMU validation.
+joint_order: [base, shoulder, elbow, gripper]   # servo ids 0,1,2,3
+home: [90, 90, 90, 90]                            # degrees
+
+# Each waypoint: full 4-joint target (non-moving joints hold), the quintic
+# duration (T), and a settle/dwell where the arm holds still (IMU baseline).
+# duration_ms is clamped up to quintic.min_duration() at replay time if needed.
+waypoints:
+  - {targets: [150, 90, 90, 90], duration_ms: 2000, settle_ms: 1500}   # base  +60
+  - {targets: [ 30, 90, 90, 90], duration_ms: 2500, settle_ms: 1500}   # base -120
+  - {targets: [ 90, 90, 90, 90], duration_ms: 2000, settle_ms: 1500}   # base  +60 home
+  - {targets: [ 90, 30, 90, 90], duration_ms: 2000, settle_ms: 1500}   # shoulder -60
+  - {targets: [ 90, 90, 90, 90], duration_ms: 2000, settle_ms: 1500}   # shoulder +60 home
+  - {targets: [ 90, 90,150, 90], duration_ms: 2000, settle_ms: 1500}   # elbow +60
+  - {targets: [ 90, 90, 90, 90], duration_ms: 2000, settle_ms: 1500}   # elbow -60 home

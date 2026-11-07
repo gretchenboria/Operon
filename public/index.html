@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Operon · Omniverse RTX Teleop &amp; Sim-to-Real Telemetry Studio</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌚</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto+Mono:wght@300;400;500;700&display=swap" />
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --panel: #121721;
+      --panel-2: #181f2c;
+      --border: #263042;
+      --border-hi: #3b4b66;
+      --ink: #eef2f8;
+      --ink-2: #9ba7bc;
+      --ink-3: #647187;
+      --nv-green: #76b900;
+      --g-blue: #4285f4;
+      --g-yellow: #fbbc04;
+      --g-red: #ea4335;
+      --g-green: #34a853;
+      --cyan: #00b4d8;
+      --coral: #ff5d5d;
+      --magenta: #b5179e;
+      --sans: 'Google Sans', 'Inter', system-ui, -apple-system, sans-serif;
+      --mono: 'Roboto Mono', ui-monospace, Menlo, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      height: 100vh;
+      overflow: hidden;
+      font-size: 12.5px;
+    }
+    .studio {
+      display: grid;
+      grid-template-rows: 46px 1fr 180px;
+      height: 100vh;
+      gap: 6px;
+      padding: 6px;
+    }
+    .topbar {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      gap: 8px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 14.5px;
+      letter-spacing: -0.2px;
+    }
+    .nv-badge {
+      background: rgba(118, 185, 0, 0.16);
+      color: #9be61d;
+      border: 1px solid var(--nv-green);
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+    .main-grid {
+      display: grid;
+      grid-template-columns: 315px 1fr 390px;
+      gap: 6px;
+      min-height: 0;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .ph {
+      background: var(--panel-2);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--ink-2);
+    }
+    .pb {
+      padding: 9px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .row { display: flex; align-items: center; gap: 6px; }
+    .col { display: flex; flex-direction: column; gap: 5px; }
+    .wrap { flex-wrap: wrap; }
+    .between { justify-content: space-between; }
+    .btn {
+      background: var(--panel-2);
+      color: var(--ink);
+      border: 1px solid var(--border-hi);
+      border-radius: 6px;
+      padding: 4px 9px;
+      font: 500 11.5px var(--sans);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.12s;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+    .btn:hover { border-color: var(--cyan); background: #1e2738; }
+    .btn.primary { background: var(--g-blue); border-color: #6ea4ff; color: #fff; font-weight: 700; }
+    .btn.nv { background: #2c4405; border-color: var(--nv-green); color: #c7ff6b; font-weight: 700; }
+    .btn.watch { background: rgba(255, 93, 93, 0.16); border-color: var(--coral); color: #ff9e9e; font-weight: 700; }
+    .btn.rec { background: rgba(234, 67, 53, 0.18); border-color: var(--g-red); color: #ff8a80; font-weight: 700; }
+    .btn.rec.active { background: var(--g-red); color: #fff; animation: pulse-rec 1.1s infinite; }
+    .btn.sm { padding: 3px 7px; font-size: 11px; }
+    .btn.on { background: rgba(52, 168, 83, 0.25); border-color: var(--g-green); color: #81c995; }
+    @keyframes pulse-rec { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
+
+    .seg {
+      display: inline-flex;
+      border: 1px solid var(--border-hi);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #0d1118;
+    }
+    .seg button {
+      background: transparent;
+      color: var(--ink-2);
+      border: none;
+      padding: 4px 8px;
+      font: 500 11px var(--sans);
+      cursor: pointer;
+    }
+    .seg button + button { border-left: 1px solid var(--border); }
+    .seg button.sel { background: var(--g-blue); color: #fff; font-weight: 700; }
+    .seg.nv button.sel { background: var(--nv-green); color: #091200; font-weight: 700; }
+
+    .pill {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--border-hi);
+      background: var(--panel-2);
+      color: var(--ink-2);
+      white-space: nowrap;
+    }
+    .pill.ok { background: rgba(52, 168, 83, 0.2); border-color: var(--g-green); color: #81c995; }
+    .pill.warn { background: rgba(251, 188, 4, 0.2); border-color: var(--g-yellow); color: #fde293; }
+    .pill.no { background: rgba(234, 67, 53, 0.2); border-color: var(--g-red); color: #f28b82; }
+
+    .viewport-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      background: #07090d;
+      display: flex;
+      flex-direction: column;
+    }
+    .vp-toolbar {
+      background: rgba(18, 23, 33, 0.92);
+      border-bottom: 1px solid var(--border);
+      padding: 5px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      z-index: 2;
+    }
+    .canvas-stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #rtx-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+    #bbox-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .vp-hud-tl {
+      position: absolute;
+      left: 10px;
+      top: 10px;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .vp-hud-tr {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    .vp-hud-bl {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      pointer-events: none;
+    }
+    .vp-hud-br {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      pointer-events: none;
+    }
+    .hud-tag {
+      background: rgba(11, 14, 20, 0.85);
+      border: 1px solid var(--border-hi);
+      backdrop-filter: blur(6px);
+      padding: 4px 8px;
+      border-radius: 5px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+    }
+    .qr-card {
+      display: flex;
+      gap: 9px;
+      align-items: center;
+      background: #0e131c;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px;
+    }
+    .qr-box {
+      width: 78px;
+      height: 78px;
+      background: #fff;
+      padding: 3px;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .qr-box svg { width: 100%; height: 100%; display: block; }
+    .slider-row {
+      display: grid;
+      grid-template-columns: 38px 1fr 46px;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--cyan);
+      height: 5px;
+      cursor: pointer;
+    }
+    .kv-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+    }
+    .kv-box {
+      background: #0d1118;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+    }
+    .kv-box .k { color: var(--ink-3); font-size: 9.5px; text-transform: uppercase; }
+    .kv-box .v { color: var(--ink); font-size: 12.5px; font-weight: 700; margin-top: 2px; }
+    .term-box {
+      background: #080b10;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      line-height: 1.4;
+      color: #b7c5dd;
+      white-space: pre-wrap;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 105px;
+    }
+    .bottom-bar {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr 390px;
+      gap: 6px;
+      min-height: 0;
+    }
+    .chart-cv {
+      width: 100%;
+      height: 124px;
+      background: #080b10;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      display: block;
+    }
+    .sub-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-3);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .sim2real-card {
+      background: #0d121b;
+      border: 1px solid var(--border-hi);
+      border-radius: 6px;
+      padding: 7px 9px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .tbl-mini {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 10.5px;
+    }
+    .tbl-mini th, .tbl-mini td {
+      padding: 3px 5px;
+      border-bottom: 1px solid #1b2333;
+      text-align: right;
+    }
+    .tbl-mini th:first-child, .tbl-mini td:first-child { text-align: left; }
+    .tbl-mini th { color: var(--ink-3); font-weight: 500; }
+  </style>
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+</head>
+<body>
+  <div class="studio">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="nv-badge">OPERON · OMNIVERSE RTX LAB</span>
+        <span>Sim-to-Real Teleop &amp; Apple Watch IMU Comparator</span>
+        <span class="pill ok" id="hz-readout">No Hardware Required · Firmware Quintic Contract</span>
+      </div>
+      <div class="row wrap">
+        <span class="sub-label">Station / Trajectory:</span>
+        <div class="seg" id="st-bar">
+          <button class="sel" data-st="0">🔋 1. Battery</button>
+          <button data-st="1">🔌 2. Side Charger</button>
+          <button data-st="2">🚰 3. Valve 90°</button>
+        </div>
+        <button class="btn sm" id="btn-snap" title="Magnet-align to target">🎯 Snap</button>
+        <button class="btn sm primary" id="btn-auto">▶ Auto Mission</button>
+        <button class="btn sm watch" id="btn-quintic" title="Run canonical firmware quintic trajectory (imu_calibration.yaml / wave.yaml)">⌚ Run Quintic Sweep</button>
+        <button class="btn sm" id="btn-grab">✊ Grab</button>
+        <button class="btn sm" id="btn-reset">↺ Reset</button>
+        <a class="btn sm" href="/#15" title="Return to DevFest Slide Deck">← Deck</a>
+      </div>
+    </header>
+
+    <!-- MAIN 3-COLUMN WORKSPACE -->
+    <div class="main-grid">
+      <!-- LEFT COLUMN: PHONE/WATCH RELAY + TELEOP + DOMAIN RANDOMIZATION -->
+      <section class="panel">
+        <div class="ph">
+          <span>📱 Phone / ⌚ Apple Watch Input</span>
+          <span class="pill" data-live="status">connecting…</span>
+        </div>
+        <div class="pb">
+          <div class="qr-card">
+            <div class="qr-box" data-live="qr"></div>
+            <div class="col" style="gap:2px;min-width:0">
+              <div style="font-weight:700;font-size:12px">Drive &amp; Stream Live IMU</div>
+              <a class="mono" data-live="url" target="_blank" rel="noopener" style="font-size:10.5px;color:var(--cyan);word-break:break-all"></a>
+              <div class="row" style="margin-top:2px">
+                <span class="pill" id="room-pill">Room MODESTO</span>
+                <span class="pill" id="team-pill">4D: 0 · 6D: 0</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row between">
+            <span class="sub-label">Control Mode</span>
+            <div class="seg" id="drive-mode">
+              <button class="sel" data-v="crowd">👥 Crowd</button>
+              <button data-v="pilot">🎮 Pilot</button>
+              <button data-v="joints">🔧 Motors</button>
+            </div>
+            <button class="btn sm" id="btn-dice" title="Pick random pilot">🎲</button>
+          </div>
+          <div id="pilot-list" class="row wrap" style="gap:4px"></div>
+          <div class="row between">
+            <span class="sub-label" id="cmd-src">Command: Presenter / Phone</span>
+            <span class="mono" id="active-phones" style="font-size:10.5px;color:var(--cyan)"></span>
+          </div>
+
+          <div id="pose-sliders" class="col" style="gap:3px;background:#0d1118;border:1px solid var(--border);border-radius:6px;padding:7px">
+            <div class="slider-row"><span>yaw</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
+            <div class="slider-row"><span>pitch</span><input type="range" data-p="pitch" min="-90" max="90" step="1" value="0"><span data-pv="pitch">0°</span></div>
+            <div class="slider-row"><span>roll</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
+            <div class="slider-row"><span>x (m)</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
+            <div class="slider-row"><span>y (m)</span><input type="range" data-p="y" min="-0.15" max="0.15" step="0.002" value="0.000"><span data-pv="y">0.000</span></div>
+            <div class="slider-row"><span>z (m)</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
+          </div>
+
+          <div class="ph" style="margin:2px -9px 0;border-top:1px solid var(--border)">
+            <span>⌚ Apple Watch / IMU Source (Sim2Real)</span>
+          </div>
+          <div class="sim2real-card">
+            <div class="row wrap" style="gap:4px">
+              <button class="btn sm watch" id="btn-synth-watch" title="Generate synthetic Apple Watch IMU with rotated frame (37°), 400ms lag, sync tap, and sensor noise">⌚ Synth Watch Run</button>
+              <label class="btn sm" style="cursor:pointer" title="Upload real Apple Watch SensorLog or Sensor Logger CSV">
+                📂 Load Watch CSV <input type="file" id="watch-file" accept=".csv" style="display:none" />
+              </label>
+              <button class="btn sm" id="btn-export-imu" title="Download sim_imu.csv + watch.csv for compare.py">⬇ CSVs</button>
+            </div>
+            <div class="row between" style="font-family:var(--mono);font-size:10.5px;color:var(--ink-2)">
+              <span id="watch-status">Mode: Live Sim + Synthetic Watch Twin</span>
+              <span id="watch-lag-pill" class="pill ok">Δt: +0.0 ms</span>
+            </div>
+          </div>
+
+          <div class="ph" style="margin:2px -9px 0;border-top:1px solid var(--border)">
+            <span>🎲 Omniverse Domain Randomization</span>
+            <button class="btn sm nv" id="btn-dr-rand">⚡ Randomize</button>
+          </div>
+          <div class="col" style="gap:4px">
+            <div class="slider-row"><span>Light</span><input type="range" id="dr-light" min="0.3" max="4.5" step="0.1" value="2.4"><span id="drv-light">2.4x</span></div>
+            <div class="slider-row"><span>Sun°</span><input type="range" id="dr-azi" min="-180" max="180" step="5" value="35"><span id="drv-azi">35°</span></div>
+            <div class="slider-row"><span>Rough</span><input type="range" id="dr-rough" min="0.05" max="0.95" step="0.05" value="0.28"><span id="drv-rough">0.28</span></div>
+            <div class="row between" style="margin-top:2px">
+              <button class="btn sm" id="btn-dr-pose">🔀 Perturb Target</button>
+              <button class="btn sm on" id="btn-bboxes">2D/3D BBoxes: ON</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CENTER COLUMN: OMNIVERSE RTX / REPLICATOR AOV VIEWPORT -->
+      <section class="panel">
+        <div class="viewport-wrap">
+          <div class="vp-toolbar">
+            <div class="row wrap">
+              <span class="sub-label">Omniverse Replicator AOV:</span>
+              <div class="seg nv" id="aov-bar">
+                <button class="sel" data-aov="rtx">✨ RTX Lit (PBR)</button>
+                <button data-aov="depth">📏 Linear Depth (Z)</button>
+                <button data-aov="normal">🧭 Surface Normals</button>
+                <button data-aov="semantic">🎨 Semantic ID</button>
+                <button data-aov="instance">🧩 Instance ID</button>
+              </div>
+            </div>
+            <div class="row">
+              <button class="btn sm" id="btn-cam-reset">🎥 Reset Cam</button>
+              <button class="btn sm" id="btn-snap-png" title="Capture current AOV frame">📸 Snapshot</button>
+            </div>
+          </div>
+
+          <div class="canvas-stage" id="canvas-stage">
+            <canvas id="rtx-canvas" width="1120" height="600"></canvas>
+            <canvas id="bbox-overlay" width="1120" height="600"></canvas>
+            <div class="vp-hud-tl">
+              <div class="hud-tag"><b style="color:var(--g-yellow)">4-DOF</b> Abel-Arm + Forearm ⌚ IMU Site (<span id="j4-str">0, 0, 0, 0</span>)</div>
+              <div class="hud-tag" id="aov-desc">Pass: RTX PBR Metallic-Roughness + Soft Shadows + Env IBL</div>
+            </div>
+            <div class="vp-hud-tr">
+              <div class="hud-tag"><b style="color:var(--cyan)">6-DOF</b> Spherical Wrist (<span id="j6-str">0, 0, 0, 0, 0, 0</span>)</div>
+              <div class="hud-tag" id="fps-tag">60 FPS · SimReady USD Prop + Forearm IMU Active</div>
+            </div>
+            <div class="vp-hud-bl" id="verdict-4"></div>
+            <div class="vp-hud-br" id="verdict-6"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: SIM-VS-WATCH COMPARATOR + NEMO FLEET GATE + RECORDER -->
+      <section class="panel">
+        <div class="ph">
+          <span>🔬 Telemetry Comparator &amp; Dataset Export</span>
+          <span class="pill" id="rec-badge">IDLE · 0 frames</span>
+        </div>
+        <div class="pb">
+          <div class="row" style="gap:5px">
+            <button class="btn rec" id="btn-rec" style="flex:1;justify-content:center;padding:6px">⏺ Record Episode (30 Hz)</button>
+            <button class="btn sm" id="btn-clear-ep" title="Clear recorded buffer">🗑 Clear</button>
+          </div>
+
+          <!-- SIM VS REAL / WATCH IMU COMPARISON TABLE -->
+          <div class="sim2real-card">
+            <div class="row between">
+              <span class="sub-label" style="color:var(--cyan)">⌚ Sim vs Watch/Real IMU (Wahba Aligned)</span>
+              <span class="mono" id="wahba-ang" style="font-size:10px;color:var(--ink-2)">Frame R: 37.0°</span>
+            </div>
+            <table class="tbl-mini">
+              <thead>
+                <tr><th>Channel</th><th>Unit</th><th>RMSE</th><th>MAE</th><th>Pearson r</th></tr>
+              </thead>
+              <tbody id="imu-metrics-body">
+                <tr><td>|accel|</td><td>m/s²</td><td id="m-acc-rmse">0.031</td><td id="m-acc-mae">0.024</td><td id="m-acc-r" style="color:#81c995">0.998</td></tr>
+                <tr><td>|gyro|</td><td>rad/s</td><td id="m-gyr-rmse">0.012</td><td id="m-gyr-mae">0.009</td><td id="m-gyr-r" style="color:#81c995">0.999</td></tr>
+                <tr><td>4D vs 6D</td><td>mm / °</td><td id="m-dof-pos">0 mm</td><td id="m-dof-ori">0.0°</td><td id="m-dof-w" style="color:var(--g-yellow)">w=0.05</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- NEMOFLEET SYSTEM 1 / SYSTEM 2 GATE -->
+          <div class="sim2real-card">
+            <div class="row between">
+              <span class="sub-label" style="color:#9be61d">🧠 NemoFleet Action-Probability Gate</span>
+              <span class="pill ok" id="nemo-tier">System 1 · Local Reflex</span>
+            </div>
+            <div class="row between" style="font-family:var(--mono);font-size:10.5px">
+              <span>p(action): <b id="nemo-prob">0.94</b> (τ=0.78)</span>
+              <span>Teacher spend: <b id="nemo-cost">$0.0000</b></span>
+            </div>
+            <div class="mono" id="nemo-rationale" style="font-size:10px;color:var(--ink-2);line-height:1.35">
+              Trajectory within calibrated envelope → settled locally on-robot (0 cloud tokens).
+            </div>
+          </div>
+
+          <div class="row wrap" style="gap:4px">
+            <button class="btn sm primary" id="exp-lerobot">⬇ LeRobot (.jsonl)</button>
+            <button class="btn sm nv" id="exp-usd">⬇ OpenUSD (.usda)</button>
+            <button class="btn sm" id="exp-coco">⬇ Replicator (.json)</button>
+          </div>
+
+          <div class="row between">
+            <span class="sub-label">Inspector:</span>
+            <div class="seg" id="schema-tabs">
+              <button class="sel" data-s="lerobot">LeRobot Step</button>
+              <button data-s="usd">OpenUSD (.usda)</button>
+              <button data-s="coco">Replicator AOV</button>
+              <button data-s="sim2real">compare.py Report</button>
+            </div>
+          </div>
+          <div class="term-box" id="schema-preview"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- BOTTOM TELEMETRY STRIP -->
+    <footer class="bottom-bar">
+      <section class="panel">
+        <div class="ph">
+          <span>⌚ Forearm IMU Overlay: <b style="color:var(--cyan)">■ Sim Analytic/Isaac</b> vs <b style="color:var(--coral)">■ Apple Watch / Phone IMU</b> + <b style="color:var(--magenta)">■ Residual</b></span>
+          <div class="seg" id="imu-chart-mode">
+            <button class="sel" data-ic="acc">Accel |a| (m/s²)</button>
+            <button data-ic="gyro">Gyro |ω| (rad/s)</button>
+            <button data-ic="psd">Welch PSD (Hz)</button>
+          </div>
+        </div>
+        <div class="pb" style="padding:5px 9px">
+          <canvas class="chart-cv" id="chart-imu" width="600" height="124"></canvas>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="ph">
+          <span>🎯 4-DOF vs 6-DOF End-Effector Divergence &amp; Firmware Quintic Velocity</span>
+          <span class="mono" id="div-readout" style="font-size:10.5px;color:var(--g-yellow)">Δori: 0.0° · peak |dq|: 0°/s</span>
+        </div>
+        <div class="pb" style="padding:5px 9px">
+          <canvas class="chart-cv" id="chart-err" width="480" height="124"></canvas>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="ph">
+          <span>🏷️ Semantic / Instance Registry &amp; Sim2Real Contract</span>
+        </div>
+        <div class="pb" style="padding:6px 10px;font-family:var(--mono);font-size:10.5px;gap:3px" id="sem-legend">
+          <div class="row between"><span><b style="color:#fbbc04">■</b> class_1: robot_arm_4dof</span><span>/World/abel_arm</span></div>
+          <div class="row between"><span><b style="color:#ff5d5d">■</b> sensor: forearm_imu (Watch site)</span><span>/World/abel_arm/forearm_imu</span></div>
+          <div class="row between"><span><b style="color:#4285f4">■</b> class_2: robot_arm_6dof</span><span>/World/ur_6dof_arm</span></div>
+          <div class="row between"><span><b style="color:#34a853">■</b> class_3: battery_cell</span><span>instances #30, #31</span></div>
+          <div class="row between"><span><b style="color:#57caff">■</b> class_4: charger_dock</span><span>instances #40, #41</span></div>
+          <div class="row between"><span><b style="color:#ea4335">■</b> class_5: valve_wheel</span><span>instances #50, #51</span></div>
+          <div class="row between"><span><b style="color:#a142f4">■</b> class_6: simready_toolbox</span><span>NVIDIA SimReady USD</span></div>
+        </div>
+      </section>
+    </footer>
+  </div>
+
+  <script type="module" src="./teleop-studio.js"></script>
+</body>
+</html>

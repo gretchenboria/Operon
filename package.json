@@ -1,0 +1,15 @@
+{
+  "name": "operon",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Operon — Browser-native Omniverse RTX Teleop & Sim-to-Real Telemetry Comparator (Phone / Apple Watch IMU vs. Firmware Quintic & Isaac Analytic Twin, LeRobot, OpenUSD, NemoFleet Action-Probability Gate)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "deploy": "gcloud run deploy operon --source . --project gen-lang-client-0221638641 --region us-central1 --allow-unauthenticated --min-instances 0 --max-instances 1 --cpu 1 --memory 512Mi --concurrency 1000 --timeout 3600 --quiet"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
