@@ -373,17 +373,25 @@ try {
   }
 } catch {}
 
-$("enable-tilt").addEventListener("click", async () => {
-  await acquireWatchWakeLock();
+async function activateMotionSensorsFromUserGesture() {
   try {
+    if (!window.isSecureContext) throw new Error("needs https");
+    // CRITICAL FOR iOS / watchOS WebKit:
+    // DeviceOrientationEvent.requestPermission() and DeviceMotionEvent.requestPermission()
+    // MUST be invoked synchronously on the very first line of the click/touchend handler
+    // BEFORE any other `await` (like wakeLock), otherwise Safari drops the transient user-activation token!
+    const permPromises = [];
     if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
-      const r = await DeviceOrientationEvent.requestPermission();
-      if (r !== "granted") throw new Error("denied");
+      permPromises.push(DeviceOrientationEvent.requestPermission().catch(() => "denied"));
     }
     if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
-      try { await DeviceMotionEvent.requestPermission(); } catch {}
+      permPromises.push(DeviceMotionEvent.requestPermission().catch(() => "denied"));
     }
-    if (!window.isSecureContext) throw new Error("needs https");
+    const results = permPromises.length ? await Promise.all(permPromises) : ["granted"];
+    if (results.every(r => r !== "granted")) {
+      throw new Error("permission denied");
+    }
+
     window.addEventListener("deviceorientation", onOrient);
     window.addEventListener("devicemotion", onMotion);
     tiltOn = true; zero = null; fusedAtt = { yaw: 0, pitch: 0, roll: 0, lastT: 0 };
@@ -392,13 +400,21 @@ $("enable-tilt").addEventListener("click", async () => {
     $("tilt-box")?.classList.remove("hide");
     $("enable-tilt").textContent = T("Wrist IMU + Screen Wake Lock Active ✓", "IMU + Pantalla Activa ✓");
     $("enable-tilt").classList.add("light");
+
+    // Acquire Screen Wake Lock & WebAudio keep-alive AFTER sensor permission is granted
+    acquireWatchWakeLock();
   } catch (err) {
-    $("enable-tilt").textContent = T(`Tilt unavailable (${err.message}): use sliders`, `Sin inclinación (${err.message}): usa deslizadores`);
+    $("enable-tilt").textContent = T(`Tap here to allow Wrist Motion (${err.message})`, `Toca aquí para activar sensor (${err.message})`);
     openManual();
   }
-});
+}
+
+$("enable-tilt").addEventListener("click", activateMotionSensorsFromUserGesture);
+
+// Also trigger sensor permission on the first tap of Zero, Align, or Grasp if not yet active
 $("zero").addEventListener("click", () => {
-  acquireWatchWakeLock();
+  if (!tiltOn) activateMotionSensorsFromUserGesture();
+  else acquireWatchWakeLock();
   zero = lastO ? { ...lastO } : { a: fusedAtt.yaw, b: fusedAtt.pitch, g: fusedAtt.roll };
   pose.yaw = pose.pitch = pose.roll = 0;
   readout();
