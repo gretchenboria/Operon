@@ -287,7 +287,7 @@ function triggerWatchGraspToggle(gestureName = "Watch GRASP/RELEASE") {
   }
   if (navigator.vibrate) navigator.vibrate(35);
 }
-let deskGain = 2.4; // Default 2.4x Smooth Mode: comfortable, steady wrist movement without over-sensitivity
+let deskGain = 1.5; // 1:1 natural proportion so the robot never moves more than your hand
 let wearMode = "left"; // "left" (Left Wrist Watch) | "right" (Right Wrist Watch) | "phone" (Phone in Hand)
 let flipLR = 1, flipUD = 1;
 let fusedAtt = { yaw: 0, pitch: 0, roll: 0, lastT: 0 };
@@ -380,20 +380,18 @@ function mapDeviceAnglesToRobot(rawYaw, rawPitch, rawRoll) {
   const y = dz(wrap90(rawYaw), 2.2), p = dz(wrap90(rawPitch), 2.2), r = dz(wrap90(rawRoll), 2.2);
   let lrDeg, udDeg, twistDeg;
   if (wearMode === "left") {
-    // Left Wrist Watch held comfortably facing screen: sideways tilt (r) + yaw sweep (y) both steer L/R across both pads
-    lrDeg = (-y * 0.85 + r * 0.95) * flipLR;
-    udDeg = (p * 0.95) * flipUD;
-    twistDeg = r * 0.95;
+    // Pure 1:1 natural tilt without roll-twist cross-coupling
+    lrDeg = (-y * 0.80 + r * 0.22) * flipLR;
+    udDeg = (p * 0.82) * flipUD;
+    twistDeg = 0;
   } else if (wearMode === "right") {
-    // Right Wrist Watch (+X_device points left toward fingers)
-    lrDeg = (-y * 0.85 - r * 0.95) * flipLR;
-    udDeg = (-p * 0.95) * flipUD;
-    twistDeg = -r * 0.95;
+    lrDeg = (-y * 0.80 - r * 0.22) * flipLR;
+    udDeg = (-p * 0.82) * flipUD;
+    twistDeg = 0;
   } else {
-    // Phone held in hand pointing at screen
-    lrDeg = (-y * 0.85 - r * 0.95) * flipLR;
-    udDeg = (p * 0.95) * flipUD;
-    twistDeg = r * 0.95;
+    lrDeg = (-y * 0.75 - r * 0.35) * flipLR;
+    udDeg = (p * 0.82) * flipUD;
+    twistDeg = 0;
   }
   const targetYaw = clamp(lrDeg * deskGain, -80, 80);
   const targetPitch = clamp(udDeg * deskGain, -70, 70);
@@ -441,35 +439,16 @@ function onMotion(e) {
     : 0;
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
 
-  // Forearm Tendon Grasp & Release Detector (MMG + Tenodesis Envelope):
-  // - Tracks adaptive moving-average baseline (baseDa3D, baseUa) so smooth wrist tilting never auto-fires in the background
-  // - Integrates true tendon contraction above baseline (excessDa, excessUa, tendon roll gx, or clench impulse aDelta > 1.8) smoothly to 1.0 (~110 ms) with NO poisedMs or speed lockouts!
-  const steerRate = Math.hypot(pose.gy, pose.gz);
-  const excessDa = Math.max(0, da3D - baseDa3D);
-  const excessUa = Math.max(0, uaMag - baseUa);
-  if (excessDa < 0.35) baseDa3D = 0.92 * baseDa3D + 0.08 * da3D;
-  if (excessUa < 0.30) baseUa = 0.92 * baseUa + 0.08 * uaMag;
-
-  if (now - lastGrabActionMs > 620 && steerRate < 1.35) {
-    const crispTendon = excessDa > 0.62 || excessUa > 0.52 || aDelta > 1.80 || Math.abs(pose.gx) > 1.45;
-    const tendonSignal = Math.max(excessDa - 0.24, excessUa - 0.20, Math.abs(pose.gx) - 0.68);
-    if (crispTendon) {
+  // Pure Forearm Tendon Impulse Detector (NO gyro roll/twist trigger, NO low-threshold background accumulator):
+  // - Only fires when the wrist is held steady (gMag < 0.78 rad/s, so tilting/moving the arm NEVER auto-grasps)
+  // - Requires a deliberate forearm tendon contraction impulse (da3D > 0.95 m/s² or uaMag > 0.78 m/s²) with 950 ms debounce
+  if (now - lastGrabActionMs > 950 && gMag < 0.78) {
+    if (da3D > 0.95 || uaMag > 0.78) {
       squeezeProgress = 0;
       triggerWatchGraspToggle(pose.g ? "Tendon Release" : "Tendon Grasp");
-    } else if (tendonSignal > 0) {
-      const rate = Math.min(10.5, 5.2 + tendonSignal * 8.0);
-      squeezeProgress = Math.min(1.0, squeezeProgress + rate * dt);
-      if (squeezeProgress >= 1.0) {
-        squeezeProgress = 0;
-        triggerWatchGraspToggle(pose.g ? "Tendon Release" : "Tendon Grasp");
-      }
-    } else {
-      squeezeProgress = Math.max(0, squeezeProgress - 2.4 * dt);
     }
-  } else {
-    squeezeProgress = Math.max(0, squeezeProgress - 3.2 * dt);
   }
-  pose.squeeze = +squeezeProgress.toFixed(2);
+  pose.squeeze = 0;
 
   // Use hypot(ax, az) in denominator so watch face verticality (az crossing 0) NEVER flips +/-180 deg!
   const accElev = wearMode === "phone"

@@ -416,23 +416,9 @@ const server = http.createServer((req, res) => {
         room.lastImuMs = nowMs;
         const da3D = room.prevImuAcc ? Math.hypot(ax - room.prevImuAcc[0], ay - room.prevImuAcc[1], az - room.prevImuAcc[2]) : 0;
         room.prevImuAcc = [ax, ay, az];
-        const steerRate = Math.hypot(gy, gz);
-        const aDelta = Math.abs(aMag - 9.80665);
-        const baseDa = room.baseDa3D ?? 0.10;
-        const excessDa = Math.max(0, da3D - baseDa);
-        if (excessDa < 0.35) room.baseDa3D = 0.92 * baseDa + 0.08 * da3D;
-        const crispTendon = excessDa > 0.62 || aDelta > 1.80 || Math.abs(gx) > 1.45;
-        const tendonSignal = Math.max(excessDa - 0.24, Math.abs(gx) - 0.68);
-        if (steerRate < 1.35 && crispTendon) {
-          room.squeezeProgress = 1.0;
-        } else if (steerRate < 1.35 && tendonSignal > 0) {
-          const fillRate = Math.min(10.5, 5.2 + tendonSignal * 8.0);
-          room.squeezeProgress = Math.min(1.0, (room.squeezeProgress || 0) + fillRate * dtS);
-        } else {
-          room.squeezeProgress = Math.max(0.0, (room.squeezeProgress || 0) - 2.4 * dtS);
-        }
+        room.squeezeProgress = 0;
         let grabToggle = 0, gesture = "";
-        const naturalGraspDone = (room.squeezeProgress >= 1.0) && (nowMs - (room.lastImuGrabMs || 0) > 650);
+        const naturalGraspDone = (gMag < 0.78 && da3D > 0.95) && (nowMs - (room.lastImuGrabMs || 0) > 950);
         if (body.grabToggle || naturalGraspDone) {
           room.squeezeProgress = 0;
           room.lastImuGrabMs = nowMs;
