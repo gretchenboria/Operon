@@ -135,7 +135,12 @@ class Room {
     this.sockets.add(ws);
 
     if (role === "deck") {
-      try { ws.send(JSON.stringify({ t: "presence", phones: this.phoneIds() })); } catch {}
+      try {
+        ws.send(JSON.stringify({ t: "presence", phones: this.phoneIds() }));
+        ws.send(JSON.stringify({ t: "isaac_status", connected: this.getWebSockets("isaac").length > 0 }));
+      } catch {}
+    } else if (role === "isaac") {
+      this.toDecks({ t: "isaac_status", connected: true, from: id });
     } else {
       if (this.state) {
         try { ws.send(JSON.stringify(this.state)); } catch {}
@@ -155,16 +160,29 @@ class Room {
   }
 
   onMessage(ws, raw) {
-    if (typeof raw !== "string" || raw.length > MAX_MSG) return;
+    const me = ws.meta || {};
+    const maxLen = me.role === "isaac" ? 262144 : me.role === "deck" ? 8192 : MAX_MSG;
+    if (typeof raw !== "string" || raw.length > maxLen) return;
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-    const me = ws.meta || {};
     if (msg.t === "ping") {
       try { ws.send('{"t":"pong"}'); } catch {}
       return;
     }
 
+    if (me.role === "isaac") {
+      msg.from = me.id;
+      this.toDecks(msg);
+      return;
+    }
+
     if (me.role === "deck") {
+      if (msg.t === "isaac_cmd") {
+        for (const sim of this.getWebSockets("isaac")) {
+          try { sim.send(raw); } catch {}
+        }
+        return;
+      }
       if (msg.to) {
         for (const p of this.getWebSockets(`id:${msg.to}`)) {
           try { p.send(raw); } catch {}
@@ -208,7 +226,9 @@ class Room {
         (!tag || s.meta.role === tag || `id:${s.meta.id}` === tag)
     );
 
-    if (me.role === "phone") {
+    if (me.role === "isaac") {
+      this.toDecks({ t: "isaac_status", connected: others("isaac").length > 0 });
+    } else if (me.role === "phone") {
       if (!others(`id:${me.id}`).length) this.toDecks({ t: "leave", from: me.id });
       this.toDecks({
         t: "presence",
@@ -496,7 +516,8 @@ server.on("upgrade", (req, socket, head) => {
     return;
   }
 
-  const role = url.searchParams.get("role") === "deck" ? "deck" : "phone";
+  const rawRole = url.searchParams.get("role");
+  const role = rawRole === "deck" ? "deck" : rawRole === "isaac" ? "isaac" : "phone";
 
   const room = getRoom(code);
   if (role === "phone" && room.getWebSockets("phone").length >= MAX_PHONES) {

@@ -1265,6 +1265,39 @@ function renderPilots() {
 }
 
 onLive((m) => {
+  if (m.t === "isaac_status") {
+    st.isaacConnected = !!m.connected;
+    if (st.isaacConnected && st.isaacViewEnabled === undefined) st.isaacViewEnabled = true;
+    if (!st.isaacConnected) {
+      if ($("rtx-stream-overlay")) $("rtx-stream-overlay").classList.add("hide");
+      if ($("btn-rtx-bridge")) {
+        $("btn-rtx-bridge").className = "btn sm";
+        $("btn-rtx-bridge").textContent = "RTX: Shadow Bridge";
+      }
+    } else if ($("btn-rtx-bridge")) {
+      $("btn-rtx-bridge").className = "btn sm on";
+      $("btn-rtx-bridge").textContent = "RTX: Shadow LIVE";
+    }
+    return;
+  }
+  if (m.t === "isaac_frame") {
+    st.isaacConnected = true;
+    st.isaacLastFrameMs = performance.now();
+    if (st.isaacViewEnabled === undefined) st.isaacViewEnabled = true;
+    if (m.imu) st.isaacImu = m.imu;
+    const overlay = $("rtx-stream-overlay");
+    if (overlay && m.jpg && st.isaacViewEnabled) {
+      overlay.src = `data:image/jpeg;base64,${m.jpg}`;
+      overlay.classList.remove("hide");
+    }
+    if ($("btn-rtx-bridge")) {
+      $("btn-rtx-bridge").className = st.isaacViewEnabled ? "btn sm on" : "btn sm";
+      $("btn-rtx-bridge").textContent = st.isaacViewEnabled
+        ? `RTX: LIVE (${m.fps || 20}fps)`
+        : "RTX: Paused (WebGL)";
+    }
+    return;
+  }
   if (m.t === "status") {
     const n = (m.phones || []).length;
     statusEl.className = `pill ${m.status === "live" ? "ok" : "warn"}`;
@@ -1830,6 +1863,31 @@ document.querySelectorAll("details.drawer").forEach(det => {
     if (det.open) det.scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
 });
+
+if ($("btn-rtx-bridge")) {
+  $("btn-rtx-bridge").onclick = () => {
+    if (st.isaacConnected) {
+      st.isaacViewEnabled = !st.isaacViewEnabled;
+      const overlay = $("rtx-stream-overlay");
+      if (overlay) overlay.classList.toggle("hide", !st.isaacViewEnabled);
+      $("btn-rtx-bridge").className = st.isaacViewEnabled ? "btn sm on" : "btn sm";
+      $("btn-rtx-bridge").textContent = st.isaacViewEnabled ? "RTX: Shadow LIVE" : "RTX: Paused (WebGL)";
+    } else {
+      const wsProto = location.protocol === "https:" ? "wss" : "ws";
+      const cmd = `python sim/shadow_rtx_bridge.py --server ${wsProto}://${location.host} --room ${ROOM}`;
+      navigator.clipboard?.writeText(cmd);
+      $("btn-rtx-bridge").textContent = "Copied Shadow Command";
+      if ($("watch-status")) {
+        $("watch-status").textContent = `Copied: ${cmd}`;
+      }
+      setTimeout(() => {
+        if (!st.isaacConnected && $("btn-rtx-bridge")) {
+          $("btn-rtx-bridge").textContent = "RTX: Shadow Bridge";
+        }
+      }, 2200);
+    }
+  };
+}
 $("btn-bboxes").onclick = () => {
   st.showBBoxes = !st.showBBoxes;
   $("btn-bboxes").textContent = `2D/3D BBoxes: ${st.showBBoxes ? "ON" : "OFF"}`;
@@ -2538,6 +2596,7 @@ function tick(now) {
   const vRight = evaluateArm(6, fRight, dt);
 
   // Forearm IMU analytic prediction on active forearm link (sim/isaac_replay.py:forearm_fk)
+  // Upgraded automatically to live Omniverse PhysX IMUSensor when Shadow PC bridge is connected!
   const siteLeft = forearmSiteFK(is4v6 ? st.q4 : st.q6.slice(0, 4));
   const siteRight = forearmSiteFK(st.q6Real.slice(0, 4));
   const site = st.quinticPlan ? forearmSiteFK(st.q4) : siteRight;
@@ -2547,15 +2606,34 @@ function tick(now) {
   // Proper acceleration includes +g_up reaction in world frame, rotated into forearm site frame: R^T * (a_world + [0,0,G0])
   const aProperWorld = [siteAccWorld[0], siteAccWorld[1], siteAccWorld[2] + G0];
   const Rt = [site.R[0], site.R[3], site.R[6], site.R[1], site.R[4], site.R[7], site.R[2], site.R[5], site.R[8]];
-  const simAcc = applyMat3(Rt, aProperWorld);
+  let simAcc = applyMat3(Rt, aProperWorld);
   // Body angular velocity from R^T * Rdot
   const Rdot = site.R.map((r, i) => (r - prevSiteR[i]) / dt);
-  const simGyro = [
+  let simGyro = [
     Rt[6] * Rdot[3] + Rt[7] * Rdot[4] + Rt[8] * Rdot[5],
     Rt[0] * Rdot[6] + Rt[1] * Rdot[7] + Rt[2] * Rdot[8],
     Rt[3] * Rdot[0] + Rt[4] * Rdot[1] + Rt[5] * Rdot[2]
   ];
   prevSiteP = site.p.slice(); prevSiteV = siteVel; prevSiteR = site.R.slice();
+
+  if (st.isaacConnected && st.isaacImu && (now - (st.isaacLastFrameMs || 0) < 2500)) {
+    simAcc = [st.isaacImu.ax || 0, st.isaacImu.ay || 0, st.isaacImu.az || G0];
+    simGyro = [st.isaacImu.gx || 0, st.isaacImu.gy || 0, st.isaacImu.gz || 0];
+  }
+
+  if (st.isaacConnected && (now - (st.lastIsaacCmdMs || 0) >= 50)) {
+    st.lastIsaacCmdMs = now;
+    send({
+      t: "isaac_cmd",
+      q4: st.q4.map(v => +v.toFixed(4)),
+      q6: st.q6Real.map(v => +v.toFixed(4)),
+      closed: st.closed,
+      aov: st.aov,
+      light: +$("dr-light").value,
+      angle: +$("dr-angle").value,
+      rough: +$("dr-rough").value
+    });
+  }
 
   // Real Watch IMU source only: (a) Live Phone/Watch DeviceMotion/SensorLogger stream, or (b) Uploaded Watch CSV.
   // Never fabricate synthetic random watch noise when no Watch source is active.

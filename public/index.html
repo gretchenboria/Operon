@@ -472,6 +472,19 @@
       display: inline-block;
     }
 
+    .rtx-stream-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .rtx-stream-overlay.hide {
+      display: none;
+    }
+
     /* Live 3D Raycast Hover Probe HUD */
     .scene-hover-probe {
       position: fixed;
@@ -926,6 +939,7 @@
               </div>
             </div>
             <div class="glass-bar">
+              <button class="btn sm" id="btn-rtx-bridge" title="Shadow PC Omniverse RTX Bridge: Click to copy the Shadow PC launch command, or toggle between Live RTX Stream and Local WebGL when connected">RTX: Shadow Bridge</button>
               <button class="btn sm on" id="btn-gizmo-toggle" title="Toggle 3D Yaw, Pitch, Roll Axis Gizmo on the grippers">3D Axes: ON</button>
               <button class="btn sm" id="btn-cam-reset" title="Reset camera orbit to close-up front isometric view">Reset Camera</button>
               <button class="btn sm nv" id="btn-expand-canvas" title="Cycle 3D Canvas Size: Standard -> Wide -> Fullscreen">Expand 3D</button>
@@ -949,6 +963,7 @@
           <!-- 3D WebGL Stage -->
           <div class="canvas-stage" id="canvas-stage">
             <canvas id="rtx-canvas" width="1120" height="720"></canvas>
+            <img id="rtx-stream-overlay" class="rtx-stream-overlay hide" alt="Omniverse RTX Live Stream" />
             <canvas id="bbox-overlay" width="1120" height="720"></canvas>
           </div>
 
