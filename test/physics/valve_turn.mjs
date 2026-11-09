@@ -1,0 +1,46 @@
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+// Station 2: the ARM turns the handwheel. There is no actuator on the stem,
+// so every degree comes from contact between the jaws and the wheel.
+import fs from "node:fs"; import path from "node:path";
+const ROOT=REPO;
+globalThis.fetch=async u=>new Response(fs.readFileSync(path.join(ROOT,"public",String(u)),"utf8"),{status:200});
+const { initPhysics } = await import(`${ROOT}/public/mujoco-physics.js`);
+const { ik6 } = await import(`${ROOT}/public/demos/arms3d.js`);
+const FRAME=1/60, D2R=Math.PI/180;
+const nrm=a=>{const l=Math.hypot(...a);return[a[0]/l,a[1]/l,a[2]/l];};
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const fromZX=(z,x)=>{z=nrm(z);x=nrm(x);const y=cross(z,x);return[x[0],y[0],z[0],x[1],y[1],z[1],x[2],y[2],z[2]];};
+const mul=(a,b)=>{const r=new Array(9);for(let i=0;i<3;i++)for(let j=0;j<3;j++)r[i*3+j]=a[i*3]*b[j]+a[i*3+1]*b[3+j]+a[i*3+2]*b[6+j];return r;};
+const Rx=t=>[1,0,0,0,Math.cos(t),-Math.sin(t),0,Math.sin(t),Math.cos(t)];
+let fail=0; const ok=(c,m)=>{console.log(`${c?"  PASS":"  FAIL"}  ${m}`);if(!c)fail++;};
+const p=await initPhysics({vendorBase:`${ROOT}/node_modules/mujoco/`,modelUrl:"/models/operon_station0.xml",rigs:[6]});
+const B=p.arms[6]; B.setStation(2);
+const settle=s=>{const n=Math.round(s/FRAME);for(let i=0;i<n;i++)B.advance(FRAME);};
+const goto=(p3,R,grip,s)=>{const q=ik6(p3,R,B.read().q).q;B.setArmTarget(q);if(grip!==undefined)B.setGripTarget(grip);settle(s);};
+const BASE=fromZX([1,0,0],[0,0,1]);   // tool z = +X (the station's approach axis)
+const HUB=[0.172,0,0.140];
+console.log("engage the hub and roll the tool about the wheel axis\n");
+B.teleportTo(ik6([0.110,0,0.150],BASE).q,1); settle(0.4);
+ok(Math.abs(B.read().valveRad)/D2R < 1, "wheel starts closed at 0 deg");
+goto([HUB[0]-0.05,0,HUB[2]],BASE,1,0.7);
+goto(HUB,BASE,1,0.7);
+goto(HUB,BASE,0,0.6);
+const cl=B.read();
+console.log(`  engaged: contacts ${cl.contacts}, pads ${cl.padLoadN.map(v=>v.toFixed(1)).join("/")} N, grip ${cl.gripForceN.toFixed(1)} N`);
+ok(cl.contacts>2,"jaws are mechanically engaged with the wheel");
+for(let d=3; d<=95; d+=3) goto(HUB, mul(Rx(d*D2R),BASE), 0, 0.10);
+const spun=Math.abs(B.read().valveRad)/D2R;
+console.log(`  wheel wound to ${spun.toFixed(1)} deg by the arm alone (no stem actuator)`);
+ok(spun>75,`handwheel driven past the 90 deg task threshold (${spun.toFixed(1)} deg)`);
+goto(HUB, mul(Rx(95*D2R),BASE), 1, 0.5);
+goto([HUB[0]-0.06,0,HUB[2]], mul(Rx(95*D2R),BASE), 1, 0.9);
+settle(1.5);
+const hold=Math.abs(B.read().valveRad)/D2R;
+console.log(`  after release + retreat: ${hold.toFixed(1)} deg`);
+ok(hold>75,"wheel stays open after the arm lets go (packed stem friction)");
+settle(3.0);
+ok(Math.abs(Math.abs(B.read().valveRad)/D2R - hold)<2,"no drift 3 s later");
+console.log(`\n${fail===0?"VALVE TURNED BY THE ARM - PASSED":fail+" FAILED"}`);
+B.dispose(); process.exitCode=fail===0?0:1;
