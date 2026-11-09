@@ -1,24 +1,14 @@
-Copyright (c) 2026 Gretchen Boria, PhD. All Rights Reserved.
+Personal Testing & Non-Commercial Research License
 
-PROPRIETARY AND CONFIDENTIAL COMMERCIAL SOFTWARE LICENSE
+Copyright (c) 2026 Gretchen Boria, PhD
 
-NOTICE: This software, source code, algorithms, kinematic models, firmware
-quintic trajectory contracts, Sim-to-Real IMU calibration pipelines, and
-associated documentation ("Operon") are the exclusive proprietary property
-of Gretchen Boria, PhD ("Licensor").
+Permission is hereby granted, free of charge, to any individual, student, researcher, or hobbyist obtaining a copy of this software and associated documentation files (the "Software" or "Operon") to use, copy, modify, and run the Software for personal testing, educational study, and non-commercial academic or hobbyist robotics research, subject to the following conditions:
 
-1. NO FREE OR OPEN-SOURCE GRANT
-   Operon is commercial, licensed software — NOT freeware or open-source.
-   No license or right is granted without an active, paid commercial license
-   subscription or enterprise agreement executed with Licensor.
+1. Non-Commercial Use Only
+   The Software and any datasets, trajectories, calibration matrices, or OpenUSD files exported from it may be used solely for personal testing, evaluation, and non-commercial research. Commercial deployment, commercial dataset generation, or resale of the Software requires a separate written commercial agreement from the copyright holder.
 
-2. RESTRICTIONS
-   Without a valid commercial license, you may NOT:
-   (a) copy, modify, distribute, sublicense, or host this software;
-   (b) export LeRobot (.jsonl), OpenUSD (.usda), Omniverse Replicator (.json),
-       or calibrated Sim-to-Real IMU datasets for commercial or production use;
-   (c) reverse-engineer, decompile, or extract the underlying kinematic,
-       Wahba/SVD alignment, or NemoFleet action-probability gating models.
+2. Attribution
+   The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-3. COMMERCIAL LICENSING
-   For Pro, Lab, or Enterprise Fleet licensing inquiries, contact Gretchen Boria, PhD.
+3. Disclaimer of Warranty
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

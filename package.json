@@ -1,10 +1,14 @@
 {
   "name": "operon",
-  "version": "1.0.0",
-  "private": true,
-  "license": "UNLICENSED",
+  "version": "1.1.0",
+  "private": false,
+  "license": "SEE LICENSE IN LICENSE",
   "author": "Gretchen Boria, PhD",
-  "description": "Operon — Browser-native Omniverse RTX Teleop & Sim-to-Real Telemetry Comparator (Phone / Apple Watch IMU vs. Firmware Quintic & Isaac Analytic Twin, LeRobot, OpenUSD, NemoFleet Action-Probability Gate)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gretchenboria/Operon.git"
+  },
+  "description": "Operon: 6-DOF Sim-to-Real Kinematic & IMU Calibration Workbench (6-DOF Sim vs 6-DOF Real/Watch Twin + Optional 4-DOF Baseline)",
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
