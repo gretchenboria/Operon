@@ -37,10 +37,15 @@ const STATIC = {
 };
 for (const [k, v] of Object.entries(STATIC)) if ($(k)) $(k).textContent = v;
 
-// ---------- connection (WebSocket with instant HTTP fallback for watchOS WebKit) ----------
-let ws = null, retry = 0, useHttp = false, httpQueue = [], httpTimer = null;
+// ---------- connection (WebSocket with resilient auto-recovery & HTTP fallback for watchOS WebKit) ----------
+let ws = null, retry = 0, useHttp = false, httpQueue = [], httpTimer = null, lastNetOkAt = 0;
 const status = $("status");
 function setStatus(cls, txt) { status.className = `pill ${cls}`; status.textContent = txt; }
+
+function stopHttpMode() {
+  useHttp = false;
+  if (httpTimer) { clearInterval(httpTimer); httpTimer = null; }
+}
 
 function startHttpMode() {
   if (useHttp) return;
@@ -50,7 +55,7 @@ function startHttpMode() {
   httpQueue.push({ t: "hello", name: myName });
   let pollBusy = false;
   const poll = async () => {
-    if (pollBusy) return;
+    if (pollBusy || !useHttp) return;
     pollBusy = true;
     const batch = httpQueue.splice(0, httpQueue.length);
     try {
@@ -58,9 +63,11 @@ function startHttpMode() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: myId, msgs: batch }),
-        cache: "no-store"
+        cache: "no-store",
+        keepalive: true
       });
       if (r.ok) {
+        lastNetOkAt = performance.now();
         const d = await r.json();
         setStatus("ok", `HTTP ${ROOM}`);
         if (Array.isArray(d.msgs)) d.msgs.forEach(handle);
@@ -74,7 +81,8 @@ function startHttpMode() {
     }
   };
   poll();
-  httpTimer = setInterval(poll, 60);
+  // 100 ms (10 Hz) in HTTP fallback mode prevents watchOS WebKit memory pressure / WebContent jettison
+  httpTimer = setInterval(poll, 100);
 }
 
 function connect() {
@@ -84,47 +92,63 @@ function connect() {
     $("idle-sub").textContent = T("This link is missing its room code.", "A este enlace le falta el código de sala.");
     return;
   }
-  if (useHttp) return;
+  if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
+  stopHttpMode();
   const proto = location.protocol === "https:" ? "wss" : "ws";
   setStatus("warn", T("connecting…", "conectando…"));
   const fallbackTimeout = setTimeout(() => {
     if (!ws || ws.readyState !== 1) startHttpMode();
-  }, 2400);
+  }, 2600);
   try {
     ws = new WebSocket(`${proto}://${location.host}/api/room/${ROOM}/ws?role=phone&id=${myId}`);
     ws.onopen = () => {
       clearTimeout(fallbackTimeout);
+      stopHttpMode();
       retry = 0;
+      lastNetOkAt = performance.now();
       setStatus("ok", `${T("room", "sala")} ${ROOM}`);
       send({ t: "hello", name: myName });
     };
-    ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } handle(m); };
-    ws.onerror = () => { clearTimeout(fallbackTimeout); startHttpMode(); };
+    ws.onmessage = (e) => {
+      lastNetOkAt = performance.now();
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      handle(m);
+    };
+    ws.onerror = () => { clearTimeout(fallbackTimeout); if (retry >= 2) startHttpMode(); };
     ws.onclose = () => {
       clearTimeout(fallbackTimeout);
+      ws = null;
       if (useHttp) return;
-      if (retry >= 1) { startHttpMode(); return; }
-      setStatus("no", T("reconnecting…", "reconectando…"));
-      setTimeout(connect, Math.min(3000, 400 * 2 ** retry++));
+      if (retry >= 2) { startHttpMode(); return; }
+      setStatus("warn", T("reconnecting…", "reconectando…"));
+      setTimeout(connect, Math.min(2000, 300 * 2 ** retry++));
     };
   } catch {
     clearTimeout(fallbackTimeout);
     startHttpMode();
   }
 }
+
+function ensureConnected() {
+  if (!ws || ws.readyState > 1) {
+    retry = 0;
+    connect();
+  }
+}
+
 const send = (m) => {
   if (useHttp) {
     if (m.t === "pose") {
       const idx = httpQueue.findIndex(x => x.t === "pose" && !x.v?.grabToggle && !x.v?.snap);
       if (idx >= 0 && !m.v?.grabToggle && !m.v?.snap) { httpQueue[idx] = m; return; }
     }
-    httpQueue.push(m);
+    if (httpQueue.length < 15) httpQueue.push(m);
   } else if (ws && ws.readyState === 1) {
-    ws.send(JSON.stringify(m));
+    try { ws.send(JSON.stringify(m)); } catch {}
   }
 };
 connect();
-setInterval(() => { if (!useHttp) send({ t: "ping" }); }, 25000);
+setInterval(() => { if (!useHttp && ws && ws.readyState === 1) send({ t: "ping" }); }, 15000);
 
 // ---------- state ----------
 let slide = "teleop", deckSlide = "idle", mode = "pose", team = 6, assigned = [], vote = null, quizQ = null;
@@ -229,54 +253,45 @@ $("team").querySelectorAll("button").forEach(b => b.addEventListener("click", ()
 // ---------- pose: tilt + pad + live IMU + Wrist Clench / Flick Grip Detector + Watch Wake Lock ----------
 const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
 let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false, lastGestureAt = 0;
-let deskGain = 3.2; // Default 3.2x Effortless Desk Mode: +/-14 deg natural wrist movement spans the full robot workspace
+let deskGain = 3.8; // Default 3.8x Watch Mode: +/-10 deg subtle movement while keeping watch face angled toward your eyes (prevents watchOS wrist-drop screen dim!)
 let wearMode = "left"; // "left" (Left Wrist Watch) | "right" (Right Wrist Watch) | "phone" (Phone in Hand)
 let flipLR = 1, flipUD = 1;
 let fusedAtt = { yaw: 0, pitch: 0, roll: 0, lastT: 0 };
-let wakeLockSentinel = null, audioKeepAliveCtx = null;
+let wakeLockSentinel = null;
 
-// Prevent Apple Watch / iOS Safari from sleeping, dimming, or freezing JS timers while wrist is held in front of screen
+// Safe W3C Screen Wake Lock (NO <video>.play() or AudioContext which cause watchOS WebKit to show a blank black media screen or jettison WebContent!)
 async function acquireWatchWakeLock() {
   try {
-    if ("wakeLock" in navigator && navigator.wakeLock?.request) {
+    if ("wakeLock" in navigator && navigator.wakeLock?.request && (!wakeLockSentinel || wakeLockSentinel.released)) {
       wakeLockSentinel = await navigator.wakeLock.request("screen");
-    }
-  } catch {}
-  try {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (AC && !audioKeepAliveCtx) {
-      audioKeepAliveCtx = new AC();
-      const osc = audioKeepAliveCtx.createOscillator();
-      const gain = audioKeepAliveCtx.createGain();
-      gain.gain.value = 0.00001;
-      osc.connect(gain);
-      gain.connect(audioKeepAliveCtx.destination);
-      osc.start();
-    } else if (audioKeepAliveCtx && audioKeepAliveCtx.state === "suspended") {
-      await audioKeepAliveCtx.resume();
-    }
-  } catch {}
-  try {
-    const vid = $("wake-video");
-    if (vid && !vid.srcObject) {
-      const cv = document.createElement("canvas");
-      cv.width = cv.height = 2;
-      const ctx = cv.getContext("2d");
-      setInterval(() => { if (ctx) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 2, 2); } }, 1000);
-      if (cv.captureStream) {
-        vid.srcObject = cv.captureStream(1);
-        vid.play().catch(() => {});
-      }
     }
   } catch {}
 }
 
+function onWatchWakeOrInteract() {
+  acquireWatchWakeLock();
+  ensureConnected();
+}
+
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    acquireWatchWakeLock();
-    if (!useHttp && (!ws || ws.readyState !== 1)) connect();
-  }
+  if (document.visibilityState === "visible") onWatchWakeOrInteract();
 });
+window.addEventListener("pageshow", onWatchWakeOrInteract);
+window.addEventListener("focus", onWatchWakeOrInteract);
+window.addEventListener("touchstart", onWatchWakeOrInteract, { passive: true });
+window.addEventListener("pointerdown", onWatchWakeOrInteract, { passive: true });
+
+// Apple Watch Digital Crown support: turning the Digital Crown fires `wheel` events, which both resets watchOS's 15s screen dim timer
+// AND lets you smoothly raise/lower gripper height (vz) without lifting your wrist!
+let crownTimeout = null;
+window.addEventListener("wheel", (e) => {
+  onWatchWakeOrInteract();
+  if (Math.abs(e.deltaY) > 0.5) {
+    vz = e.deltaY < 0 ? 0.65 : -0.65;
+    if (crownTimeout) clearTimeout(crownTimeout);
+    crownTimeout = setTimeout(() => { vz = 0; }, 220);
+  }
+}, { passive: true });
 
 // Wear Mode selector (Left Wrist Watch vs Right Wrist Watch vs Phone in Hand)
 if ($("wrist-side")) {
@@ -363,6 +378,10 @@ function onMotion(e) {
   const a = e.accelerationIncludingGravity || e.acceleration;
   const r = e.rotationRate;
   const now = performance.now();
+  // If watchOS dimmed/slept for > 1.2s and just woke up on wrist motion, immediately restore WebSocket!
+  if (fusedAtt.lastT && (now - fusedAtt.lastT) > 1200) {
+    ensureConnected();
+  }
   const dt = fusedAtt.lastT ? Math.min(0.08, Math.max(0.002, (now - fusedAtt.lastT) / 1000)) : 0.016;
   fusedAtt.lastT = now;
 
@@ -429,14 +448,6 @@ function onMotion(e) {
   mapDeviceAnglesToRobot(yaw, fPitch, fRoll);
   tiltOn = true;
   readout();
-
-  // Stream at 30 Hz directly on motion callback for crisp low-latency response
-  if (now - (onMotion.lastSent || 0) >= 32) {
-    onMotion.lastSent = now;
-    const tMs = Date.now();
-    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
-    pose.tap = 0;
-  }
 
   // Hands-free Apple Watch Pinch / Wrist Tendon Clench Impulse or Pronation Roll Flick -> Toggle Grip/Release
   if (now - lastGestureAt > 700 && ((aDelta > 2.35 && gMag < 2.2) || Math.abs(pose.gx) > 2.1)) {

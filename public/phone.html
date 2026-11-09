@@ -52,6 +52,19 @@
     .score b { font: 700 20px var(--sans); display: block; }
     .hide { display: none !important; }
     .gdg { height: 22px; }
+    /* Compact WatchOS viewport optimization: keeps DOM ultra-lightweight and prevents scroll/memory pressure on Apple Watch */
+    @media (max-width: 260px) {
+      body { padding: 6px 8px 12px; }
+      .panel { padding: 10px; border-radius: 16px; margin-bottom: 8px; }
+      .top { margin-bottom: 6px; }
+      .brand { font-size: 14px; }
+      #hint { font-size: 13px !important; padding: 7px !important; min-height: 0 !important; }
+      .read { font-size: 12px; margin: 6px 0; gap: 4px; }
+      .read b { font-size: 16px; }
+      .btn { font-size: 14px; padding: 9px 6px; }
+      .seg button { font-size: 11.5px; padding: 6px 2px; }
+      #pad-row, #p-idle, #p-team { display: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -111,9 +124,9 @@
       <div class="row" style="margin-bottom:8px;justify-content:space-between;gap:6px">
         <span class="lbl" id="t-gain">Effort</span>
         <div class="seg" id="gain-bar" style="flex:1">
-          <button data-g="1.5">1.5x</button>
-          <button data-g="3.2" class="sel">3.2x Desk</button>
-          <button data-g="4.8">4.8x Micro</button>
+          <button data-g="2.0">2.0x</button>
+          <button data-g="3.8" class="sel">3.8x Watch</button>
+          <button data-g="5.2">5.2x Micro</button>
         </div>
       </div>
       <div class="row" style="margin-bottom:8px;gap:6px">
@@ -128,7 +141,7 @@
         <div class="row" style="margin-top:10px"><span class="lbl">twist (roll)</span><span class="v" id="mv-roll">0°</span></div><input type="range" id="m-roll" min="-90" max="90" value="0">
       </div>
     </div>
-    <div class="row" style="margin-top:10px;align-items:stretch;gap:10px">
+    <div class="row" id="pad-row" style="margin-top:10px;align-items:stretch;gap:10px">
       <div style="flex:1">
         <div class="lbl" id="t-pad" style="text-align:center">Optional Touch Pad</div>
         <div id="stick" style="position:relative;width:100%;aspect-ratio:1;border:2px solid var(--ink);border-radius:50%;background:radial-gradient(circle,#fff 55%,#eee 56%);touch-action:none;margin-top:6px">
@@ -143,8 +156,6 @@
         <button class="btn light" id="down" style="flex:1;font-size:24px;touch-action:none">▼</button>
       </div>
     </div>
-    <!-- Hidden keep-awake media element for watchOS / iOS WebKit screen-lock prevention -->
-    <video id="wake-video" playsinline muted loop style="position:fixed;width:1px;height:1px;opacity:0.01;pointer-events:none;bottom:0;right:0"></video>
   </section>
 
   <section class="panel hide" id="p-joints">

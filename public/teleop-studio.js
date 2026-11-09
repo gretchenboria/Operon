@@ -2348,7 +2348,8 @@ function tick(now) {
       }
       $("cmd-src").textContent = st.drive === "pilot" ? `Live Pilot (${st.studioGain}x Desk)` : `Live Watch/Phone (${st.studioGain}x Desk)`;
     } else {
-      $("cmd-src").textContent = "Studio Sliders (60Hz)";
+      const hasDormantWatch = [...phones.values()].some(p => p.pose && (now - p.t) >= 2500);
+      $("cmd-src").textContent = hasDormantWatch ? "Watch Dimmed (Tap Watch / Turn Crown)" : "Studio Sliders (60Hz)";
     }
     showCmd(st.cmd);
     // Rigid-Body Fixture & Table Collision Clamp:
