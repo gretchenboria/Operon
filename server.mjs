@@ -416,11 +416,13 @@ const server = http.createServer((req, res) => {
         room.lastImuMs = nowMs;
         const da3D = room.prevImuAcc ? Math.hypot(ax - room.prevImuAcc[0], ay - room.prevImuAcc[1], az - room.prevImuAcc[2]) : 0;
         room.prevImuAcc = [ax, ay, az];
-        const aDelta = Math.abs(aMag - 9.80665);
-        const tendonSignal = Math.max(da3D - 0.24, aDelta - 0.30);
-        if (tendonSignal > 0 && gMag < 1.15) {
-          const fillRate = Math.min(8.5, 3.8 + tendonSignal * 4.2);
+        const netJerk = Math.max(0, da3D - 9.81 * gMag * dtS);
+        const tendonSignal = netJerk - 0.46;
+        if (tendonSignal > 0 && gMag < 0.44) {
+          const fillRate = Math.min(7.5, 3.2 + tendonSignal * 4.5);
           room.squeezeProgress = Math.min(1.0, (room.squeezeProgress || 0) + fillRate * dtS);
+        } else if (gMag >= 0.55) {
+          room.squeezeProgress = 0;
         } else {
           room.squeezeProgress = Math.max(0.0, (room.squeezeProgress || 0) - 3.2 * dtS);
         }
@@ -491,7 +493,7 @@ const server = http.createServer((req, res) => {
     const contentType = MIME[ext] || "application/octet-stream";
     res.writeHead(200, {
       "Content-Type": contentType,
-      "Cache-Control": "no-cache"
+      "Cache-Control": "no-store, no-cache, must-revalidate"
     });
     fs.createReadStream(filePath).pipe(res);
   });

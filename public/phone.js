@@ -440,24 +440,27 @@ function onMotion(e) {
     : 0;
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
 
-  // Natural Hand Grasp / Release Envelope (Biomechanical MMG + Tenodesis integration over ~180 ms):
-  // - Suppresses while sweeping the whole arm fast (gMag > 1.15 rad/s) so steering never triggers a false grasp
-  // - Accumulates smoothly as fingers curl/close (or open) so gripper jaws track hand closure hi-fi and lock at full grasp completion
-  if (now - lastGrabActionMs > 950 && gMag < 1.15) {
-    const tendonSignal = Math.max(da3D - 0.24, uaMag - 0.22, aDelta - 0.30);
+  // Natural Hand Grasp / Release Envelope (Biomechanical MMG + Tenodesis integration):
+  // - Requires wrist tilt to be poised/steady (gMag < 0.44 rad/s) so tilting to steer NEVER triggers an auto-grasp
+  // - Subtracts gravity-rotation change (9.81 * gMag * dt) from da3D so only true finger/tendon contraction is integrated
+  const netJerk = Math.max(0, da3D - 9.81 * gMag * dt);
+  if (now - lastGrabActionMs > 950 && gMag < 0.44) {
+    const tendonSignal = Math.max(netJerk - 0.46, uaMag - 0.42);
     if (tendonSignal > 0) {
-      // Builds from 0 -> 1 over ~170-220 ms of natural hand closing
-      const rate = Math.min(7.5, 2.8 + tendonSignal * 3.6);
+      const rate = Math.min(7.5, 3.2 + tendonSignal * 4.5);
       squeezeProgress = Math.min(1.0, squeezeProgress + rate * dt);
       if (squeezeProgress >= 1.0) {
         squeezeProgress = 0;
         triggerWatchGraspToggle(pose.g ? "Natural Hand Release" : "Natural Hand Grasp");
       }
     } else {
-      squeezeProgress = Math.max(0, squeezeProgress - 3.2 * dt);
+      squeezeProgress = Math.max(0, squeezeProgress - 3.0 * dt);
     }
+  } else if (gMag >= 0.55) {
+    // Actively tilting the wrist to steer -> zero out squeezeProgress so steering never closes jaws early
+    squeezeProgress = 0;
   } else {
-    squeezeProgress = Math.max(0, squeezeProgress - 4.5 * dt);
+    squeezeProgress = Math.max(0, squeezeProgress - 3.5 * dt);
   }
   pose.squeeze = +squeezeProgress.toFixed(2);
 

@@ -1112,6 +1112,7 @@ function armTarget(dof) {
 
 function setClosed(v, lift = true, forceAction = null) {
   const next = !!v;
+  const wasClosed = !!st.closed;
   const nowMs = performance.now();
   if (st.closed !== next) st.recoilUntil = nowMs + 340;
   st.closed = next;
@@ -1123,7 +1124,7 @@ function setClosed(v, lift = true, forceAction = null) {
   $("btn-grab").classList.toggle("on", next);
   send({ t: "grip", g: next ? 1 : 0 });
 
-  // Ensure kinematic joint state matches current st.cmd before evaluating grasp/release proximity
+  // Ensure kinematic joint state matches current st.cmd before evaluating grasp/release contact
   const cmdR = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll);
   const cmdP = [st.cmd.x, st.cmd.y, st.cmd.z];
   st.q4 = ik4(cmdP, cmdR).q;
@@ -1136,29 +1137,30 @@ function setClosed(v, lift = true, forceAction = null) {
   let releasedAny = false, grabbedAny = false;
   for (const dof of [4, 6]) {
     const a = st.arm[dof], f = fks[dof];
-    if (next) {
+    // Only grasp when jaws actively close (!wasClosed -> next) right over the cell (no proximity magnet!)
+    if (next && !wasClosed) {
       const dxy = Math.hypot(f.tip[0] - a.battP[0], f.tip[1] - a.battP[1]);
       const dz = Math.abs(f.tip[2] - 0.032);
-      if (forceAction === "grasp_cell" || (!a.held && !a.inserted && dxy < 0.115 && dz < 0.16)) {
+      if (forceAction === "grasp_cell" || (!a.held && !a.inserted && dxy < 0.052 && dz < 0.058)) {
         a.held = true;
         a.inserted = null;
         a.dest = a.battP[1] > 0.02 ? "pick" : "place";
         grabbedAny = true;
         if (st.station === 0) a.done[0] = false;
       }
-    } else if (a.held) {
+    } else if (!next && a.held) {
       a.held = false;
       releasedAny = true;
       const dPlace = Math.hypot(f.tip[0] - PLACE_P[0], f.tip[1] - PLACE_P[1]);
       const dPick = Math.hypot(f.tip[0] - PICK_P[0], f.tip[1] - PICK_P[1]);
       const dCharger = Math.hypot(f.tip[0] - ST[1].p[0], f.tip[1] - ST[1].p[1], f.tip[2] - ST[1].p[2]);
-      if (st.station === 0 && (forceAction === "release_cell" || dPlace < 0.115)) {
+      if (st.station === 0 && (forceAction === "release_cell" || dPlace < 0.055)) {
         const destCoord = a.dest === "pick" && dPick < dPlace ? PICK_P : PLACE_P;
         const destRot = a.dest === "pick" && dPick < dPlace ? PICK_R : PLACE_R;
         a.battP = [destCoord[0], destCoord[1], 0.013];
         a.battR = destRot;
         a.done[0] = true;
-      } else if (st.station === 0 && dPick < 0.115 && a.dest === "pick") {
+      } else if (st.station === 0 && dPick < 0.055 && a.dest === "pick") {
         a.battP = [PICK_P[0], PICK_P[1], 0.013]; a.battR = PICK_R; a.done[0] = true;
       } else if (st.station === 1 && (forceAction === "slot_charger" || (dCharger < POS_TOL * 2.2 && oriError(f.R, ST[1].R) < ORI_TOL * 2.2))) {
         a.inserted = { p: [...ST[1].p], R: [...ST[1].R] }; a.done[1] = true;
@@ -1183,19 +1185,12 @@ function evaluateArm(dof, f, dt) {
   const posMm = Math.round(pos * 1000);
   if (s.id === "battery") {
     const oriDeg = Math.round(oriError(f.R, tgt.R));
-    const aligned = pos < 0.052;
+    const aligned = pos < 0.048;
     if (!a.held) {
-      if (aligned && closed) {
-        st.arm[4].held = true; st.arm[6].held = true;
-        st.arm[4].done[0] = false; st.arm[6].done[0] = false;
-        st.arm[4].dest = a.battP[1] > 0.02 ? "pick" : "place";
-        st.arm[6].dest = st.arm[4].dest;
-        return { msg: "Cell Grasped · Move to Target Pad -> Release", cls: "warn", aligned: false, posMm, oriDeg };
-      }
       if (a.done[0]) return { msg: "Pick & Place Complete", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 };
-      return { msg: aligned ? "Aligned Over Cell -> Click Grasp" : `To Cell · ${posMm} mm · ${oriDeg}°`, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
+      return { msg: aligned ? "Aligned Over Cell -> Grasp Hand" : `To Cell · ${posMm} mm · ${oriDeg}°`, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
     }
-    return { msg: aligned ? "Over Target Pad -> Click Release" : `Carrying Cell · ${posMm} mm to Pad`, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
+    return { msg: aligned ? "Over Target Pad -> Open Hand to Release" : `Carrying Cell · ${posMm} mm to Pad`, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
   }
   if (a.done[i]) return { msg: "Station Task Complete", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 };
   if (s.id === "valve") {
@@ -1457,13 +1452,18 @@ function triggerSmartGraspOrRelease(gestureLabel) {
   const liveTilt = crowdPose() !== null;
 
   if (s.id === "battery") {
-    if (!isHolding) {
-      if (liveTilt) {
-        // Pure 1:1 Watch/Phone tilt: grasp right in-place without hijacking the arm pose
-        setClosed(true, false, "grasp_cell");
-        if ($("watch-status")) $("watch-status").textContent = "Grasped Cell -> Tilt to Target Pad & Release";
-        return;
+    if (liveTilt) {
+      // Pure 1:1 Watch/Phone tilt: toggle jaws at current pose with NO magnet teleport!
+      // Only grasps the cell if the jaws are actually positioned over the cell (dxy < 52mm, dz < 58mm)
+      setClosed(!st.closed, false);
+      if ($("watch-status")) {
+        $("watch-status").textContent = st.arm[6].held
+          ? "Grasped Cell -> Tilt to Target Pad & Release"
+          : (st.closed ? "Jaws Closed (Move over cell & re-grasp)" : "Jaws Opened / Released");
       }
+      return;
+    }
+    if (!isHolding) {
       const bp = [st.arm[6].battP[0], st.arm[6].battP[1], 0.032];
       const pickYaw = bp[1] > 0.02 ? 25 : -25;
       st.cmd.x = bp[0]; st.cmd.y = bp[1]; st.cmd.z = 0.032; st.cmd.yaw = pickYaw; st.cmd.pitch = 0; st.cmd.roll = 0;
@@ -1474,12 +1474,6 @@ function triggerSmartGraspOrRelease(gestureLabel) {
       if ($("watch-status")) $("watch-status").textContent = "Cell grasped -> Move to Pad & Release";
       return;
     } else {
-      if (liveTilt) {
-        // Pure 1:1 Watch/Phone tilt: release right in-place without hijacking the arm pose
-        setClosed(false, false, "release_cell");
-        if ($("watch-status")) $("watch-status").textContent = "Released Cell onto Target Pad!";
-        return;
-      }
       const destP = st.arm[6].dest === "pick" ? PICK_P : PLACE_P;
       const destYaw = st.arm[6].dest === "pick" ? -25 : 25;
       st.cmd.x = destP[0]; st.cmd.y = destP[1]; st.cmd.z = destP[2]; st.cmd.yaw = destYaw; st.cmd.pitch = 0; st.cmd.roll = 0;
