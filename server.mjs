@@ -413,10 +413,14 @@ const server = http.createServer((req, res) => {
         const tap = aMag > 16.5 ? 1 : 0;
         const nowMs = Date.now();
         let grabToggle = 0, gesture = "";
-        if (body.grabToggle) {
+        const da3D = room.hasPrevAcc ? Math.hypot(ax - room.prevAx, ay - room.prevAy, az - room.prevAz) : 0;
+        room.prevAx = ax; room.prevAy = ay; room.prevAz = az; room.hasPrevAcc = true;
+        if (body.grabToggle || (nowMs - room.lastGestureMs > 950 && Math.abs(gz) < 1.5 && (da3D > 1.35 || Math.abs(gx) > 1.65))) {
+          room.lastGestureMs = nowMs;
           room.watchGrip = room.watchGrip ? 0 : 1;
+          room.grabSeq = (room.grabSeq || 0) + 1;
           grabToggle = 1;
-          gesture = room.watchGrip ? "GRASP" : "RELEASE";
+          gesture = room.watchGrip ? "Hand Grasp" : "Hand Release";
         }
         room.touchHttpPhone(wid);
         const dtS = room.lastImuMs ? Math.min(0.08, Math.max(0.004, (nowMs - room.lastImuMs) / 1000)) : 0.02;
@@ -442,7 +446,7 @@ const server = http.createServer((req, res) => {
         const yawDeg = Math.round(clamp((-dz(room.fusedYaw || 0) * 1.15 + dRoll * 0.65) * 3.2, -85, 85));
         const pitchDeg = Math.round(clamp(dPitch * 1.20 * 3.2, -75, 75));
         const rollDeg = Math.round(clamp(dRoll * 1.10 * 3.2, -85, 85));
-        room.toDecks({ t: "pose", from: wid, v: { vx: 0, vy: 0, vz: 0, aim: "tilt", gain: 3.2, yaw: yawDeg, pitch: pitchDeg, roll: rollDeg, g: room.watchGrip, grabToggle, gesture, ax, ay, az, gx, gy, gz, tap } });
+        room.toDecks({ t: "pose", from: wid, v: { vx: 0, vy: 0, vz: 0, aim: "tilt", gain: 3.2, yaw: yawDeg, pitch: pitchDeg, roll: rollDeg, g: room.watchGrip, grabToggle, grabSeq: room.grabSeq || 0, gesture, ax, ay, az, gx, gy, gz, tap } });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true, grip: room.watchGrip, gesture }));
       } catch {

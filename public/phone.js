@@ -253,7 +253,39 @@ $("team").querySelectorAll("button").forEach(b => b.addEventListener("click", ()
 // ---------- pose: tilt + pad + live IMU + Watch Wake Lock ----------
 const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
 let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false;
-let lastGrabActionMs = 0;
+let lastGrabActionMs = 0, grabSeq = 0, prevAx = 0, prevAy = 0, prevAz = 9.81, hasPrevAcc = false;
+
+function triggerWatchGraspToggle(gestureName = "Watch GRASP/RELEASE") {
+  const now = performance.now();
+  if (now - lastGrabActionMs < 850) return;
+  lastGrabActionMs = now;
+  grabSeq++;
+  pose.g = pose.g ? 0 : 1;
+  paintGrab();
+  const msg = {
+    t: "pose",
+    v: {
+      vx: -jy, vy: -jx, vz,
+      g: pose.g,
+      grabToggle: 1,
+      grabSeq,
+      gesture: gestureName,
+      aim, gain: deskGain,
+      yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll
+    }
+  };
+  send(msg);
+  if (!useHttp && (!ws || ws.readyState !== 1)) {
+    fetch(`/api/room/${ROOM}/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: myId, msgs: [msg] }),
+      cache: "no-store",
+      keepalive: true
+    }).catch(() => {});
+  }
+  if (navigator.vibrate) navigator.vibrate(35);
+}
 let deskGain = 2.4; // Default 2.4x Smooth Mode: comfortable, steady wrist movement without over-sensitivity
 let wearMode = "left"; // "left" (Left Wrist Watch) | "right" (Right Wrist Watch) | "phone" (Phone in Hand)
 let flipLR = 1, flipUD = 1;
@@ -400,7 +432,22 @@ function onMotion(e) {
   const r2d = 180 / Math.PI;
   const gMag = Math.hypot(pose.gx, pose.gy, pose.gz);
   const aDelta = Math.abs(Math.hypot(pose.ax, pose.ay, pose.az) - 9.80665);
+  const da3D = hasPrevAcc ? Math.hypot(pose.ax - prevAx, pose.ay - prevAy, pose.az - prevAz) : 0;
+  prevAx = pose.ax; prevAy = pose.ay; prevAz = pose.az; hasPrevAcc = true;
+  const ua = e.acceleration;
+  const uaMag = (ua && (ua.x != null || ua.y != null || ua.z != null))
+    ? Math.hypot(ua.x || 0, ua.y || 0, ua.z || 0)
+    : 0;
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
+
+  // Physical Hand Grasp / Clench / Pinch / Wrist Twist detector:
+  // Uses true 3D vector jerk (da3D) + CoreMotion userAcceleration (uaMag) + forearm pronation/supination (gx)
+  // while not sweeping the whole arm rapidly in yaw (|gz| < 1.5 rad/s).
+  if (now - lastGrabActionMs > 950 && Math.abs(pose.gz) < 1.5) {
+    if (da3D > 1.35 || uaMag > 1.20 || Math.abs(pose.gx) > 1.65) {
+      triggerWatchGraspToggle(pose.g ? "Hand Release" : "Hand Grasp");
+    }
+  }
 
   // Use hypot(ax, az) in denominator so watch face verticality (az crossing 0) NEVER flips +/-180 deg!
   const accElev = wearMode === "phone"
@@ -534,22 +581,7 @@ function paintGrab() {
 }
 $("grab").addEventListener("click", () => {
   touched = true;
-  lastGrabActionMs = performance.now();
-  pose.g = pose.g ? 0 : 1;
-  paintGrab();
-  const msg = { t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll } };
-  send(msg);
-  // Guaranteed delivery fallback if WebSocket is mid-reconnect when tapping GRASP/RELEASE
-  if (!useHttp && (!ws || ws.readyState !== 1)) {
-    fetch(`/api/room/${ROOM}/poll`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: myId, msgs: [msg] }),
-      cache: "no-store",
-      keepalive: true
-    }).catch(() => {});
-  }
-  if (navigator.vibrate) navigator.vibrate(30);
+  triggerWatchGraspToggle(pose.g ? "Button Release" : "Button Grasp");
 });
 if ($("snap")) {
   $("snap").textContent = T("ALIGN", "ALINEAR");
@@ -586,7 +618,7 @@ $("aim").querySelectorAll("button").forEach(b => b.addEventListener("click", () 
 setInterval(() => {
   if (slide === "teleop" && mode === "pose") {
     const tMs = Date.now();
-    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
+    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabSeq, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
     pose.tap = 0;
   }
 }, 50);

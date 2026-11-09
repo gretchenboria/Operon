@@ -1331,11 +1331,10 @@ onLive((m) => {
   } else if (m.t === "pose" && phones.has(m.from)) {
     const p = phones.get(m.from), v = m.v || {};
     const num = (x, lo, hi, d) => Number.isFinite(+x) ? Math.max(lo, Math.min(hi, +x)) : d;
-    const nextG = v.g ? 1 : 0;
-    const gChanged = p.lastG !== undefined && nextG !== p.lastG;
-    p.g = nextG;
-    p.lastG = nextG;
-    if ((v.grabToggle || gChanged) && (!st.pilot || st.pilot === m.from)) {
+    p.g = v.g ? 1 : 0;
+    const seqTriggered = Number.isFinite(+v.grabSeq) && +v.grabSeq > 0 && +v.grabSeq !== (p.lastGrabSeq || 0);
+    if (Number.isFinite(+v.grabSeq) && +v.grabSeq > 0) p.lastGrabSeq = +v.grabSeq;
+    if ((seqTriggered || v.grabToggle) && (!st.pilot || st.pilot === m.from)) {
       if (v.gesture) st.lastGestureBanner = v.gesture;
       triggerSmartGraspOrRelease(v.gesture || "Watch GRASP/RELEASE");
     }
@@ -1519,6 +1518,13 @@ function triggerSmartGraspOrRelease(gestureLabel) {
   if (gestureLabel && $("watch-status")) $("watch-status").textContent = `Watch: ${gestureLabel}`;
 }
 $("btn-grab").onclick = () => triggerSmartGraspOrRelease();
+window.addEventListener("keydown", (e) => {
+  if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA")) return;
+  if (e.code === "Space" || e.key === "g" || e.key === "G") {
+    e.preventDefault();
+    triggerSmartGraspOrRelease("Keyboard GRASP/RELEASE");
+  }
+});
 $("btn-reset").onclick = () => {
   st.arm = { 4: freshArm(), 6: freshArm() };
   st.quinticPlan = null;
