@@ -253,6 +253,7 @@ $("team").querySelectorAll("button").forEach(b => b.addEventListener("click", ()
 // ---------- pose: tilt + pad + live IMU + Watch Wake Lock ----------
 const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
 let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false;
+let lastGrabActionMs = 0;
 let deskGain = 2.4; // Default 2.4x Smooth Mode: comfortable, steady wrist movement without over-sensitivity
 let wearMode = "left"; // "left" (Left Wrist Watch) | "right" (Right Wrist Watch) | "phone" (Phone in Hand)
 let flipLR = 1, flipUD = 1;
@@ -401,6 +402,15 @@ function onMotion(e) {
   const aDelta = Math.abs(Math.hypot(pose.ax, pose.ay, pose.az) - 9.80665);
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
 
+  // Deliberate Wrist Flick / Clench Gesture (with strict 1.4s cooldown so it never double-toggles or fights button taps)
+  if (now - lastGrabActionMs > 1400 && (Math.abs(pose.gx) > 3.1 || (aDelta > 4.2 && gMag < 2.2))) {
+    lastGrabActionMs = now;
+    pose.g = pose.g ? 0 : 1;
+    paintGrab();
+    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, gesture: pose.g ? "Wrist Grasp" : "Wrist Release", aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll } });
+    if (navigator.vibrate) navigator.vibrate(35);
+  }
+
   // Use hypot(ax, az) in denominator so watch face verticality (az crossing 0) NEVER flips +/-180 deg!
   const accElev = wearMode === "phone"
     ? Math.atan2(-pose.ay, Math.max(1.5, Math.hypot(pose.ax, pose.az))) * r2d
@@ -533,9 +543,10 @@ function paintGrab() {
 }
 $("grab").addEventListener("click", () => {
   touched = true;
+  lastGrabActionMs = performance.now();
   pose.g = pose.g ? 0 : 1;
   paintGrab();
-  send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, aim, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll } });
+  send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll } });
   if (navigator.vibrate) navigator.vibrate(30);
 });
 if ($("snap")) {
