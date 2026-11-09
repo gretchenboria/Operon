@@ -412,16 +412,29 @@ const server = http.createServer((req, res) => {
         const gMag = Math.hypot(gx, gy, gz);
         const tap = aMag > 16.5 ? 1 : 0;
         const nowMs = Date.now();
+        const dtS = room.lastImuMs ? Math.min(0.08, Math.max(0.004, (nowMs - room.lastImuMs) / 1000)) : 0.02;
+        room.lastImuMs = nowMs;
+        const da3D = room.prevImuAcc ? Math.hypot(ax - room.prevImuAcc[0], ay - room.prevImuAcc[1], az - room.prevImuAcc[2]) : 0;
+        room.prevImuAcc = [ax, ay, az];
+        const aDelta = Math.abs(aMag - 9.80665);
+        const tendonSignal = Math.max(da3D - 0.24, aDelta - 0.30);
+        if (tendonSignal > 0 && gMag < 1.15) {
+          const fillRate = Math.min(8.5, 3.8 + tendonSignal * 4.2);
+          room.squeezeProgress = Math.min(1.0, (room.squeezeProgress || 0) + fillRate * dtS);
+        } else {
+          room.squeezeProgress = Math.max(0.0, (room.squeezeProgress || 0) - 3.2 * dtS);
+        }
         let grabToggle = 0, gesture = "";
-        if (body.grabToggle) {
+        const naturalGraspDone = (room.squeezeProgress >= 1.0) && (nowMs - (room.lastImuGrabMs || 0) > 650);
+        if (body.grabToggle || naturalGraspDone) {
+          room.squeezeProgress = 0;
+          room.lastImuGrabMs = nowMs;
           room.watchGrip = room.watchGrip ? 0 : 1;
           room.grabSeq = (room.grabSeq || 0) + 1;
           grabToggle = 1;
           gesture = room.watchGrip ? "GRASP" : "RELEASE";
         }
         room.touchHttpPhone(wid);
-        const dtS = room.lastImuMs ? Math.min(0.08, Math.max(0.004, (nowMs - room.lastImuMs) / 1000)) : 0.02;
-        room.lastImuMs = nowMs;
         const r2d = 180 / Math.PI;
         const isStill = gMag < 0.09 && Math.abs(aMag - 9.80665) < 0.45;
         const accElev = Math.atan2(ax, Math.max(1.5, Math.hypot(ay, az))) * r2d;
@@ -443,7 +456,8 @@ const server = http.createServer((req, res) => {
         const yawDeg = Math.round(clamp((-dz(room.fusedYaw || 0) * 1.15 + dRoll * 0.65) * 3.2, -85, 85));
         const pitchDeg = Math.round(clamp(dPitch * 1.20 * 3.2, -75, 75));
         const rollDeg = Math.round(clamp(dRoll * 1.10 * 3.2, -85, 85));
-        room.toDecks({ t: "pose", from: wid, v: { vx: 0, vy: 0, vz: 0, aim: "tilt", gain: 3.2, yaw: yawDeg, pitch: pitchDeg, roll: rollDeg, g: room.watchGrip, grabToggle, grabSeq: room.grabSeq || 0, gesture, ax, ay, az, gx, gy, gz, tap } });
+        const squeeze = +((room.squeezeProgress || 0).toFixed(2));
+        room.toDecks({ t: "pose", from: wid, v: { vx: 0, vy: 0, vz: 0, aim: "tilt", gain: 3.2, squeeze, yaw: yawDeg, pitch: pitchDeg, roll: rollDeg, g: room.watchGrip, grabToggle, grabSeq: room.grabSeq || 0, gesture, ax, ay, az, gx, gy, gz, tap } });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true, grip: room.watchGrip, gesture }));
       } catch {

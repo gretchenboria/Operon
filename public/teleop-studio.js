@@ -1350,6 +1350,7 @@ onLive((m) => {
       vx: num(v.vx, -1, 1, 0), vy: num(v.vy, -1, 1, 0), vz: num(v.vz, -1, 1, 0),
       aim: v.aim === "tilt" ? "tilt" : "auto",
       gain: num(v.gain, 0.5, 6.0, st.studioGain),
+      squeeze: num(v.squeeze, 0, 1, 0),
       yaw: num(v.yaw, -180, 180, 0), pitch: num(v.pitch, -90, 90, 0), roll: num(v.roll, -90, 90, 0)
     };
     if (v.ax !== undefined || v.gx !== undefined) {
@@ -1368,10 +1369,10 @@ function crowdPose() {
   let fresh = [...phones.entries()].filter(([, p]) => p.pose && now - p.t < 2500);
   if (st.drive === "pilot") fresh = fresh.filter(([id]) => id === st.pilot);
   if (!fresh.length) return null;
-  const n = fresh.length, acc = { vx: 0, vy: 0, vz: 0, pitch: 0, roll: 0 };
+  const n = fresh.length, acc = { vx: 0, vy: 0, vz: 0, pitch: 0, roll: 0, squeeze: 0 };
   let sx = 0, sy = 0, g = 0, tilt = 0, gainSum = 0, liveImu = null;
   fresh.forEach(([, p]) => {
-    for (const k in acc) acc[k] += p.pose[k];
+    for (const k in acc) acc[k] += p.pose[k] || 0;
     sx += Math.cos(p.pose.yaw * D2R); sy += Math.sin(p.pose.yaw * D2R);
     g += p.g || 0; tilt += p.pose.aim === "tilt" ? 1 : 0;
     gainSum += p.pose.gain || st.studioGain || 3.2;
@@ -1449,16 +1450,22 @@ function snapToStation() {
 $("btn-snap").onclick = snapToStation;
 function triggerSmartGraspOrRelease(gestureLabel) {
   const nowMs = performance.now();
-  if (nowMs - (st.lastSmartGrabMs || 0) < 450) return;
+  if (nowMs - (st.lastSmartGrabMs || 0) < 380) return;
   st.lastSmartGrabMs = nowMs;
   const s = ST[st.station];
   const isHolding = st.arm[6].held || st.arm[4].held;
+  const liveTilt = crowdPose() !== null;
 
   if (s.id === "battery") {
     if (!isHolding) {
+      if (liveTilt) {
+        // Pure 1:1 Watch/Phone tilt: grasp right in-place without hijacking the arm pose
+        setClosed(true, false, "grasp_cell");
+        if ($("watch-status")) $("watch-status").textContent = "Grasped Cell -> Tilt to Target Pad & Release";
+        return;
+      }
       const bp = [st.arm[6].battP[0], st.arm[6].battP[1], 0.032];
       const pickYaw = bp[1] > 0.02 ? 25 : -25;
-      // Immediately move to cell, close jaws, and lock cell into gripper synchronously on click
       st.cmd.x = bp[0]; st.cmd.y = bp[1]; st.cmd.z = 0.032; st.cmd.yaw = pickYaw; st.cmd.pitch = 0; st.cmd.roll = 0;
       setClosed(true, false, "grasp_cell");
       showCmd(st.cmd);
@@ -1467,9 +1474,14 @@ function triggerSmartGraspOrRelease(gestureLabel) {
       if ($("watch-status")) $("watch-status").textContent = "Cell grasped -> Move to Pad & Release";
       return;
     } else {
+      if (liveTilt) {
+        // Pure 1:1 Watch/Phone tilt: release right in-place without hijacking the arm pose
+        setClosed(false, false, "release_cell");
+        if ($("watch-status")) $("watch-status").textContent = "Released Cell onto Target Pad!";
+        return;
+      }
       const destP = st.arm[6].dest === "pick" ? PICK_P : PLACE_P;
       const destYaw = st.arm[6].dest === "pick" ? -25 : 25;
-      // Immediately place cell onto Target Pad and open jaws synchronously on click
       st.cmd.x = destP[0]; st.cmd.y = destP[1]; st.cmd.z = destP[2]; st.cmd.yaw = destYaw; st.cmd.pitch = 0; st.cmd.roll = 0;
       setClosed(false, false, "release_cell");
       showCmd(st.cmd);
@@ -1482,6 +1494,11 @@ function triggerSmartGraspOrRelease(gestureLabel) {
 
   if (s.id === "charger") {
     if (isHolding) {
+      if (liveTilt) {
+        setClosed(false, false, "slot_charger");
+        if ($("watch-status")) $("watch-status").textContent = "Cell slotted into Charger Dock!";
+        return;
+      }
       st.cmd.x = s.p[0]; st.cmd.y = s.p[1]; st.cmd.z = s.p[2];
       st.cmd.yaw = s.ypr[0]; st.cmd.pitch = s.ypr[1]; st.cmd.roll = s.ypr[2];
       setClosed(false, false, "slot_charger");
@@ -2665,38 +2682,6 @@ function tick(now) {
           if (key === "yaw") { while (d > 180) d -= 360; while (d < -180) d += 360; }
           if (Math.abs(d) > 1.0) st.cmd[key] += d * kp;
         }
-
-        // Tilt-Driven Grasp & Release:
-        // 1) Tilt down onto cell (or roll-tilt wrist near cell) -> grasps cell into jaws
-        // 2) Tilt up & tilt across to Target Pad, then tilt down onto pad (or roll-tilt) -> releases cell onto pad
-        const isHolding = st.arm[6].held || st.arm[4].held;
-        if (st.station === 0) {
-          if (!isHolding) {
-            const bp = st.arm[6].battP;
-            const dxyCell = Math.hypot(st.cmd.x - bp[0], st.cmd.y - bp[1]);
-            const tiltDownAtCell = dxyCell < 0.068 && (st.cmd.z < 0.052 || c.pitch < -11);
-            const rollGraspNearCell = dxyCell < 0.085 && Math.abs(c.roll) > 16;
-            if ((tiltDownAtCell || rollGraspNearCell) && (now - (st.lastReleaseMs || 0)) > 750) {
-              setClosed(true, false, "grasp_cell");
-              if ($("watch-status")) $("watch-status").textContent = "Grasped Cell with Tilt -> Tilt Up & Right to Place Pad";
-            }
-          } else {
-            const destP = st.arm[6].dest === "pick" ? PICK_P : PLACE_P;
-            const dxyDest = Math.hypot(st.cmd.x - destP[0], st.cmd.y - destP[1]);
-            const tiltDownAtDest = dxyDest < 0.072 && (st.cmd.z < 0.056 || c.pitch < -10);
-            const rollReleaseAtDest = dxyDest < 0.085 && Math.abs(c.roll) > 18;
-            if ((tiltDownAtDest || rollReleaseAtDest) && (now - (st.lastGraspMs || 0)) > 750) {
-              setClosed(false, false, "release_cell");
-              if ($("watch-status")) $("watch-status").textContent = "Released Cell onto Target Pad with Tilt!";
-            }
-          }
-        } else if (st.station === 1 && isHolding) {
-          const dSlot = Math.hypot(st.cmd.x - ST[1].p[0], st.cmd.y - ST[1].p[1]);
-          if (dSlot < 0.072 && (st.cmd.z < 0.095 || Math.abs(c.roll) > 18) && (now - (st.lastGraspMs || 0)) > 750) {
-            setClosed(false, false, "slot_charger");
-            if ($("watch-status")) $("watch-status").textContent = "Slotted Cell into Charger with Tilt!";
-          }
-        }
       } else {
         st.cmd.x = cl(st.cmd.x + c.vx * SPEED * gainScale * dt, 0.05, 0.22);
         st.cmd.y = cl(st.cmd.y + c.vy * SPEED * gainScale * dt, -0.14, 0.14);
@@ -2891,8 +2876,12 @@ function tick(now) {
   });
   if (st.imuHistory.length > 180) st.imuHistory.shift();
 
-  // Update 3D Rigs
-  st.openVis += ((st.closed ? 0 : 1) - st.openVis) * Math.min(1, dt * 8);
+  // Update 3D Rigs (with real-time hi-fi hand squeeze aperture tracking)
+  const sq = c && c.squeeze ? c.squeeze : 0;
+  const targetOpen = st.closed
+    ? Math.min(0.65, sq * 0.65)
+    : Math.max(0.12, 1 - sq * 0.88);
+  st.openVis += (targetOpen - st.openVis) * Math.min(1, dt * 16);
   const makeProps = (slot, v, watchSiteObj) => {
     const a = st.arm[slot], tgt = armTarget(slot);
     return {

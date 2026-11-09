@@ -251,9 +251,9 @@ function handle(m) {
 $("team").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { team = 6; send({ t: "team", team }); render(); }));
 
 // ---------- pose: tilt + pad + live IMU + Watch Wake Lock ----------
-const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
+const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, squeeze: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
 let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false;
-let lastGrabActionMs = 0, grabSeq = 0, prevAx = 0, prevAy = 0, prevAz = 9.81, hasPrevAcc = false;
+let lastGrabActionMs = 0, grabSeq = 0, prevAx = 0, prevAy = 0, prevAz = 9.81, hasPrevAcc = false, squeezeProgress = 0;
 
 function triggerWatchGraspToggle(gestureName = "Watch GRASP/RELEASE") {
   const now = performance.now();
@@ -432,7 +432,34 @@ function onMotion(e) {
   const r2d = 180 / Math.PI;
   const gMag = Math.hypot(pose.gx, pose.gy, pose.gz);
   const aDelta = Math.abs(Math.hypot(pose.ax, pose.ay, pose.az) - 9.80665);
+  const da3D = hasPrevAcc ? Math.hypot(pose.ax - prevAx, pose.ay - prevAy, pose.az - prevAz) : 0;
+  prevAx = pose.ax; prevAy = pose.ay; prevAz = pose.az; hasPrevAcc = true;
+  const ua = e.acceleration;
+  const uaMag = (ua && (ua.x != null || ua.y != null || ua.z != null))
+    ? Math.hypot(ua.x || 0, ua.y || 0, ua.z || 0)
+    : 0;
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
+
+  // Natural Hand Grasp / Release Envelope (Biomechanical MMG + Tenodesis integration over ~180 ms):
+  // - Suppresses while sweeping the whole arm fast (gMag > 1.15 rad/s) so steering never triggers a false grasp
+  // - Accumulates smoothly as fingers curl/close (or open) so gripper jaws track hand closure hi-fi and lock at full grasp completion
+  if (now - lastGrabActionMs > 950 && gMag < 1.15) {
+    const tendonSignal = Math.max(da3D - 0.24, uaMag - 0.22, aDelta - 0.30);
+    if (tendonSignal > 0) {
+      // Builds from 0 -> 1 over ~170-220 ms of natural hand closing
+      const rate = Math.min(7.5, 2.8 + tendonSignal * 3.6);
+      squeezeProgress = Math.min(1.0, squeezeProgress + rate * dt);
+      if (squeezeProgress >= 1.0) {
+        squeezeProgress = 0;
+        triggerWatchGraspToggle(pose.g ? "Natural Hand Release" : "Natural Hand Grasp");
+      }
+    } else {
+      squeezeProgress = Math.max(0, squeezeProgress - 3.2 * dt);
+    }
+  } else {
+    squeezeProgress = Math.max(0, squeezeProgress - 4.5 * dt);
+  }
+  pose.squeeze = +squeezeProgress.toFixed(2);
 
   // Use hypot(ax, az) in denominator so watch face verticality (az crossing 0) NEVER flips +/-180 deg!
   const accElev = wearMode === "phone"
@@ -603,7 +630,7 @@ $("aim").querySelectorAll("button").forEach(b => b.addEventListener("click", () 
 setInterval(() => {
   if (slide === "teleop" && mode === "pose") {
     const tMs = Date.now();
-    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabSeq, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
+    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, squeeze: pose.squeeze, grabSeq, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: pose.tap, utc_ms: tMs, utc_iso: new Date(tMs).toISOString() } });
     pose.tap = 0;
   }
 }, 50);
