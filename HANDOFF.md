@@ -1,11 +1,11 @@
 # Operon — Agent Handoff Document (`HANDOFF.md`)
 
-**Last Updated:** 2026-11-08 23:40 PST  
+**Last Updated:** 2026-11-09 PST  
 **Author / Owner:** Gretchen Boria, PhD  
 **Workspace:** `/Users/dr.gretchenboria/Operon`  
 **GitHub Repository:** `https://github.com/gretchenboria/Operon.git` (`main` branch)  
 **Latest Live Cloud Run Revision:** `operon-00041-c4q` (commit `decdd72`, cache version `?v=22`)  
-**Local HEAD (not yet deployed):** MuJoCo 3.x contact physics, cache version `?v=23`
+**Local HEAD (not yet deployed):** MuJoCo 3.x contact physics on all three stations, cache version `?v=24`
 
 ---
 
@@ -26,7 +26,7 @@
 
 ---
 
-## 1b. MuJoCo 3.x Rigid-Body Contact Physics (NEW, `?v=23`)
+## 1b. MuJoCo 3.x Rigid-Body Contact Physics (NEW, `?v=24`)
 
 The studio no longer fakes the grasp. It runs the **official Google DeepMind MuJoCo WebAssembly bindings** (npm [`mujoco@3.1.16`](https://github.com/google-deepmind/mujoco/tree/main/wasm), Apache-2.0) in the browser. There is **no MuJoCo 4** — 3.x is the current line.
 
@@ -43,6 +43,8 @@ The studio no longer fakes the grasp. It runs the **official Google DeepMind MuJ
 | | before | after |
 |---|---|---|
 | grasp | distance heuristic + proximity snap | pad friction; `held` from `touch` sensors |
+| charger dock | cell teleported into the slot | lowered into a cradle, retained after withdrawal |
+| valve | angle inferred from tool roll | wound 0→91° by contact, no stem actuator |
 | jaws | binary 0/1 eased snap, closed *through* the cell | stop at the cell's width, 0.4 mm pad compression |
 | release | cell teleported to the destination pad | **falls under gravity** (67 mm in 0.12 s) |
 | RMS TCP jerk (pick & place) | 43.1 m/s³ | **29.2 m/s³ (−32 %)** |
@@ -55,14 +57,16 @@ The studio no longer fakes the grasp. It runs the **official Google DeepMind MuJ
 1. **`PHYS_GRASP_H = 0.011` is not arbitrary.** Finger pads reach 14 mm below the TCP. Grasping at the cell's centre drives the fingertips into the 1 mm locating pad; one pad then reads a ~48 N crush load against the table, the jaws jam open, and the grasp fails on the lift. This only shows up on the **right-hand rig**, which follows the firmware quintic streamer (1° deadband ⇒ several mm of tool error) — the ideal-IK left rig hides the bug. It was caught only by the headless-browser test, never by the Node tests.
 2. **Clamp on arrival, never on a timer.** `physWaitArrival()` polls the achieved TCP. A fixed `setTimeout` closes the jaws while the firmware-streamed arm is still travelling.
 3. **`physCellGraspYaw()`** derives the approach yaw from the cell's solved axis (column 2 of `cellR`). Needed for `Perturb Cell`; a fixed −25° approach catches an end cap on a randomised cell (verified 8/8 random yaws grasp and lift).
-4. **All three stations are in the MJCF now**, but only Station 0's *object* is physics-owned (`physCellOn()`).
-   - Station props are **parked below the table when inactive** (`ArmSim.setStation`). This is required, not cosmetic: the renderer hides inactive props, and leaving them solid makes the arm clip the charger dock mid-traverse during pick-and-place. Any test that builds the model directly instead of through `ArmSim` must park them too, or it will reproduce that collision.
-   - Station 1's cell insertion stays analytic. **A full physical insertion was attempted and abandoned deliberately** — read this before trying again:
-     - The dock normal `(0, 0.906, -0.423)` faces partly **downward**: gravity puts +4.15 m/s² along the opening and ejects any released cell. Re-angling it to face up (normal `(0, 0.423, 0.906)`) fixes retention — a 60 x 64 mm cradle with 13 mm end walls and 18 mm side rails was built and **provably holds a cell at rest for 7.5 s**.
-     - But the dock is then not *serviceable*. `ST[1].R`'s +z is the dock's OUTWARD normal, and the tool's +z is its APPROACH axis, so aiming the arm at `ST[1].R` points the tool backwards and puts the wrist centre 60 mm **inside** the dock structure. The body frame and the approach frame have to be separate (`app: fromZX([0,-0.42,-0.9],[1,0,0])`).
-     - Even with that fixed, at the dock's authored position the wrist centre falls outside the 200 mm reach: the commanded TCP ended up 50-108 mm from the achievable pose with the forearm fouling the dock. Making it reachable requires **relocating the dock** to roughly `[0.10, 0.090, 0.040]`, which is a visible change to the user's scene layout and should be their call.
-     - The attempt was reverted rather than left half-applied. What survived: the grip stiffness and `held` fixes below.
-   - Station 2's handwheel is a real hinge but is **servoed** to the task angle via `valve_act` (kp=12 against 0.085 N·m frictionloss ⇒ ~0.4 deg steady-state error). Letting the grasp drive it was tried and regressed: the scripted sequence nudges the wheel to 37 deg and loses it, so the task never completed.
+4. **All three station tasks are physics-driven now.** Station props are **parked below the table when inactive** (`ArmSim.setStation`) — required, not cosmetic: the renderer hides inactive props, and leaving them solid makes the arm clip the charger dock mid-traverse. Any test that builds the model directly instead of through `ArmSim` must park them too.
+   - **Station 1 was redesigned, and the scene layout changed.** The dock now faces UP (normal `(0, 0.423, 0.906)`) and sits at `p = [0.10, 0.090, 0.040]`. Three separate defects had to be fixed together, and fixing only one at a time still fails:
+     a. Facing down, gravity put +4.15 m/s² along the opening and ejected every released cell.
+     b. `ST[1].R`'s +z is the dock's OUTWARD normal while a tool's +z is its APPROACH axis, so aiming the arm at the body frame put the wrist 60 mm inside the dock. Stations now expose `app` for the approach frame; `s.tgtR = s.app || s.R` is what `armTarget`/`evaluateArm` use, while `s.R` still draws the prop.
+     c. At the authored height the wrist centre fell outside the 200 mm reach — the TCP is not what has to be reachable, the wrist is.
+   - **The insertion path is staged on purpose.** Lift → re-orient IN PLACE → traverse ABOVE the dock → descend. Blending position and orientation together walks the arm through poses it cannot track (50 mm short); a straight line from the safe point to the dock clips the cradle and strips the cell out of the jaws.
+   - **Station 2 has no actuator on the stem.** The arm engages the hub and rolls the tool about the wheel axis. This must command R directly (`st.cmdR`) — routed through yaw/pitch/roll the same motion only reached 36° before unwinding, because `yprOf()` cannot represent a clean roll about world +X. Gripping the 11 mm rim or a 6.4 mm spoke does NOT work: the hand is too large for a 62 mm wheel and jams on the spokes.
+   - **Known gap: the scripted Station 1 insertion completes ~3 runs in 4.** The physics is not the problem — `retain.mjs` and `dock3.mjs` pass deterministically, and the headless-browser run seats the cell 4.5 mm from the slot when it works. The variance is in the scripted approach: if the initial clamp seats poorly the carry delivers a badly-held cell and the retries do not always recover. Next thing to try is gating the carry on a measured grip quality (pad load AND cell-to-TCP distance stable over several frames) rather than the single `held` check, and/or re-grasping from a known pose instead of wherever the cell ended up. Teleoperated insertion is unaffected.
+   - Scripted sequences **verify, never assume**: `physWaitArrival` before clamping, and the dock sequence re-reads the cell pose after the approach and retries the clamp up to 3× if the pads did not take it. A fixed timer clamps while the firmware-streamed arm is still travelling.
+
 5. **Grip force and the `held` flag.** `grip_act` runs at `kp=1800` (~17 N clamp); `kp=900` gave only ~9 N and a carried cell slid between the pads during a re-orientation. `held` uses the **total** pad load `(padL + padR) > 0.4 N`, not both pads individually — re-orienting shifts the cell onto one pad and momentarily unloads the other, which the old test reported as a drop while the cell was still 2 mm from the TCP.
 6. **`jawGapMm` is the pad-to-pad gap, not finger-body separation.** The pads close to 3.5 mm; the finger bodies are 18 mm apart at full close. An earlier version reported the latter and made a correct 24 mm grasp look like a failure.
 7. Cost is ~1.5 ms/frame for both arms at the 0.5 ms timestep (~9 % of a 60 fps budget).

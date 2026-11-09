@@ -202,32 +202,37 @@
             solref="0.006 1" solimp="0.95 0.99 0.001" rgba="0.80 0.72 0.22 1"/>
     </body>
 
-    <!-- ════════════ Station 1: tilted side-charger insertion dock ════════════
-      Static structure. The pocket is built from five boxes because MuJoCo
-      geoms are convex: a "slot" has to be walls, not one hollow box. Interior
-      is 62 x 30 x 19 mm, so the 24 x 54 mm cell slides in lengthways and is
-      retained by the lips. Pose matches ST[1] in teleop-studio.js exactly:
-      p + z*0.024 with R = fromZX([0,0.9,-0.42],[1,0,0]), verified by
-      round-tripping the matrix through its quaternion (max err 6e-16).
+    <!-- ════════════ Station 1: tilted side-charger cradle ════════════
+      Pose matches ST[1] in teleop-studio.js: body = p + z*0.024 with
+      R = fromZX([0,0.42,0.9],[1,0,0]) and p = [0.10, 0.090, 0.040].
+
+      Two physics-driven corrections to the authored station:
+      1. It faces UP. The old outward normal (0, 0.906, -0.423) put +4.15
+         m/s^2 of gravity along the opening and ejected every released cell.
+         (0, 0.423, 0.906) puts -8.89 m/s^2 INTO the pocket; the +y end wall
+         takes the remaining 4.15 m/s^2 of slide.
+      2. It was LOWERED and brought in. The tool is 60 mm long and approaches
+         with its +z pointing into the dock, so the WRIST sits 60 mm outside
+         along the normal -- that is what must stay inside the 200 mm reach,
+         not the TCP. At the old height the arm came up 50-108 mm short with
+         the forearm fouling the dock; it only ever worked because the
+         kinematic path teleported the cell in.
+
+      Interior 60 x 64 mm so the finger arms (46.5 mm outer span while holding
+      a 24 mm cell) can enter, side rails low enough to clear them. Five boxes
+      because MuJoCo geoms are convex.
     -->
-    <body name="charger_mount" pos="0.100 0.18175 0">
-      <geom class="env" name="charger_stand" type="capsule" size="0.0065" fromto="0 0 0 0 0 0.08985"/>
+    <body name="charger_mount" pos="0.100 0.1402 0">
+      <geom class="env" name="charger_stand" type="capsule" size="0.0065" fromto="0 0 0 0 0 0.0417"/>
     </body>
-    <body name="charger" pos="0.100000 0.151748 0.109851" quat="0.537175 -0.843471 0 0">
-      <geom class="env" name="charger_panel" type="box" size="0.056 0.051 0.008" pos="0 0 -0.012"/>
-      <!--
-        Pocket long axis runs along the dock's LOCAL Y, because a cell carried
-        at the dock's own approach orientation (ST[1].R) has its axis parallel
-        to the tool's y, which is the dock's y. Orienting the pocket along
-        local X instead would present a 54 mm cell to a 30 mm opening and it
-        could never be inserted. Interior: 30 x 62 x 19 mm.
-      -->
-      <geom class="env" name="charger_floor" type="box" size="0.015 0.031 0.003" pos="0 0 -0.003"/>
-      <geom class="env" name="charger_end_n" type="box" size="0.015 0.003 0.012" pos="0 -0.034 0.012"/>
-      <geom class="env" name="charger_end_p" type="box" size="0.015 0.003 0.012" pos="0 0.034 0.012"/>
-      <geom class="env" name="charger_lip_n" type="box" size="0.003 0.031 0.012" pos="-0.018 0 0.012"/>
-      <geom class="env" name="charger_lip_p" type="box" size="0.003 0.031 0.012" pos="0.018 0 0.012"/>
-      <site name="charger_slot" pos="0 0 0.006" size="0.004" rgba="0 0.8 1 0.4"/>
+    <body name="charger" pos="0.100000 0.100149 0.061748" quat="0.976264 -0.216584 0 0">
+      <geom class="env" name="charger_panel" type="box" size="0.048 0.052 0.008" pos="0 0 -0.012"/>
+      <geom class="env" name="charger_floor" type="box" size="0.030 0.032 0.003" pos="0 0 -0.003"/>
+      <geom class="env" name="charger_end_n" type="box" size="0.030 0.0025 0.013" pos="0 -0.0345 0.013"/>
+      <geom class="env" name="charger_end_p" type="box" size="0.030 0.0025 0.013" pos="0 0.0345 0.013"/>
+      <geom class="env" name="charger_rail_n" type="box" size="0.0025 0.032 0.009" pos="-0.0325 0 0.009"/>
+      <geom class="env" name="charger_rail_p" type="box" size="0.0025 0.032 0.009" pos="0.0325 0 0.009"/>
+      <site name="charger_slot" pos="0 0 0.012" size="0.004" rgba="0 0.8 1 0.4"/>
     </body>
 
     <!-- ════════════ Station 2: industrial process valve handwheel ════════════
@@ -298,20 +303,9 @@
     <position name="grip_act" joint="finger_r" kp="1800" kv="30" forcerange="-85 85" ctrlrange="0 0.022"/>
 
     <!--
-      Valve stem drive. The handwheel is a genuine friction joint (0.14 N*m
-      breakaway, holds its angle, damps out), but a reliable two-pad grasp of
-      the 11 mm rim plus a coordinated arc sweep is a motion-planning problem
-      the studio's scripted sequence does not solve. Rather than ship a task
-      that silently never completes, the wheel is SERVOED to the task angle
-      with a weak, torque-limited actuator: it stays real collision geometry
-      posed exactly as drawn, and the arm can still push against it.
+      No actuator on the valve stem: the handwheel is turned by the gripper
+      doing work against its own frictionloss, and holds where it is left.
     -->
-    <!-- kp is sized against the stem's 0.085 N*m frictionloss: steady-state
-         error is frictionloss/kp, so kp=12 keeps the simulated wheel within
-         ~0.4 deg of the angle being drawn, while forcerange keeps it a
-         physical object the arm can still push against. -->
-    <position name="valve_act" joint="valve_hinge" kp="12.0" kv="1.2"
-              forcerange="-3.0 3.0" ctrlrange="-3.2 3.2"/>
   </actuator>
 
   <sensor>

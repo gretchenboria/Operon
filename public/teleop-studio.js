@@ -12,9 +12,9 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
-import { poseR, oriError, ik4, ik6, fk4, fk6, JOINTS, G } from "./demos/arms3d.js";
+import { poseR, oriError, ik4, ik6, fk4, fk6, JOINTS, G, M } from "./demos/arms3d.js";
 import { onLive, send, qrSVG, phoneUrl, ROOM } from "./live.js";
-import { initPhysics } from "./mujoco-physics.js?v=23";
+import { initPhysics } from "./mujoco-physics.js?v=24";
 
 const D2R = Math.PI / 180;
 const R2D = 180 / Math.PI;
@@ -260,10 +260,23 @@ const PICK_P = [0.15, -0.075, 0.032], PICK_R = poseR(-25, 0, 0);
 const PLACE_P = [0.15, 0.075, 0.032], PLACE_R = poseR(25, 0, 0);
 const ST = [
   { id: "battery", icon: "[1]", name: "Pick & place cell", p: PICK_P, R: PICK_R, placeP: PLACE_P, placeR: PLACE_R },
-  { id: "charger", icon: "[2]", name: "Side charger dock", p: [0.10, 0.13, 0.12], R: fromZX([0, 0.9, -0.42], [1, 0, 0]) },
+  // R is the DOCK BODY frame (+z = outward normal; draws the panel and places
+  // the MJCF body). `app` is the ARM's approach frame: the tool's +z is its
+  // approach axis so it must point INTO the dock, otherwise the 60 mm tool
+  // puts the wrist centre inside the dock structure and the pose is
+  // unreachable. The dock also faces UP and sits lower than originally
+  // authored -- see the Station 1 comment in the MJCF for why.
+  { id: "charger", icon: "[2]", name: "Side charger dock", p: [0.10, 0.090, 0.040],
+    R: fromZX([0, 0.42, 0.9], [1, 0, 0]), app: fromZX([0, -0.42, -0.9], [1, 0, 0]) },
   { id: "valve", icon: "[3]", name: "Turn valve 90°", p: [0.17, 0, 0.14], R: fromZX([1, 0, 0], [0, 1, 0]), grip: fromZX([1, 0, 0], [0, 0, -1]) }
 ];
-ST.forEach(s => { s.ypr = yprOf(s.R); if (s.grip) s.yprGrip = yprOf(s.grip); });
+ST.forEach(s => {
+  // Stations whose approach frame differs from their body frame expose `app`;
+  // the arm aims at that while the body frame still draws the prop.
+  s.tgtR = s.app || s.R;
+  s.ypr = yprOf(s.tgtR);
+  if (s.grip) s.yprGrip = yprOf(s.grip);
+});
 const POS_TOL = 0.052, ORI_TOL = 32, SPEED = 0.34, ASSIST_R = 0.088;
 // Height above the cell's centre to put the TCP for a top-down clamp. The cell
 // lies on its side (radius 12 mm) and the finger pads are 22 mm tall, reaching
@@ -276,7 +289,9 @@ const POS_TOL = 0.052, ORI_TOL = 32, SPEED = 0.34, ASSIST_R = 0.088;
 const PHYS_GRASP_H = 0.011;
 // World position of the charger pocket's mouth, derived from the MJCF body
 // pose (ST[1].p + z*0.024, then +z*0.006 to the slot site).
-const CHARGER_SLOT_P = [0.1, 0.157185, 0.107314];
+const CHARGER_SLOT_P = [0.1, 0.105224, 0.072622];
+// Outward normal of the dock, = column 2 of ST[1].R.
+const CHARGER_NZ = [0, 0.42289, 0.90618];
 
 // ── 4. Studio State ──
 const st = {
@@ -302,6 +317,11 @@ const st = {
   dq6: [0, 0, 0, 0, 0, 0],
   dq6Real: [0, 0, 0, 0, 0, 0],
   tween: null,
+  // When set, this rotation matrix overrides poseR(cmd.yaw,pitch,roll). A
+  // clean roll about a fixed world axis -- what winding a handwheel needs --
+  // is not representable as a yaw/pitch/roll triple that yprOf() recovers
+  // faithfully, so such motions command R directly.
+  cmdR: null,
   quinticPlan: null,
   holdCrowd: 0,
   pilot: null,
@@ -413,18 +433,10 @@ function updatePhysReadout(nowMs) {
 // The cell is a real rigid body at Station 0 (pick & place) and Station 1
 // (charger dock insertion). Station 2 manipulates the valve handwheel, which
 // is a real revolute joint with stem friction rather than the cell.
-// Station 0 only. The charger dock's normal is (0, 0.906, -0.423) -- it faces
-// partly DOWNWARD, so gravity pushes a cell out of the pocket, and the jaws
-// (about 40 mm across the finger arms while holding a cell) cannot enter the
-// slot to place one anyway. Physical retention there needs a sprung clip or a
-// re-angled dock, so Station 1's cell logic stays analytic rather than ship a
-// task that silently never completes.
-const physCellOn = () => physArmOn() && st.station === 0;
-// Station 2's handwheel is a real revolute joint in the MJCF (validated
-// breakaway torque 0.14 N*m, holds its angle after release, damps out instead
-// of free-spinning) and real collision geometry the arm can hit, but the 90
-// deg turn itself is still driven by the task logic and the wheel is servoed
-// to follow it: see the valve_act comment in the MJCF.
+// The cell is a real rigid body at Station 0 (pick & place) and Station 1
+// (charger dock insertion). Station 2 manipulates the handwheel instead.
+const physCellOn = () => physArmOn() && (st.station === 0 || st.station === 1);
+const physValveOn = () => physArmOn() && st.station === 2;
 
 /**
  * Approach yaw (degrees) that lines the jaws up across the cell's curved wall.
@@ -497,7 +509,7 @@ function freshArm() {
 // in place. A failure here is not fatal: physArmOn() simply stays false.
 (async () => {
   const t0 = performance.now();
-  const p = await initPhysics({ rigs: [4, 6], modelUrl: "/models/operon_station0.xml?v=23" });
+  const p = await initPhysics({ rigs: [4, 6], modelUrl: "/models/operon_station0.xml?v=24" });
   st.phys.available = p.available;
   st.phys.reason = p.reason;
   st.phys.arms = p.arms;
@@ -1296,7 +1308,7 @@ function armTarget(dof) {
     const g = st.closed || a.gripping;
     return { p: s.p, R: g ? s.R : s.grip, ypr: g ? s.ypr : s.yprGrip };
   }
-  return { p: s.p, R: s.R, ypr: s.ypr };
+  return { p: s.p, R: s.tgtR, ypr: s.ypr };
 }
 
 function setClosed(v, lift = true, forceAction = null) {
@@ -1389,14 +1401,18 @@ function evaluateArm(dof, f, dt) {
     const z = [f.R[2], f.R[5], f.R[8]], x = [f.R[0], f.R[3], f.R[6]], off = angleBetween(z, [1, 0, 0]);
     const oriDeg = Math.round(off);
     const aligned = pos < POS_TOL && off < ORI_TOL;
-    a.gripping = aligned && closed;
-    const ang = Math.abs(Math.atan2(x[1], -x[2])) / D2R, folded = ang > 90 ? 180 - ang : ang;
-    if (a.gripping) a.valve = Math.max(a.valve, folded);
+    if (!physValveOn()) {
+      // Analytic fallback: infer the turn from the tool's own roll. Under
+      // MuJoCo the angle comes from the solved hinge instead.
+      a.gripping = aligned && closed;
+      const ang = Math.abs(Math.atan2(x[1], -x[2])) / D2R, folded = ang > 90 ? 180 - ang : ang;
+      if (a.gripping) a.valve = Math.max(a.valve, folded);
+    }
     if (a.gripping && a.valve >= 75) { a.done[i] = true; return { msg: "Valve Rotated 90°", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 }; }
     const msg = !aligned ? `To Valve · ${posMm} mm · ${oriDeg}°` : !closed ? "Aligned -> Click Grasp" : dof === 4 ? `Grasping · 4-DOF No Wrist Roll (${a.valve.toFixed(0)}°)` : `Rotating Valve… ${a.valve.toFixed(0)}°/90°`;
     return { msg, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
   }
-  const oriDeg = Math.round(oriError(f.R, s.R));
+  const oriDeg = Math.round(oriError(f.R, s.tgtR));
   const aligned = pos < POS_TOL && oriDeg < ORI_TOL;
   if (aligned && !closed && a.inserted) { a.done[i] = true; return { msg: "Charger Dock Slotted", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 }; }
   const msg = aligned ? "Aligned in Slot -> Click Release" : dof === 4 ? `4-DOF Planar Lock · ${oriDeg}° Off` : `To Charger · ${posMm} mm · ${oriDeg}°`;
@@ -1627,6 +1643,7 @@ if ($("rig-mode-bar")) {
 function setStation(i) {
   st.station = i;
   st.quinticPlan = null;
+  st.cmdR = null;
   // Make the solver's solid geometry match what the renderer draws: only the
   // active station's props stay collidable, the rest are parked below the
   // table. Otherwise the arm hits invisible obstacles mid-traverse.
@@ -1651,8 +1668,15 @@ function setStation(i) {
   if (i === 0) {
     if (!st.arm[4].held && !st.arm[6].held) setClosed(false);
   } else if (i === 1) {
-    for (const d of [4, 6]) { st.arm[d].inserted = null; st.arm[d].held = true; }
-    setClosed(true);
+    if (physArmOn()) {
+      // Physics owns the cell here: it starts on the pick pad and has to be
+      // picked up for real, so don't fake a grasp.
+      for (const d of [4, 6]) { st.arm[d].inserted = null; st.arm[d].held = false; }
+      setClosed(false);
+    } else {
+      for (const d of [4, 6]) { st.arm[d].inserted = null; st.arm[d].held = true; }
+      setClosed(true);
+    }
   } else if (i === 2) {
     setClosed(false);
   }
@@ -1824,6 +1848,236 @@ $("btn-reset").onclick = () => {
 
 const later = (ms, fn) => setTimeout(fn, ms);
 
+/**
+ * Station 2, physically: engage the handwheel hub with the jaws and roll the
+ * tool about the wheel's own axis so the ARM winds the valve open. There is no
+ * actuator on the stem, so every degree comes from contact, and the wheel
+ * holds wherever it is left. Validated at ~91 deg turned, ~95 deg retained.
+ *
+ * Commands R directly: routed through yaw/pitch/roll the same motion only
+ * reached 36 deg before unwinding, because yprOf() cannot represent a clean
+ * roll about world +X.
+ */
+/** Re-orthonormalised blend between two rotation matrices. */
+function blendR(A, B, f) {
+  const Mx = A.map((v, i) => v * (1 - f) + B[i] * f);
+  const nrm3 = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const z = nrm3([Mx[2], Mx[5], Mx[8]]);
+  let x = [Mx[0], Mx[3], Mx[6]];
+  const d = x[0] * z[0] + x[1] * z[1] + x[2] * z[2];
+  x = nrm3([x[0] - d * z[0], x[1] - d * z[1], x[2] - d * z[2]]);
+  return fromZX(z, x);
+}
+
+/**
+ * Run [{p, R, grip, ms, tol}] waypoints back to back, then call done().
+ *
+ * Each waypoint is ARRIVAL-GATED, not merely timed: it advances once the tool
+ * is physically within `tol` of the commanded point, or after a timeout. A
+ * purely time-based sequence desynchronises on slow frames because the right
+ * rig follows the firmware quintic stream and lags, and the errors accumulate
+ * until the final seating misses the dock entirely.
+ */
+function runPoseSequence(steps, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= steps.length) { st.cmdR = null; done && done(); return; }
+    const w = steps[i++];
+    if (w.grip !== undefined) setClosed(!!w.grip, false);
+    if (w.p) { st.cmd.x = w.p[0]; st.cmd.y = w.p[1]; st.cmd.z = w.p[2]; }
+    if (w.R) st.cmdR = w.R;
+    if (w.status && $("watch-status")) $("watch-status").textContent = w.status;
+    showCmd(st.cmd);
+    st.holdCrowd = performance.now() + w.ms + 4000;
+    if (w.p && physArmOn()) {
+      const tol = w.tol || 0.006;
+      physWaitArrival(w.p, tol, Math.max(w.ms * 3, 900), () => later(Math.min(w.ms, 200), next));
+    } else {
+      later(w.ms, next);
+    }
+  };
+  st.tween = null;
+  next();
+}
+
+/**
+ * Station 1, physically: grasp the cell off the pick pad, carry it to the
+ * charger and lower it into the cradle so it is RETAINED BY THE DOCK, not by
+ * the gripper. Validated: seated 1.2 mm from the slot, still 8.3 mm after the
+ * arm withdraws and 3 s of settling.
+ *
+ * The motion is deliberately staged. Blending position and orientation at the
+ * same time walked the arm through poses it could not track (50 mm short), and
+ * a straight line from the safe point to the dock clips the cradle and strips
+ * the cell out of the jaws, so it lifts, re-orients IN PLACE, traverses ABOVE
+ * the dock, and only then descends.
+ */
+function runPhysicalDockInsertion() {
+  const DOCK = ST[1].tgtR;
+  const along = (r) => [CHARGER_SLOT_P[0] + CHARGER_NZ[0] * r,
+                        CHARGER_SLOT_P[1] + CHARGER_NZ[1] * r,
+                        CHARGER_SLOT_P[2] + CHARGER_NZ[2] * r];
+  const SAFE = [0.130, 0.020, 0.150];
+  const STAND = along(0.034);
+  const OVER = [STAND[0], STAND[1], 0.155];
+
+  const cell0 = st.phys.readR ? st.phys.readR.cellP.slice() : [PICK_P[0], PICK_P[1], 0.0135];
+  const gy0 = physCellGraspYaw(st.phys.readR, -25);
+  st.tween = null;
+  st.holdCrowd = performance.now() + 20000;
+  setClosed(false, false);
+  if ($("watch-status")) $("watch-status").textContent = "Approaching cell\u2026";
+
+  // Phase 1: get above the cell, THEN re-read its pose. Reading once up front
+  // is not safe -- right after a station change the cell may still be
+  // settling, and the whole sequence would be aimed at a stale position.
+  runPoseSequence([
+    { p: [cell0[0], cell0[1], cell0[2] + PHYS_GRASP_H + 0.070], R: poseR(gy0, 0, 0), ms: 620 },
+  ], () => {
+    const pr = st.phys.readR;
+    const cp = pr ? pr.cellP.slice() : cell0;
+    const zG = cp[2] + PHYS_GRASP_H;
+    const GR = poseR(physCellGraspYaw(pr, gy0), 0, 0);
+    const graspP = [cp[0], cp[1], zG];
+
+    st.cmdR = GR;
+    st.cmd.x = graspP[0]; st.cmd.y = graspP[1]; st.cmd.z = graspP[2];
+    showCmd(st.cmd);
+    st.holdCrowd = performance.now() + 20000;
+
+    // Clamp only once the tool has physically arrived, exactly as the
+    // Station 0 cycle does -- the right rig follows the firmware quintic
+    // stream and lags any fixed timer.
+    // Clamp, then VERIFY the pads actually took the cell before committing to
+    // the carry. Without this the sequence happily carries nothing to the
+    // dock and reports "aligned in slot" with the cell still on the pad.
+    const clampThen = (attempt, after) => {
+      physWaitArrival(graspP, 0.004, 3000, () => {
+        setClosed(true, false);
+        if ($("watch-status")) $("watch-status").textContent = attempt > 1 ? "Re-clamping cell\u2026" : "Clamping cell";
+        later(480, () => {
+          const r = st.phys.readR;
+          if (r && r.held) { after(); return; }
+          if (attempt >= 3) {
+            if ($("watch-status")) $("watch-status").textContent = "Could not get a grip on the cell";
+            st.cmdR = null;
+            return;
+          }
+          // Back off, re-read the cell (it may have been nudged) and retry.
+          setClosed(false, false);
+          const pr2 = st.phys.readR;
+          if (pr2) {
+            const c2 = pr2.cellP;
+            graspP[0] = c2[0]; graspP[1] = c2[1]; graspP[2] = c2[2] + PHYS_GRASP_H;
+          }
+          st.cmd.x = graspP[0]; st.cmd.y = graspP[1]; st.cmd.z = graspP[2] + 0.045;
+          showCmd(st.cmd);
+          later(420, () => {
+            st.cmd.z = graspP[2]; showCmd(st.cmd);
+            clampThen(attempt + 1, after);
+          });
+        });
+      });
+    };
+    clampThen(1, () => {
+      later(120, () => {
+        const steps = [{ p: SAFE, R: GR, ms: 780, status: "Carrying to charger dock\u2026" }];
+        // Re-orient IN PLACE, then traverse ABOVE the dock, then descend.
+        // Blending position and orientation together walks the arm through
+        // poses it cannot track, and a straight line to the dock clips the
+        // cradle and strips the cell out of the jaws.
+        for (let k = 1; k <= 6; k++) steps.push({ p: SAFE, R: blendR(GR, DOCK, k / 6), ms: 190 });
+        for (let k = 1; k <= 6; k++) {
+          const f = k / 6;
+          steps.push({ p: [SAFE[0] + (OVER[0] - SAFE[0]) * f, SAFE[1] + (OVER[1] - SAFE[1]) * f, SAFE[2] + (OVER[2] - SAFE[2]) * f], R: DOCK, ms: 210 });
+        }
+        for (let k = 1; k <= 5; k++) steps.push({ p: [OVER[0], OVER[1], OVER[2] + (STAND[2] - OVER[2]) * (k / 5)], R: DOCK, ms: 200, tol: 0.004 });
+        for (let k = 1; k <= 6; k++) {
+          const f = k / 6;
+          steps.push({ p: along(0.034 * (1 - f) + 0.012 * f), R: DOCK, ms: 200, tol: 0.003, status: k === 6 ? "Seating cell in dock\u2026" : undefined });
+        }
+        steps.push({ R: DOCK, grip: false, ms: 560, status: "Releasing into cradle" });
+        for (let k = 1; k <= 4; k++) steps.push({ p: along(0.012 + 0.015 * k), R: DOCK, ms: 200 });
+        steps.push({ p: along(0.080), R: DOCK, ms: 560, status: "Cell docked \u2014 retained by the cradle" });
+        runPoseSequence(steps);
+      });
+    });
+  });
+}
+
+function runPhysicalValveTurn() {
+  const z = [1, 0, 0], x = [0, 0, 1];
+  const y = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]];
+  const BASE = [x[0], y[0], z[0], x[1], y[1], z[1], x[2], y[2], z[2]];
+  const HUB = [0.172, 0, 0.140];
+  const setPose = (p, R) => { st.cmd.x = p[0]; st.cmd.y = p[1]; st.cmd.z = p[2]; st.cmdR = R; showCmd(st.cmd); };
+
+  st.holdCrowd = performance.now() + 40000;
+  st.tween = null;
+  setClosed(false, false);
+  setPose([HUB[0] - 0.050, HUB[1], HUB[2]], BASE);
+  if ($("watch-status")) $("watch-status").textContent = "Engaging handwheel hub\u2026";
+
+  later(650, () => {
+    setPose(HUB, BASE);
+    later(650, () => {
+      setClosed(true, false);
+      if ($("watch-status")) $("watch-status").textContent = "Winding valve open\u2026";
+      later(700, () => {
+        // Wind the wheel CLOSED-LOOP on its own solved angle. Open-loop the
+        // tool outruns the wheel by roughly 3x and most of the commanded
+        // rotation is wasted as slip; leading the MEASURED angle by a fixed
+        // amount keeps steady driving torque on the hub and completes as
+        // fast as the contact actually allows.
+        const LEAD = 14, TARGET = 92;
+        const t0 = performance.now();
+        const finish = (endDeg) => {
+          const endR = M.mul(M.Rx(Math.min(endDeg + 3, 115) * D2R), BASE);
+          later(350, () => {
+            setClosed(false, false);
+            later(350, () => {
+              setPose([HUB[0] - 0.060, HUB[1], HUB[2]], endR);
+              later(800, () => { st.cmdR = null; });
+            });
+          });
+        };
+        // Stall watchdog: if the jaws lose their bite on the hub the wheel
+        // stops advancing while the tool keeps rolling. Back off, re-seat and
+        // carry on from the angle already won.
+        let best = 0, lastGain = performance.now(), reseats = 0, reseating = false;
+        const iv = setInterval(() => {
+          const r = st.phys.readR;
+          const actual = r ? Math.abs(r.valveRad) / D2R : 0;
+          const now = performance.now();
+          if (actual > best + 0.5) { best = actual; lastGain = now; }
+          if (actual >= TARGET || now - t0 > 30000) {
+            clearInterval(iv);
+            finish(actual);
+            return;
+          }
+          if (reseating) return;
+          if (now - lastGain > 2200 && reseats < 3) {
+            reseats++; reseating = true; lastGain = now;
+            setClosed(false, false);
+            setPose([HUB[0] - 0.030, HUB[1], HUB[2]], M.mul(M.Rx(actual * D2R), BASE));
+            if ($("watch-status")) $("watch-status").textContent = "Re-seating on the handwheel\u2026";
+            later(420, () => {
+              setPose(HUB, M.mul(M.Rx(actual * D2R), BASE));
+              later(420, () => {
+                setClosed(true, false);
+                later(400, () => { reseating = false; lastGain = performance.now(); });
+              });
+            });
+            return;
+          }
+          setPose(HUB, M.mul(M.Rx(Math.min(actual + LEAD, 130) * D2R), BASE));
+          st.holdCrowd = performance.now() + 5000;
+        }, 80);
+      });
+    });
+  });
+}
+
 function runPickAndPlaceCycle() {
   if (st.station !== 0) setStation(0);
   for (const d of [4, 6]) {
@@ -1901,10 +2155,13 @@ $("btn-auto").onclick = () => {
   if (s.id === "battery") {
     runPickAndPlaceCycle();
   } else if (s.id === "charger") {
+    if (physCellOn()) { runPhysicalDockInsertion(); return; }
     for (const d of [4, 6]) { st.arm[d].inserted = null; st.arm[d].held = true; st.arm[d].done[1] = false; }
     setClosed(true);
     const back = [s.p[0] - s.R[2] * 0.05, s.p[1] - s.R[5] * 0.05, s.p[2] - s.R[8] * 0.05];
     tweenTo(s.ypr, back, 1000, () => tweenTo(s.ypr, s.p, 750, () => later(400, () => setClosed(false))));
+  } else if (physValveOn()) {
+    runPhysicalValveTurn();
   } else {
     setClosed(false);
     tweenTo(s.yprGrip, s.p, 1100, () => later(300, () => { setClosed(true); later(400, () => tweenTo(s.ypr, s.p, 1300)); }));
@@ -2076,7 +2333,7 @@ const showCmd = (c) => {
 };
 document.querySelectorAll("[data-p]").forEach(inp => inp.addEventListener("input", () => {
   st.cmd[inp.dataset.p] = parseFloat(inp.value);
-  st.tween = null; st.quinticPlan = null;
+  st.tween = null; st.quinticPlan = null; st.cmdR = null;
   st.holdCrowd = performance.now() + 1200;
   // Instant zero-latency kinematic solve on slider drag with continuous wrist unwrapping
   const R = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
@@ -2110,6 +2367,7 @@ if ($("btn-recenter-wrist")) {
     const t = armTarget(st.arm[6].held ? 6 : 4);
     st.deskBasePos = [t.p[0], t.p[1], Math.max(0.08, t.p[2])];
     st.cmd = { yaw: t.ypr[0], pitch: t.ypr[1], roll: t.ypr[2], x: st.deskBasePos[0], y: st.deskBasePos[1], z: st.deskBasePos[2] };
+    st.cmdR = null;
     const R = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
     st.q4 = ik4(p, R).q;
     st.q6 = ik6(p, R, st.q6).q;
@@ -3046,7 +3304,7 @@ function tick(now) {
       }
     }
     if (clampedCollision) showCmd(st.cmd);
-    const R = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
+    const R = st.cmdR || poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll), p = [st.cmd.x, st.cmd.y, st.cmd.z];
     const raw4 = ik4(p, R).q;
     const raw6 = ik6(p, R, st.q6).q;
     st.q4 = smooth(st.q4, raw4, 0.94);
@@ -3149,12 +3407,15 @@ function tick(now) {
       }
     }
     if (st.station === 2) {
-      // Keep the solver's handwheel at the angle the task logic is showing, so
-      // the collision geometry the arm can hit is always posed exactly as it
-      // is drawn. Servoed through a weak torque-limited actuator rather than
-      // teleported, so tool contact resolves smoothly.
-      pa.setValveTarget(st.arm[4].valve * D2R);
-      pb.setValveTarget(st.arm[6].valve * D2R);
+      // The handwheel is turned by the ARM: there is no actuator on the stem,
+      // so the angle below is whatever the gripper has physically wound it to
+      // against the stem's frictionloss, and it holds where it is left.
+      for (const [dof, r] of [[4, rA], [6, rB]]) {
+        const a = st.arm[dof];
+        a.valve = Math.abs(r.valveRad) / D2R;
+        a.gripping = st.closed && r.contacts > 2;
+        if (a.valve >= 75) a.done[2] = true;
+      }
     }
   } else {
     st.phys.readL = st.phys.readR = null;
@@ -3294,7 +3555,9 @@ function tick(now) {
         physPose: (pr && physCellOn()) ? { p: pr.cellP, R: pr.cellR } : null
       },
       charger: { p: ST[1].p, R: ST[1].R, lit: a.done[1] },
-      valve: { p: ST[2].p, angle: a.valve * D2R }
+      // Draw the wheel at its SOLVED angle when MuJoCo owns it, so the
+      // rendered handwheel is the one the arm actually turned.
+      valve: { p: ST[2].p, angle: (pr && physValveOn()) ? pr.valveRad : a.valve * D2R }
     };
   };
   updateRig(4, fLeft, makeProps(4, vLeft, is4v6 ? siteLeft : null));
