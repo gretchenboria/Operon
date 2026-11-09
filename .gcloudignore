@@ -1,0 +1,29 @@
+# Keep the Cloud Build upload to just what the image needs.
+#
+# Without this file gcloud falls back to .gitignore, which does NOT exclude the
+# untracked screen recording — so a 25 MB video and the 16 MB .git directory
+# would be uploaded on every deploy.
+#
+# node_modules is excluded deliberately: the Dockerfile runs
+# `npm install --omit=dev` inside the image, which is what fetches the 8.2 MB
+# MuJoCo .wasm. Uploading the host's node_modules would just be slower and
+# risks shipping macOS-built artifacts into a linux image.
+
+.git/
+.gitignore
+node_modules/
+.DS_Store
+**/.DS_Store
+__pycache__/
+**/__pycache__/
+.env
+
+# Local capture, never deploy
+*.mov
+*.mp4
+
+# Dev-only: regression harnesses and docs are not needed at runtime
+test/
+HANDOFF.md
+README.md
+LICENSE
