@@ -91,14 +91,14 @@
   <div class="row" style="justify-content:space-between;margin:-4px 2px 10px"><span class="lbl" id="me-name"></span><span class="lbl" id="pilot-who"></span></div>
   <section class="panel hide" id="p-station" style="padding:12px 16px"><div class="lbl" id="st-n"></div><h1 id="st-name" style="font-size:20px;margin-top:4px"></h1></section>
 
-  <section class="panel hide" id="p-team">
+  <section class="panel hide" id="p-team" style="display:none">
     <div class="lbl" style="margin-bottom:8px" id="t-team">Target Arm Rig</div>
     <div class="seg" id="team"><button data-v="4">Left Rig</button><button data-v="6">Right Rig (6-DOF)</button></div>
     <div class="score" style="margin-top:10px"><div id="sc4">Left<b>--</b></div><div id="sc6">Right<b>--</b></div></div>
   </section>
 
   <section class="panel hide" id="p-pose">
-    <div id="hint" style="font:700 17px var(--sans);text-align:center;padding:11px;border:2px solid var(--ink);border-radius:16px;background:var(--py);min-height:52px">1. Hold wrist comfortably in front of screen &amp; tap ZERO<br/>2. Move ±14° Left/Right or Up/Down · Tap GRASP</div>
+    <div id="hint" style="font:700 17px var(--sans);text-align:center;padding:11px;border:2px solid var(--ink);border-radius:16px;background:var(--py);min-height:52px">1. Hold wrist comfortably &amp; tap ZERO<br/>2. Move wrist gently · Tap GRASP / RELEASE</div>
     <div class="row" style="margin-top:10px;gap:8px">
       <button class="btn light" id="snap" style="width:38%;font-size:16px;padding:16px 8px;background:var(--py);color:var(--ink)">ALIGN</button>
       <button class="btn" id="grab" style="flex:1;font-size:19px;padding:16px;background:var(--pg);color:var(--ink)">GRASP</button>
@@ -122,11 +122,11 @@
         </div>
       </div>
       <div class="row" style="margin-bottom:8px;justify-content:space-between;gap:6px">
-        <span class="lbl" id="t-gain">Effort</span>
+        <span class="lbl" id="t-gain">Speed</span>
         <div class="seg" id="gain-bar" style="flex:1">
-          <button data-g="2.0">2.0x</button>
-          <button data-g="3.8" class="sel">3.8x Watch</button>
-          <button data-g="5.2">5.2x Micro</button>
+          <button data-g="1.5">1.5x Gentle</button>
+          <button data-g="2.4" class="sel">2.4x Smooth</button>
+          <button data-g="3.4">3.4x Quick</button>
         </div>
       </div>
       <div class="row" style="margin-bottom:8px;gap:6px">
@@ -171,6 +171,6 @@
     <p class="sub" id="q-note"></p>
   </section>
 
-  <script type="module" src="./phone.js"></script>
+  <script type="module" src="./phone.js?v=13"></script>
 </body>
 </html>

@@ -300,7 +300,7 @@ const st = {
   watchLagMs: 0.0,
   estimatedR: [1, 0, 0, 0, 1, 0, 0, 0, 1],
   selectedTraj: "imu_calibration",
-  studioGain: 3.2,
+  studioGain: 2.4,
   deskBasePos: [0.15, 0.0, 0.11],
   hwStreamer: {
     lastSentMs: 0,
@@ -367,7 +367,7 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
 
 const camera = new THREE.PerspectiveCamera(38, cv.width / cv.height, 0.04, 3.5);
-camera.position.set(0.60, 0.37, 0.0);
+camera.position.set(0.68, 0.40, 0.0);
 const controls = new OrbitControls(camera, cv);
 controls.target.set(0.11, 0.11, 0);
 controls.enableDamping = true;
@@ -943,79 +943,68 @@ function updateRig(dof, fk, props) {
 
 const AOV_EXPLAIN = {
   rtx: {
-    title: "WebGL2 PBR Shaded Pass · 3D Yaw / Pitch / Roll Gizmo",
-    desc: "Browser-native Three.js WebGL2 metallic-roughness shading with fixture collision clamping (no remote Omniverse RTX stream required). Export OpenUSD (.usda) for Isaac Sim PhysX/RTX.",
+    title: "PBR Lit Pass",
+    desc: "",
     legend: `
-      <span class="swatch" title="Yaw rotates horizontally around Z"><i style="background:#60a5fa"></i>Yaw (Z-Turn)</span>
-      <span class="swatch" title="Pitch tilts nose up/down"><i style="background:#34d399"></i>Pitch (Tilt)</span>
-      <span class="swatch" title="Roll twists wrist around approach axis"><i style="background:#c084fc"></i>Roll (Twist)</span>
+      <span class="swatch"><i style="background:#60a5fa"></i>L/R = Side</span>
+      <span class="swatch"><i style="background:#34d399"></i>U/D = Reach+Height</span>
+      <span class="swatch"><i style="background:#c084fc"></i>Twist = Roll</span>
     `
   },
   depth: {
-    title: "Depth Z Pass · Metric Distance-to-Camera Buffer",
-    desc: "Encodes linear metric distance Z (in meters) from the camera pinhole to every surface pixel.",
+    title: "Depth Z Pass (m)",
+    desc: "",
     legend: `
-      <span class="swatch"><i style="background:#f8fafc"></i>Near (0.35 m)</span>
-      <span class="swatch"><i style="background:#64748b"></i>Mid (0.85 m)</span>
-      <span class="swatch"><i style="background:#0f172a"></i>Far (>1.60 m)</span>
+      <span class="swatch"><i style="background:#f8fafc"></i>Near</span>
+      <span class="swatch"><i style="background:#64748b"></i>Mid</span>
+      <span class="swatch"><i style="background:#0f172a"></i>Far</span>
     `
   },
   normal: {
-    title: "Surface Normals Pass · View-Space XYZ Unit Vectors",
-    desc: "Maps 3D surface orientation vectors N = (Nx, Ny, Nz) into RGB channels.",
+    title: "Surface Normals (XYZ)",
+    desc: "",
     legend: `
-      <span class="swatch"><i style="background:#f43f5e"></i>Red = +X (Right)</span>
-      <span class="swatch"><i style="background:#34d399"></i>Green = +Y (Up)</span>
-      <span class="swatch"><i style="background:#60a5fa"></i>Blue = +Z (Toward Lens)</span>
+      <span class="swatch"><i style="background:#f43f5e"></i>+X</span>
+      <span class="swatch"><i style="background:#34d399"></i>+Y</span>
+      <span class="swatch"><i style="background:#60a5fa"></i>+Z</span>
     `
   },
   semantic: {
-    title: "Semantic Segmentation Pass · Per-Pixel Category Class IDs (1..6)",
-    desc: "Assigns a deterministic class color to every pixel by object category.",
+    title: "Semantic Classes",
+    desc: "",
     legend: `
-      <span class="swatch"><i style="background:#9d72ff"></i>1: Left Arm</span>
-      <span class="swatch"><i style="background:#3b82f6"></i>2: Right Arm</span>
-      <span class="swatch"><i style="background:#38bdf8"></i>3: Power Cell</span>
-      <span class="swatch"><i style="background:#60a5fa"></i>4: Charger</span>
-      <span class="swatch"><i style="background:#c084fc"></i>5: Valve</span>
+      <span class="swatch"><i style="background:#9d72ff"></i>Left</span>
+      <span class="swatch"><i style="background:#3b82f6"></i>Right</span>
+      <span class="swatch"><i style="background:#38bdf8"></i>Cell</span>
+      <span class="swatch"><i style="background:#60a5fa"></i>Dock</span>
+      <span class="swatch"><i style="background:#c084fc"></i>Valve</span>
     `
   },
   instance: {
-    title: "Instance Segmentation Pass · Unique OpenUSD Prim IDs",
-    desc: "Assigns a unique color hash to each individual object instance.",
+    title: "OpenUSD Instance IDs",
+    desc: "",
     legend: `
-      <span class="swatch"><i style="background:#b99aff"></i>#10: Left_Rig</span>
-      <span class="swatch"><i style="background:#60a5fa"></i>#20: Right_Rig</span>
-      <span class="swatch"><i style="background:#f0abfc"></i>#15: Watch_IMU</span>
-      <span class="swatch"><i style="background:#7dd3fc"></i>#30/#31: Cells</span>
+      <span class="swatch"><i style="background:#b99aff"></i>#10</span>
+      <span class="swatch"><i style="background:#60a5fa"></i>#20</span>
+      <span class="swatch"><i style="background:#f0abfc"></i>#15</span>
+      <span class="swatch"><i style="background:#7dd3fc"></i>#30</span>
     `
   }
 };
 
 const STATION_GUIDES = [
-  {
-    title: "Station 1: Cell Pick & Place | Point Wrist Left/Right & Tilt Down to Grasp",
-    desc: "Move wrist within 85 mm of the blue 21700 cell (magnetic funnel guides the gripper onto target), then click Grasp (or pinch/clench wrist). Sweep wrist right to the target pad and click Release."
-  },
-  {
-    title: "Station 2: Compound-Angle Charger Dock | Tilt & Twist Wrist to Slot Cell",
-    desc: "Guide the grasped cell toward the tilted dock at right. Within 85 mm, the magnetic funnel aligns pitch and roll; click Release (or pinch/clench wrist) to slot the cell into the charger."
-  },
-  {
-    title: "Station 3: Process Valve Handwheel | Grasp Hub & Twist Forearm 90°",
-    desc: "Bring the gripper to the purple valve wheel and click Grasp (auto-aligns horizontally if away). Then twist your forearm 90° to rotate the valve wheel."
-  }
+  { title: "Task 1: Pick & Place Cell", desc: "" },
+  { title: "Task 2: Slot into Charger", desc: "" },
+  { title: "Task 3: Turn Valve 90°", desc: "" }
 ];
 
 function renderAOVBanner(mode) {
   const info = AOV_EXPLAIN[mode] || AOV_EXPLAIN.rtx;
   const stGuide = STATION_GUIDES[st.station] || STATION_GUIDES[0];
   const titleText = mode === "rtx" ? stGuide.title : info.title;
-  const descText = mode === "rtx" ? stGuide.desc : info.desc;
   if ($("aov-banner-title")) {
-    $("aov-banner-title").innerHTML = `<svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span>${titleText}</span>`;
+    $("aov-banner-title").innerHTML = `<span>${titleText}</span>`;
   }
-  if ($("aov-banner-desc")) $("aov-banner-desc").textContent = descText;
   if ($("aov-banner-legend")) $("aov-banner-legend").innerHTML = info.legend;
 }
 
@@ -1119,7 +1108,7 @@ function armTarget(dof) {
   return { p: s.p, R: s.R, ypr: s.ypr };
 }
 
-function setClosed(v, lift = true) {
+function setClosed(v, lift = true, forceAction = null) {
   const next = !!v;
   if (st.closed !== next) st.recoilUntil = performance.now() + 340;
   st.closed = next;
@@ -1128,6 +1117,13 @@ function setClosed(v, lift = true) {
     : `<svg class="ico sm" viewBox="0 0 24 24"><path d="M7 4v8l3 3v5M17 4v8l-3 3v5M4 8h4M16 8h4"/></svg><span>Grasp</span>`;
   $("btn-grab").classList.toggle("on", next);
   send({ t: "grip", g: next ? 1 : 0 });
+
+  // Ensure kinematic joint state matches current st.cmd before evaluating grasp/release proximity
+  const cmdR = poseR(st.cmd.yaw, st.cmd.pitch, st.cmd.roll);
+  const cmdP = [st.cmd.x, st.cmd.y, st.cmd.z];
+  st.q4 = ik4(cmdP, cmdR).q;
+  st.q6 = ik6(cmdP, cmdR, st.q6).q;
+
   const fks = { 4: fk4(st.q4), 6: fk6(st.q6) };
   const cl = (val, lo, hi) => Math.max(lo, Math.min(hi, val));
   let releasedAny = false, grabbedAny = false;
@@ -1136,8 +1132,9 @@ function setClosed(v, lift = true) {
     if (next) {
       const dxy = Math.hypot(f.tip[0] - a.battP[0], f.tip[1] - a.battP[1]);
       const dz = Math.abs(f.tip[2] - 0.032);
-      if (!a.held && !a.inserted && dxy < 0.088 && dz < 0.14 && oriError(f.R, a.battR) < 65) {
+      if (forceAction === "grasp_cell" || (!a.held && !a.inserted && dxy < 0.105 && dz < 0.16)) {
         a.held = true;
+        a.inserted = null;
         a.dest = a.battP[1] > 0.02 ? "pick" : "place";
         grabbedAny = true;
         if (st.station === 0) a.done[0] = false;
@@ -1148,11 +1145,15 @@ function setClosed(v, lift = true) {
       const dPlace = Math.hypot(f.tip[0] - PLACE_P[0], f.tip[1] - PLACE_P[1]);
       const dPick = Math.hypot(f.tip[0] - PICK_P[0], f.tip[1] - PICK_P[1]);
       const dCharger = Math.hypot(f.tip[0] - ST[1].p[0], f.tip[1] - ST[1].p[1], f.tip[2] - ST[1].p[2]);
-      if (st.station === 0 && dPlace < 0.062) {
-        a.battP = [PLACE_P[0], PLACE_P[1], 0.013]; a.battR = PLACE_R; a.done[0] = true;
-      } else if (st.station === 0 && dPick < 0.062 && a.dest === "pick") {
+      if (st.station === 0 && (forceAction === "release_cell" || dPlace < 0.095)) {
+        const destCoord = a.dest === "pick" && dPick < dPlace ? PICK_P : PLACE_P;
+        const destRot = a.dest === "pick" && dPick < dPlace ? PICK_R : PLACE_R;
+        a.battP = [destCoord[0], destCoord[1], 0.013];
+        a.battR = destRot;
+        a.done[0] = true;
+      } else if (st.station === 0 && dPick < 0.095 && a.dest === "pick") {
         a.battP = [PICK_P[0], PICK_P[1], 0.013]; a.battR = PICK_R; a.done[0] = true;
-      } else if (st.station === 1 && dCharger < POS_TOL * 1.45 && oriError(f.R, ST[1].R) < ORI_TOL * 1.35) {
+      } else if (st.station === 1 && (forceAction === "slot_charger" || (dCharger < POS_TOL * 1.65 && oriError(f.R, ST[1].R) < ORI_TOL * 1.65))) {
         a.inserted = { p: [...ST[1].p], R: [...ST[1].R] }; a.done[1] = true;
       } else {
         a.battP = [cl(f.tip[0], 0.06, 0.22), cl(f.tip[1], -0.14, 0.14), 0.013];
@@ -1161,8 +1162,8 @@ function setClosed(v, lift = true) {
       }
     }
   }
-  if (grabbedAny && st.station === 0 && lift && !st.tween) st.cmd.z = Math.max(st.cmd.z, 0.060);
-  if (releasedAny && lift && !st.tween) st.cmd.z = 0.135;
+  if (grabbedAny && st.station === 0 && lift && !st.tween) st.cmd.z = Math.max(st.cmd.z, 0.065);
+  if (releasedAny && lift && !st.tween) st.cmd.z = 0.130;
 }
 
 const angleBetween = (a, b) => Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))) / D2R;
@@ -1208,7 +1209,7 @@ const qrEl = document.querySelector('[data-live="qr"]');
 const urlEl = document.querySelector('[data-live="url"]');
 const statusEl = document.querySelector('[data-live="status"]');
 if (qrEl) qrEl.innerHTML = qrSVG();
-if (urlEl) { urlEl.href = phoneUrl(); urlEl.textContent = phoneUrl().replace(/^https?:\/\//, ""); }
+if (urlEl) { urlEl.href = phoneUrl(); urlEl.textContent = "Open Controller ↗"; }
 if ($("sms-watch")) {
   $("sms-watch").href = `sms:&body=${encodeURIComponent(phoneUrl())}`;
 }
@@ -1221,27 +1222,23 @@ if ($("imu-push-url")) {
   };
 }
 
-const teamCounts = () => { let a = 0, b = 0; phones.forEach(p => p.team === 4 ? a++ : b++); return { 4: a, 6: b }; };
 const addPhone = (id) => {
   if (!phones.has(id)) {
-    const c = teamCounts();
-    phones.set(id, { team: c[4] <= c[6] ? 4 : 6, pose: null, joints: {}, t: 0, assigned: [], name: `Phone ${phones.size + 1}`, imu: null });
+    phones.set(id, { team: 6, pose: null, joints: {}, t: 0, assigned: [], name: `Watch ${phones.size + 1}`, imu: null });
   }
 };
 
 function assignAll() {
   const mode = st.drive === "joints" ? "joints" : "pose";
-  for (const team of [4, 6]) {
-    const ids = [...phones.entries()].filter(([, p]) => p.team === team).map(([id]) => id);
-    const J = JOINTS[team].length, n = Math.min(ids.length, J);
-    ids.forEach((id, k) => {
-      const mine = []; for (let j = 0; j < J; j++) if (n && j % n === k % n) mine.push(j);
-      phones.get(id).assigned = mine; phones.get(id).joints = {};
-      send({ t: "assign", to: id, team, mode, joints: mine.map(j => ({ i: j, n: JOINTS[team][j].n, lim: JOINTS[team][j].lim, v: Math.round((team === 4 ? st.q4 : st.q6)[j] / D2R) })) });
-    });
-  }
-  const c = teamCounts();
-  $("team-pill").textContent = `4D: ${c[4]} · 6D: ${c[6]}`;
+  const ids = [...phones.keys()];
+  const J = JOINTS[6].length, n = Math.min(ids.length, J);
+  ids.forEach((id, k) => {
+    const mine = []; for (let j = 0; j < J; j++) if (n && j % n === k % n) mine.push(j);
+    phones.get(id).team = 6;
+    phones.get(id).assigned = mine; phones.get(id).joints = {};
+    send({ t: "assign", to: id, team: 6, mode, joints: mine.map(j => ({ i: j, n: JOINTS[6][j].n, lim: JOINTS[6][j].lim, v: Math.round(st.q6[j] / D2R) })) });
+  });
+  if ($("team-pill")) $("team-pill").textContent = `Watches: ${phones.size}`;
 }
 
 function pushState() {
@@ -1350,23 +1347,23 @@ function setRigMode(mode) {
 
   if ($("title-left")) {
     $("title-left").innerHTML = is4v6
-      ? `<span style="color:var(--accent)">4-DOF Planar</span> + Watch IMU`
-      : `<span style="color:var(--accent)">6-DOF Sim</span> (Ideal Analytical IK)`;
+      ? `<span style="color:var(--accent)">4-DOF Planar</span>`
+      : `<span style="color:var(--accent)">6-DOF Ideal Sim</span>`;
   }
   if ($("title-right")) {
     $("title-right").innerHTML = isSingle
-      ? `<span style="color:var(--blue)">6-DOF Spherical Wrist</span> (Centered Bench)`
+      ? `<span style="color:var(--blue)">6-DOF Spherical Wrist</span>`
       : is4v6
         ? `<span style="color:var(--blue)">6-DOF Spherical Wrist</span>`
-        : `<span style="color:var(--blue)">6-DOF Real/Watch Twin</span> + Forearm IMU`;
+        : `<span style="color:var(--blue)">6-DOF Real Twin</span>`;
   }
   if ($("kpi-err-lbl")) {
-    $("kpi-err-lbl").textContent = is4v6 ? "4D vs 6D Lag" : "Sim vs Real Lag";
+    $("kpi-err-lbl").textContent = is4v6 ? "4D/6D" : "Lag";
   }
   if ($("chart2-title")) {
     $("chart2-title").innerHTML = is4v6
-      ? `3. <b style="color:var(--purple-hi)">4D vs. 6D Error</b> &amp; <b style="color:#cbd5e1">Speed</b>`
-      : `3. <b style="color:var(--purple-hi)">Sim vs. Real Lag</b> &amp; <b style="color:#cbd5e1">Speed</b>`;
+      ? `3. <b style="color:var(--purple-hi)">4D/6D</b> &amp; <b style="color:#cbd5e1">Speed</b>`
+      : `3. <b style="color:var(--purple-hi)">Lag</b> &amp; <b style="color:#cbd5e1">Speed</b>`;
   }
 }
 if ($("rig-mode-bar")) {
@@ -1403,59 +1400,92 @@ function snapToStation() {
 $("btn-snap").onclick = snapToStation;
 function triggerSmartGraspOrRelease(gestureLabel) {
   const s = ST[st.station];
-  if (!st.closed) {
-    // Check if either arm is already close enough to grasp directly
-    const f4 = fk4(st.q4), f6 = fk6(st.q6);
-    const d4 = Math.hypot(f4.tip[0] - st.arm[4].battP[0], f4.tip[1] - st.arm[4].battP[1]);
-    const d6 = Math.hypot(f6.tip[0] - st.arm[6].battP[0], f6.tip[1] - st.arm[6].battP[1]);
-    if (s.id === "battery" && !st.arm[4].held && !st.arm[6].held && Math.min(d4, d6) > 0.068) {
-      // Auto-approach cell, grasp, and lift so Grasp always works on first click or watch pinch!
+  const isHolding = st.arm[6].held || st.arm[4].held;
+  const f6 = fk6(st.q6);
+
+  if (s.id === "battery") {
+    if (!isHolding) {
       const bp = [st.arm[6].battP[0], st.arm[6].battP[1], 0.032];
-      $("watch-status").textContent = gestureLabel ? `${gestureLabel} -> Auto-aligning & Grasping Cell…` : "Auto-aligning to cell -> Grasping…";
-      tweenTo([-25, 0, 0], bp, 340, () => {
-        setClosed(true, true);
-        $("watch-status").textContent = "Cell grasped! Point wrist right toward Target Pad & tap Release.";
-      });
-      return;
-    }
-    if (s.id === "valve") {
-      const dv = Math.hypot(f6.tip[0] - s.p[0], f6.tip[1] - s.p[1], f6.tip[2] - s.p[2]);
-      if (dv > POS_TOL) {
-        tweenTo(s.yprGrip, s.p, 340, () => {
-          setClosed(true);
-          later(220, () => tweenTo(s.ypr, s.p, 800));
+      const d6 = Math.hypot(f6.tip[0] - bp[0], f6.tip[1] - bp[1], f6.tip[2] - bp[2]);
+      const pickYaw = bp[1] > 0.02 ? 25 : -25;
+      if (d6 <= 0.095) {
+        st.cmd.x = bp[0]; st.cmd.y = bp[1]; st.cmd.z = 0.032; st.cmd.yaw = pickYaw;
+        setClosed(true, true, "grasp_cell");
+        $("watch-status").textContent = "Cell grasped -> Move to Pad & Release";
+      } else {
+        send({ t: "grip", g: 1 });
+        $("watch-status").textContent = "Aligning & grasping cell…";
+        tweenTo([pickYaw, 0, 0], bp, 240, () => {
+          setClosed(true, true, "grasp_cell");
+          $("watch-status").textContent = "Cell grasped -> Move to Pad & Release";
         });
-        return;
       }
-    }
-  } else if (s.id === "battery" && (st.arm[4].held || st.arm[6].held)) {
-    const destP = st.arm[6].dest === "pick" ? PICK_P : PLACE_P;
-    const destYaw = st.arm[6].dest === "pick" ? -25 : 25;
-    const f6 = fk6(st.q6);
-    const dDest = Math.hypot(f6.tip[0] - destP[0], f6.tip[1] - destP[1]);
-    if (dDest > 0.052) {
-      $("watch-status").textContent = gestureLabel ? `${gestureLabel} -> Guiding to Target Pad & Releasing…` : "Guiding to Target Pad -> Releasing…";
-      tweenTo([destYaw, 0, 0], destP, 360, () => {
-        setClosed(false, true);
-        $("watch-status").textContent = "Cell placed on Target Pad!";
-      });
       return;
-    }
-  } else if (s.id === "charger" && (st.arm[4].held || st.arm[6].held)) {
-    const f6 = fk6(st.q6);
-    const dCharger = Math.hypot(f6.tip[0] - s.p[0], f6.tip[1] - s.p[1], f6.tip[2] - s.p[2]);
-    if (dCharger > POS_TOL) {
-      $("watch-status").textContent = "Guiding into Charger Slot -> Slotting Cell…";
-      tweenTo(s.ypr, s.p, 380, () => {
-        setClosed(false, true);
-        $("watch-status").textContent = "Cell slotted into Charger Dock!";
-      });
+    } else {
+      const destP = st.arm[6].dest === "pick" ? PICK_P : PLACE_P;
+      const destYaw = st.arm[6].dest === "pick" ? -25 : 25;
+      const dDest = Math.hypot(f6.tip[0] - destP[0], f6.tip[1] - destP[1]);
+      if (dDest <= 0.105) {
+        st.cmd.x = destP[0]; st.cmd.y = destP[1]; st.cmd.z = destP[2]; st.cmd.yaw = destYaw;
+        setClosed(false, true, "release_cell");
+        $("watch-status").textContent = "Cell placed on Target Pad!";
+      } else {
+        send({ t: "grip", g: 0 });
+        $("watch-status").textContent = "Guiding to Target Pad & releasing…";
+        tweenTo([destYaw, 0, 0], destP, 260, () => {
+          setClosed(false, true, "release_cell");
+          $("watch-status").textContent = "Cell placed on Target Pad!";
+        });
+      }
       return;
     }
   }
+
+  if (s.id === "charger") {
+    if (isHolding) {
+      const dCharger = Math.hypot(f6.tip[0] - s.p[0], f6.tip[1] - s.p[1], f6.tip[2] - s.p[2]);
+      if (dCharger <= 0.095) {
+        st.cmd.x = s.p[0]; st.cmd.y = s.p[1]; st.cmd.z = s.p[2];
+        setClosed(false, true, "slot_charger");
+        $("watch-status").textContent = "Cell slotted into Charger Dock!";
+      } else {
+        send({ t: "grip", g: 0 });
+        $("watch-status").textContent = "Guiding into Charger Slot…";
+        tweenTo(s.ypr, s.p, 260, () => {
+          setClosed(false, true, "slot_charger");
+          $("watch-status").textContent = "Cell slotted into Charger Dock!";
+        });
+      }
+      return;
+    } else {
+      for (const d of [4, 6]) { st.arm[d].inserted = null; st.arm[d].held = true; st.arm[d].done[1] = false; }
+      setClosed(true, false);
+      $("watch-status").textContent = "Cell re-grasped -> Ready to slot";
+      return;
+    }
+  }
+
+  if (s.id === "valve") {
+    if (!st.closed) {
+      const dv = Math.hypot(f6.tip[0] - s.p[0], f6.tip[1] - s.p[1], f6.tip[2] - s.p[2]);
+      if (dv > POS_TOL) {
+        tweenTo(s.yprGrip, s.p, 240, () => {
+          setClosed(true);
+          later(180, () => tweenTo(s.ypr, s.p, 700));
+        });
+        return;
+      }
+      setClosed(true);
+      tweenTo(s.ypr, s.p, 700);
+      return;
+    } else {
+      setClosed(false);
+      return;
+    }
+  }
+
   setClosed(!st.closed);
-  if (gestureLabel) $("watch-status").textContent = `Watch Gesture: ${gestureLabel}`;
-  if (s.id === "valve" && st.closed) tweenTo(s.ypr, s.p, 800);
+  if (gestureLabel) $("watch-status").textContent = `Watch: ${gestureLabel}`;
 }
 $("btn-grab").onclick = () => triggerSmartGraspOrRelease();
 $("btn-reset").onclick = () => {
@@ -1892,7 +1922,7 @@ document.querySelectorAll("[title]").forEach(el => {
   el.addEventListener("mouseleave", () => uiHoverCard?.classList.add("hide"));
 });
 $("btn-cam-reset").onclick = () => {
-  camera.position.set(0.60, 0.37, 0.0);
+  camera.position.set(0.68, 0.40, 0.0);
   controls.target.set(0.11, 0.11, 0);
   controls.update();
 };
@@ -2143,7 +2173,7 @@ function drawCharts() {
     ctx1.textAlign = "left";
     ctx1.fillText("0 Hz", 8, H1 - 4);
     ctx1.textAlign = "right";
-    ctx1.fillText(hasWatch ? "30 Hz (Sim vs Watch Spectrum)" : "30 Hz (Sim Vibration Spectrum)", W1 - 8, H1 - 4);
+    ctx1.fillText("30 Hz FFT", W1 - 8, H1 - 4);
     ctx1.textAlign = "left";
   } else if (st.imuChartMode === "fused") {
     const sAcc = hist.map(h => Math.hypot(...h.simAcc));
@@ -2180,10 +2210,10 @@ function drawCharts() {
     ctx1.font = "500 10px 'Inter', system-ui, sans-serif";
     ctx1.fillStyle = "#93c5fd";
     ctx1.textAlign = "left";
-    ctx1.fillText("Sim Accel (m/s²) & Gyro (rad/s)", 8, 13);
+    ctx1.fillText("Sim |a| & |ω|", 8, 13);
     ctx1.fillStyle = hasWatch ? "#f0abfc" : "#8492ad";
     ctx1.textAlign = "right";
-    ctx1.fillText(hasWatch ? "Watch: Active" : "Watch: Not Paired", W1 - 8, 13);
+    ctx1.fillText(hasWatch ? "Watch: Live" : "No Watch", W1 - 8, 13);
     ctx1.textAlign = "left";
   } else {
     const isAcc = st.imuChartMode === "acc";
@@ -2213,10 +2243,10 @@ function drawCharts() {
     ctx1.font = "500 10px 'Inter', system-ui, sans-serif";
     ctx1.fillStyle = "#93c5fd";
     ctx1.textAlign = "left";
-    ctx1.fillText(isAcc ? "Acceleration (m/s²)" : "Gyroscope Rate (rad/s)", 8, 13);
+    ctx1.fillText(isAcc ? "Accel (m/s²)" : "Gyro (rad/s)", 8, 13);
     ctx1.textAlign = "right";
     ctx1.fillStyle = hasWatch ? "#f0abfc" : "#8492ad";
-    ctx1.fillText(hasWatch ? "Watch: Active" : "Watch: Not Paired", W1 - 8, 13);
+    ctx1.fillText(hasWatch ? "Watch: Live" : "No Watch", W1 - 8, 13);
     ctx1.textAlign = "left";
   }
 
@@ -2244,7 +2274,7 @@ function computeImuComparisonMetrics() {
 
   if (paired.length < 5) {
     // No real Watch data connected or uploaded: report clear status
-    if ($("m-acc-r")) $("m-acc-r").textContent = "No Watch";
+    if ($("m-acc-r")) $("m-acc-r").textContent = "None";
     ["m-acc-rmse", "m-acc-mae", "m-gyr-rmse", "m-gyr-mae", "m-gyr-r"].forEach(id => {
       if ($(id)) $(id).textContent = "--";
     });
@@ -2371,31 +2401,24 @@ function tick(now) {
       $("cmd-src").textContent = "Command: Auto Trajectory";
     } else if (c) {
       const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-      const gainScale = (st.studioGain || 3.2) / 3.2;
+      const gainScale = (st.studioGain || 2.4) / 2.4;
       if (c.aim === "tilt" && Math.hypot(c.vx, c.vy, c.vz) < 0.04) {
-        // SCREEN-ALIGNED EFFORTLESS WRIST MIRROR MODE (1:1 Anatomical Mapping + 85 mm Magnetic Station Funnel):
-        // With 3.2x Desk Gain, just +/-14 deg of physical wrist motion spans +/-45 deg in c.yaw/c.pitch,
-        // mapping directly across the full optical table without reaching or straining your arm:
-        //   - Point Wrist Left/Right (c.yaw) -> Sweeps Gripper Left/Right (Y from -0.135m to +0.135m)
-        //   - Tilt Hand Down/Up (c.pitch)    -> Lowers Gripper to Table (Z=0.024m) or Lifts Up (Z=0.205m) & Reaches Forward (X)
-        //   - Twist Forearm (c.roll)         -> Rotates Tool Roll directly
         const baseP = activeT ? activeT.p : [0.15, 0.0, 0.08];
-        let targetX = cl(0.150 + (c.pitch / 42) * 0.048 * gainScale, 0.075, 0.205);
-        let targetY = cl((c.yaw / 38) * 0.130 * gainScale, -0.135, 0.135);
-        let targetZ = cl(0.078 + (c.pitch / 38) * 0.082 * gainScale, 0.022, 0.210);
+        let targetX = cl(0.150 + (c.pitch / 48) * 0.044 * gainScale, 0.075, 0.205);
+        let targetY = cl((c.yaw / 45) * 0.115 * gainScale, -0.130, 0.130);
+        let targetZ = cl(0.076 + (c.pitch / 44) * 0.075 * gainScale, 0.024, 0.205);
 
-        let wantYPR = [c.yaw, c.pitch * 0.45, c.roll];
-        // Magnetic Target Funnel (85 mm radius): when wrist brings the gripper near the active cell, pad, charger, or valve,
-        // smoothly pull (x, y, z) AND tool orientation into alignment so grasping/releasing feels effortless
+        let wantYPR = [c.yaw * 0.85, c.pitch * 0.40, c.roll * 0.85];
+        // Magnetic Target Funnel (95 mm radius): smoothly pull (x, y, z) AND tool orientation into alignment
         if (activeT) {
           const distToTgt = Math.hypot(targetX - baseP[0], targetY - baseP[1], targetZ - baseP[2]);
           if ($("auto-assist-pill")) {
-            const engaged = distToTgt < 0.085;
+            const engaged = distToTgt < 0.095;
             $("auto-assist-pill").className = engaged ? "pill ok" : "pill warn";
             $("auto-assist-pill").textContent = engaged ? `Magnet Locked (${Math.round(distToTgt * 1000)} mm)` : "Auto-Magnet: ON";
           }
-          if (distToTgt < 0.085) {
-            const pull = Math.pow(1 - distToTgt / 0.085, 1.35) * 0.68;
+          if (distToTgt < 0.095) {
+            const pull = Math.pow(1 - distToTgt / 0.095, 1.25) * 0.72;
             targetX += (baseP[0] - targetX) * pull;
             targetY += (baseP[1] - targetY) * pull;
             targetZ += (baseP[2] - targetZ) * pull;
@@ -2404,14 +2427,14 @@ function tick(now) {
             }
           }
         }
-        const kp = Math.min(1, dt * 18);
-        if (Math.abs(targetX - st.cmd.x) > 0.0008) st.cmd.x += (targetX - st.cmd.x) * kp;
-        if (Math.abs(targetY - st.cmd.y) > 0.0008) st.cmd.y += (targetY - st.cmd.y) * kp;
-        if (Math.abs(targetZ - st.cmd.z) > 0.0008) st.cmd.z += (targetZ - st.cmd.z) * kp;
+        const kp = Math.min(1, dt * 10.5);
+        if (Math.abs(targetX - st.cmd.x) > 0.001) st.cmd.x += (targetX - st.cmd.x) * kp;
+        if (Math.abs(targetY - st.cmd.y) > 0.001) st.cmd.y += (targetY - st.cmd.y) * kp;
+        if (Math.abs(targetZ - st.cmd.z) > 0.001) st.cmd.z += (targetZ - st.cmd.z) * kp;
         for (const [i, key] of ["yaw", "pitch", "roll"].entries()) {
           let d = wantYPR[i] - st.cmd[key];
           if (key === "yaw") { while (d > 180) d -= 360; while (d < -180) d += 360; }
-          if (Math.abs(d) > 0.8) st.cmd[key] += d * kp;
+          if (Math.abs(d) > 1.0) st.cmd[key] += d * kp;
         }
       } else {
         st.cmd.x = cl(st.cmd.x + c.vx * SPEED * gainScale * dt, 0.05, 0.22);
@@ -2660,12 +2683,10 @@ function tick(now) {
   const wRatio = Math.min(0.99, Math.max(0.15, wRight / 0.145));
   if (wRight < 0.035 || dqPeak > 2.2) {
     $("nemo-tier").className = "pill warn";
-    $("nemo-tier").textContent = "Near Gimbal Lock";
-    $("nemo-rationale").textContent = `Wrist pitch (J5=${Math.round(st.q6[4] * R2D)}°) is nearly straight, aligning J4 & J6 axes (Manipulability w=${wRight.toFixed(3)}, speed=${Math.round(dqPeak * R2D)}°/s). Damped solver active.`;
+    $("nemo-tier").textContent = "Gimbal Warn";
   } else {
     $("nemo-tier").className = "pill ok";
-    $("nemo-tier").textContent = "Healthy Posture";
-    $("nemo-rationale").textContent = `Wrist joints are well-spaced away from gimbal lock (Manipulability w=${wRight.toFixed(3)}, where 0.000 = locked).`;
+    $("nemo-tier").textContent = "Healthy";
   }
 
   if (now - lastUi > 180) {
@@ -2676,10 +2697,10 @@ function tick(now) {
     }
     if ($("watch-lag-pill")) {
       const sign = st.utcOffsetMs >= 0 ? "+" : "";
-      $("watch-lag-pill").textContent = `Clock Sync: ${sign}${st.utcOffsetMs.toFixed(1)} ms`;
+      $("watch-lag-pill").textContent = `Sync: ${sign}${st.utcOffsetMs.toFixed(1)} ms`;
     }
     if ($("fusion-att")) {
-      $("fusion-att").textContent = `Wrist Attitude (Accel + Gyro): Pitch ${st.fusedPitchDeg.toFixed(1)}° · Roll ${st.fusedRollDeg.toFixed(1)}°`;
+      $("fusion-att").textContent = `Pitch ${st.fusedPitchDeg.toFixed(1)}° · Roll ${st.fusedRollDeg.toFixed(1)}°`;
     }
     const qLeftArr = is4v6 ? st.q4 : st.q6;
     const qRightArr = is4v6 ? st.q6 : st.q6Real;
@@ -2687,34 +2708,21 @@ function tick(now) {
     $("j6-str").textContent = qRightArr.map(a => `${Math.round(a * R2D)}°`).join(", ");
     $("verdict-4").innerHTML = `<span class="pill ${vLeft.cls}">${vLeft.msg}</span>`;
     $("verdict-6").innerHTML = `<span class="pill ${vRight.cls}">${vRight.msg}</span>`;
-    $("m-dof-pos").textContent = is4v6 ? `${vLeft.posMm} vs ${vRight.posMm} mm` : `${sim2realPosMm} mm`;
-    $("m-dof-ori").textContent = is4v6 ? `${vLeft.oriDeg}° vs ${vRight.oriDeg}°` : `${sim2realOriDeg}°`;
+    $("m-dof-pos").textContent = is4v6 ? `${vLeft.posMm}/${vRight.posMm}mm` : `${sim2realPosMm} mm`;
+    $("m-dof-ori").textContent = is4v6 ? `${vLeft.oriDeg}°/${vRight.oriDeg}°` : `${sim2realOriDeg}°`;
     $("m-dof-w").textContent = `w=${wLeft.toFixed(2)}/${wRight.toFixed(2)}`;
     if ($("s2r-verdict-pill")) {
       const lagHigh = sim2realPosMm > 8.0 || sim2realOriDeg > 4.0;
       $("s2r-verdict-pill").className = `pill ${lagHigh ? "warn" : "ok"}`;
       $("s2r-verdict-pill").textContent = is4v6
-        ? `4D vs 6D Diff: ${Math.abs(vLeft.oriDeg - vRight.oriDeg).toFixed(0)}°`
+        ? `Diff: ${Math.abs(vLeft.oriDeg - vRight.oriDeg).toFixed(0)}°`
         : lagHigh
-          ? `Servo Lagging (${sim2realPosMm} mm)`
-          : `Synced (${sim2realPosMm} mm lag)`;
-    }
-    if ($("s2r-plain-summary")) {
-      if (is4v6) {
-        $("s2r-plain-summary").innerHTML =
-          `<b>Left Arm (4-DOF Planar)</b> cannot roll or yaw its wrist (${vLeft.oriDeg}° off target).<br/>` +
-          `<b>Right Arm (6-DOF Wrist)</b> aligns all 3 wrist angles (${vRight.oriDeg}° off target).`;
-      } else {
-        const hasW = st.imuHistory.some(h => h.watchAccRaw !== null);
-        $("s2r-plain-summary").innerHTML =
-          `<b>Left Arm (Ideal Math)</b> moves immediately to your commanded angle.<br/>` +
-          `<b>Right Arm (Real Servo Twin)</b> trails by <b>${sim2realPosMm} mm / ${sim2realOriDeg}°</b> (models real 1° motor deadband, 10 Hz update rate, and 150 ms smooth ramp). ` +
-          (hasW ? `<span style="color:#38bdf8">Watch IMU active &amp; 3D-aligned.</span>` : `<span>Pair Watch or load CSV to compare real sensor data.</span>`);
-      }
+          ? `Lagging (${sim2realPosMm} mm)`
+          : `Synced (${sim2realPosMm} mm)`;
     }
     $("div-readout").textContent = is4v6
-      ? `Angle diff: ${Math.abs(vLeft.oriDeg - vRight.oriDeg).toFixed(0)}° · max speed: ${Math.round(dqPeak * R2D)}°/s`
-      : `Lag: ${sim2realPosMm}mm / ${sim2realOriDeg}° · max speed: ${Math.round(dqPeak * R2D)}°/s`;
+      ? `${Math.abs(vLeft.oriDeg - vRight.oriDeg).toFixed(0)}° · ${Math.round(dqPeak * R2D)}°/s`
+      : `${sim2realPosMm}mm / ${sim2realOriDeg}°`;
     $("nemo-prob").textContent = wRatio.toFixed(2);
     $("nemo-cost").textContent = `w=${wRight.toFixed(3)}`;
 

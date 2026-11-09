@@ -756,10 +756,9 @@
 
       <div class="row wrap" style="gap:5px;justify-content:flex-end">
         <!-- RIG COMPARISON SELECTOR -->
-        <div class="seg nv" id="rig-mode-bar" title="View Mode: Compare the Ideal Math Arm (Left) against the Real Servo Hardware Twin (Right), view a Single 6-DOF Arm, or compare 4-DOF vs 6-DOF">
+        <div class="seg nv" id="rig-mode-bar" title="View Mode: Compare the Ideal Math Arm (Left) against the Real Servo Hardware Twin (Right), or view a Single 6-DOF Arm">
           <button class="sel" data-rm="6d_sim2real" title="Sim vs Real (2 Arms): Left arm runs instant ideal math; Right arm models real servo hardware delay (1 deg deadband + 150 ms smoothing)">Sim vs. Real (2 Arms)</button>
           <button data-rm="6d_single" title="Single 6-DOF Arm: Focus on one 6-DOF UR5e robot arm in the center of the bench">Single 6-DOF</button>
-          <button data-rm="4d_vs_6d" title="4-DOF vs 6-DOF: Compare a 4-joint arm (no wrist twist) against a 6-joint arm">4-DOF vs. 6-DOF</button>
         </div>
 
         <!-- STATION SELECTOR -->
@@ -813,11 +812,11 @@
               <div class="slider-row" data-axis-hover="z" title="Height Above Table (Z in meters): Lifts (+Z) or lowers (-Z) the gripper"><span style="color:#60a5fa;font-weight:700">height</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
             </div>
             <div class="row between wrap" style="margin-top:2px;padding-top:5px;border-top:1px solid var(--border);gap:5px">
-              <span class="sub-label" title="Controls how little you need to move your wrist to cover the whole table">Gain</span>
+              <span class="sub-label" title="Controls how sensitive the robot is to your wrist movement">Speed</span>
               <div class="seg" id="studio-gain-bar">
-                <button data-sg="2.0" title="2.0x Standard (~20 deg wrist movement)">2.0x</button>
-                <button data-sg="3.8" class="sel" title="3.8x Watch Mode (+/-10 deg subtle movement)">3.8x</button>
-                <button data-sg="5.2" title="5.2x Micro (+/-7 deg movement)">5.2x</button>
+                <button data-sg="1.5" title="1.5x Gentle">1.5x</button>
+                <button data-sg="2.4" class="sel" title="2.4x Smooth (Default)">2.4x</button>
+                <button data-sg="3.4" title="3.4x Quick">3.4x</button>
               </div>
               <button class="btn sm" id="btn-recenter-wrist" title="Set Neutral Center: Makes your current wrist position the center of the table">Zero</button>
               <span class="mono" id="cmd-src" style="font-size:9px;color:var(--purple-hi)">Sliders</span>
@@ -878,7 +877,7 @@
                   <a class="mono" data-live="url" target="_blank" rel="noopener" style="font-size:9.5px;color:var(--cyan);word-break:break-all"></a>
                   <div class="row wrap" style="margin-top:2px;gap:4px">
                     <a class="btn sm watch" id="sms-watch" href="#" title="Send clickable controller link to your Apple Watch via iMessage">iMessage to Watch</a>
-                    <span class="pill" id="team-pill">6D: 0</span>
+                    <span class="pill" id="team-pill">Watches: 0</span>
                   </div>
                 </div>
               </div>
@@ -975,23 +974,23 @@
           <!-- CARD 1: 3 KEY METRICS -->
           <div class="step-card" style="border-color:var(--border-hi);background:#141826">
             <div class="row between">
-              <span class="sub-label" style="color:var(--surface-grey)">1. Sim vs. Real Status</span>
+              <span class="sub-label" style="color:var(--surface-grey)">1. Sim vs. Real</span>
               <span class="pill ok" id="s2r-verdict-pill">Synced (0.0 mm)</span>
             </div>
             <span id="s2r-plain-summary" style="display:none"></span>
             <div class="kpi-grid">
               <div class="kpi-card" title="Lag between Ideal Sim Arm (Left) and Real Servo Twin (Right: 1 deg deadband + 150 ms smoothing)">
-                <span class="kpi-lbl" id="kpi-err-lbl">Sim-Real Lag</span>
+                <span class="kpi-lbl" id="kpi-err-lbl">Lag</span>
                 <span class="kpi-val" id="m-dof-pos" style="color:var(--purple-hi)">0.0 mm</span>
                 <span class="kpi-sub">Angle: <b id="m-dof-ori">0.0°</b></span>
               </div>
               <div class="kpi-card" title="Pearson correlation r (-1 to +1) between Simulated Arm IMU and Apple Watch IMU">
-                <span class="kpi-lbl">Watch Match</span>
-                <span class="kpi-val" id="m-acc-r" style="color:#38bdf8">No Watch</span>
+                <span class="kpi-lbl">Watch</span>
+                <span class="kpi-val" id="m-acc-r" style="color:#38bdf8">None</span>
                 <span class="kpi-sub">Gyro r: <b id="m-gyr-r">--</b></span>
               </div>
               <div class="kpi-card" title="Root Mean Square Error between Simulated Arm IMU and Apple Watch IMU">
-                <span class="kpi-lbl">Sensor RMSE</span>
+                <span class="kpi-lbl">RMSE</span>
                 <span class="kpi-val" id="m-acc-rmse">--</span>
                 <span class="kpi-sub">m/s² | <b id="m-gyr-rmse">--</b></span>
               </div>
@@ -1127,6 +1126,6 @@
     </div>
   </div>
 
-  <script type="module" src="./teleop-studio.js"></script>
+  <script type="module" src="./teleop-studio.js?v=13"></script>
 </body>
 </html>

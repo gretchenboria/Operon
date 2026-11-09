@@ -188,7 +188,7 @@ function render() {
   if ($("mode-bar")) $("mode-bar").querySelectorAll("button").forEach(b => b.classList.toggle("sel", b.dataset.mode === slide));
   if (station) { $("st-n").textContent = `${T("Mission", "Misión")} · ${station.n}/3`; $("st-name").textContent = station.name; }
   if (slide === "teleop") {
-    const ids = ["p-team", mode === "pose" ? "p-pose" : "p-joints"];
+    const ids = [mode === "pose" ? "p-pose" : "p-joints"];
     if (station) ids.unshift("p-station");
     if (pilotId === myId && mode === "pose") ids.unshift("p-pilot");
     if (deckSlide === "idle") ids.unshift("p-idle");
@@ -199,7 +199,7 @@ function render() {
     if (deckSlide === "idle") ids.unshift("p-idle");
     show(ids);
   }
-  else show(["p-idle", "p-team", "p-pose"]);
+  else show(["p-idle", "p-pose"]);
   $("team").querySelectorAll("button").forEach(b => b.classList.toggle("sel", +b.dataset.v === team));
 }
 
@@ -225,12 +225,12 @@ function handle(m) {
     pose.g = m.g ? 1 : 0;
     paintGrab();
   } else if (m.t === "assign") {
-    team = m.team; mode = m.mode || mode; assigned = m.joints || [];
+    team = 6; mode = m.mode || mode; assigned = m.joints || [];
     renderJoints(); render();
   } else if (m.t === "pilot") {
     pilotId = m.id || null; pilotName = m.name || ""; if (navigator.vibrate && pilotId === myId) navigator.vibrate([80, 60, 80]); render();
   } else if (m.t === "hint") {
-    const h = team === 4 ? m.h4 : m.h6;
+    const h = m.h6 || m.h4;
     if (h) {
       const el = $("hint");
       el.innerHTML = `${(m.station || "")} ${h.msg}${h.dir && h.cls !== "ok" ? `<div style="font:500 15px var(--mono);margin-top:6px">${h.dir}</div>` : ""}`;
@@ -248,12 +248,12 @@ function handle(m) {
   }
 }
 
-$("team").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { team = +b.dataset.v; send({ t: "team", team }); render(); }));
+$("team").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { team = 6; send({ t: "team", team }); render(); }));
 
-// ---------- pose: tilt + pad + live IMU + Wrist Clench / Flick Grip Detector + Watch Wake Lock ----------
+// ---------- pose: tilt + pad + live IMU + Watch Wake Lock ----------
 const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
-let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false, lastGestureAt = 0;
-let deskGain = 3.8; // Default 3.8x Watch Mode: +/-10 deg subtle movement while keeping watch face angled toward your eyes (prevents watchOS wrist-drop screen dim!)
+let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false;
+let deskGain = 2.4; // Default 2.4x Smooth Mode: comfortable, steady wrist movement without over-sensitivity
 let wearMode = "left"; // "left" (Left Wrist Watch) | "right" (Right Wrist Watch) | "phone" (Phone in Hand)
 let flipLR = 1, flipUD = 1;
 let fusedAtt = { yaw: 0, pitch: 0, roll: 0, lastT: 0 };
@@ -341,37 +341,33 @@ function mapDeviceAnglesToRobot(rawYaw, rawPitch, rawRoll) {
     if (w < -90) w = -180 - w;
     return w;
   };
-  // Soft 1.8-deg jitter deadzone so holding your wrist steady keeps the robot 100% locked
-  const dz = (v, d = 1.8) => Math.abs(v) < d ? 0 : (v > 0 ? v - d : v + d);
-  const y = dz(wrap90(rawYaw), 1.8), p = dz(wrap90(rawPitch), 1.8), r = dz(wrap90(rawRoll), 1.8);
+  // Soft 2.2-deg jitter deadzone so holding your wrist steady keeps the robot 100% locked
+  const dz = (v, d = 2.2) => Math.abs(v) < d ? 0 : (v > 0 ? v - d : v + d);
+  const y = dz(wrap90(rawYaw), 2.2), p = dz(wrap90(rawPitch), 2.2), r = dz(wrap90(rawRoll), 2.2);
   let lrDeg, udDeg, twistDeg;
   if (wearMode === "left") {
-    // Left Wrist Watch held in front of chest facing screen:
-    // - Sweeping arm right/left (yaw) or gently rolling wrist -> Screen Left/Right
-    // - Raising/lowering hand or tilting watch up/down -> Screen Up/Down & Forward/Back
-    lrDeg = (-y * 1.15 + r * 0.65) * flipLR;
-    udDeg = (p * 1.20) * flipUD;
-    twistDeg = r * 1.10;
+    // Left Wrist Watch held comfortably facing screen
+    lrDeg = (-y * 0.85 + r * 0.45) * flipLR;
+    udDeg = (p * 0.88) * flipUD;
+    twistDeg = r * 0.85;
   } else if (wearMode === "right") {
-    // Right Wrist Watch (+X_device points left toward fingers): invert pitch/roll sign relative to left wrist
-    lrDeg = (-y * 1.15 - r * 0.65) * flipLR;
-    udDeg = (-p * 1.20) * flipUD;
-    twistDeg = -r * 1.10;
+    // Right Wrist Watch (+X_device points left toward fingers)
+    lrDeg = (-y * 0.85 - r * 0.45) * flipLR;
+    udDeg = (-p * 0.88) * flipUD;
+    twistDeg = -r * 0.85;
   } else {
-    // Phone held in hand pointing at screen:
-    // - Turning/tilting phone right (+gamma / -alpha) -> Screen Right (-Y)
-    // - Tilting phone nose up (+beta) -> Screen Up/Forward
-    lrDeg = (-y * 0.90 - r * 0.85) * flipLR;
-    udDeg = (p * 1.15) * flipUD;
-    twistDeg = r * 1.10;
+    // Phone held in hand pointing at screen
+    lrDeg = (-y * 0.78 - r * 0.65) * flipLR;
+    udDeg = (p * 0.88) * flipUD;
+    twistDeg = r * 0.85;
   }
-  const targetYaw = clamp(lrDeg * deskGain, -85, 85);
-  const targetPitch = clamp(udDeg * deskGain, -75, 75);
-  const targetRoll = clamp(twistDeg * deskGain, -85, 85);
-  // Low-pass filter output so a still wrist has zero 1-deg oscillation
-  pose.yaw = Math.round(pose.yaw * 0.35 + targetYaw * 0.65);
-  pose.pitch = Math.round(pose.pitch * 0.35 + targetPitch * 0.65);
-  pose.roll = Math.round(pose.roll * 0.35 + targetRoll * 0.65);
+  const targetYaw = clamp(lrDeg * deskGain, -80, 80);
+  const targetPitch = clamp(udDeg * deskGain, -70, 70);
+  const targetRoll = clamp(twistDeg * deskGain, -80, 80);
+  // Smooth low-pass filter so wrist motion glides steadily without twitchiness
+  pose.yaw = Math.round(pose.yaw * 0.55 + targetYaw * 0.45);
+  pose.pitch = Math.round(pose.pitch * 0.55 + targetPitch * 0.45);
+  pose.roll = Math.round(pose.roll * 0.55 + targetRoll * 0.45);
 }
 
 function onMotion(e) {
@@ -448,19 +444,6 @@ function onMotion(e) {
   mapDeviceAnglesToRobot(yaw, fPitch, fRoll);
   tiltOn = true;
   readout();
-
-  // Hands-free Apple Watch Pinch / Wrist Tendon Clench Impulse or Pronation Roll Flick -> Toggle Grip/Release
-  if (now - lastGestureAt > 700 && ((aDelta > 2.35 && gMag < 2.2) || Math.abs(pose.gx) > 2.1)) {
-    lastGestureAt = now;
-    touched = true;
-    pose.g = pose.g ? 0 : 1;
-    paintGrab();
-    const gesture = Math.abs(pose.gx) > 2.1
-      ? (pose.g ? "Wrist Roll Flick -> GRASP" : "Wrist Roll Flick -> RELEASE")
-      : (pose.g ? "Pinch/Clench Impulse -> GRASP" : "Pinch/Clench Impulse -> RELEASE");
-    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, gesture, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: 1 } });
-    if (navigator.vibrate) navigator.vibrate([40, 30, 50]);
-  }
 }
 
 function onOrient(e) {
