@@ -1525,13 +1525,15 @@ async function startQuinticSweep() {
   const segs = expandTrajectorySegments(trajObj);
   st.quinticPlan = { t0: performance.now() / 1000, segs, name: `${trajKey}.yaml` };
   if ($("watch-status")) {
-    $("watch-status").textContent = `Running: ${trajKey}.yaml (${segs.length} segments, 5th-order quintic)`;
+    $("watch-status").textContent = `Playing preset sweep: ${trajKey}.yaml (${segs.length} smooth 5th-order steps)`;
   }
 }
 if ($("btn-quintic")) $("btn-quintic").onclick = startQuinticSweep;
+if ($("btn-synth-watch")) $("btn-synth-watch").onclick = startQuinticSweep;
 if ($("traj-select")) {
   $("traj-select").addEventListener("change", () => {
     st.selectedTraj = $("traj-select").value;
+    startQuinticSweep();
   });
 }
 if ($("btn-clear-watch")) {
@@ -1733,33 +1735,69 @@ $("btn-dice").onclick = () => {
   if (ids.length) { st.pilot = ids[Math.floor(Math.random() * ids.length)]; renderPilots(); pushState(); }
 };
 
-// Domain Randomization Controls
+// Domain Randomization Controls (Lighting, PBR Surface Roughness & Object Pose Perturbation)
 function updateDR() {
-  const light = parseFloat($("dr-light").value);
-  const azi = parseFloat($("dr-azi").value) * D2R;
-  const rough = parseFloat($("dr-rough").value);
-  $("drv-light").textContent = `${light.toFixed(1)}x`;
-  $("drv-azi").textContent = `${Math.round(azi * R2D)}°`;
-  $("drv-rough").textContent = rough.toFixed(2);
+  const light = parseFloat($("dr-light")?.value ?? "2.8");
+  const aziDeg = parseFloat($("dr-azi")?.value ?? "35");
+  const azi = aziDeg * D2R;
+  const rough = parseFloat($("dr-rough")?.value ?? "0.22");
+  if ($("drv-light")) $("drv-light").textContent = `${light.toFixed(1)}x`;
+  if ($("drv-azi")) $("drv-azi").textContent = `${Math.round(aziDeg)}°`;
+  if ($("drv-rough")) $("drv-rough").textContent = rough.toFixed(2);
   sun.intensity = light;
-  sun.position.set(Math.cos(azi) * 0.9, 1.25, Math.sin(azi) * 0.9);
-  MAT.alu.roughness = rough;
-  MAT.bench.roughness = Math.min(0.95, rough + 0.25);
-}
-["dr-light", "dr-azi", "dr-rough"].forEach(id => $(id).addEventListener("input", updateDR));
-$("btn-dr-rand").onclick = () => {
-  $("dr-light").value = (0.8 + Math.random() * 3.2).toFixed(1);
-  $("dr-azi").value = Math.round(-170 + Math.random() * 340);
-  $("dr-rough").value = (0.08 + Math.random() * 0.75).toFixed(2);
-  sun.color.setHSL(Math.random() * 0.12 + 0.05, 0.25, 0.96);
-  updateDR();
-};
-$("btn-dr-pose").onclick = () => {
-  const jx = (Math.random() - 0.5) * 0.03, jy = (Math.random() - 0.5) * 0.03;
-  for (const d of [4, 6]) {
-    st.arm[d].battP = [Math.max(0.11, Math.min(0.19, 0.15 + jx)), Math.max(-0.11, Math.min(-0.04, -0.075 + jy)), 0.013];
+  sun.position.set(Math.cos(azi) * 0.95, 1.25, Math.sin(azi) * 0.95);
+  hemi.intensity = 0.35 + light * 0.22;
+  rimLight.intensity = 0.8 + light * 0.65;
+  // Apply roughness across all robot arm, joint cap, steel, and optical bench materials so visual change is immediate
+  for (const m of [MAT.alu, MAT.urSilver, MAT.urBlueCap, MAT.urPurpleCap, MAT.carbon, MAT.dark, MAT.steel, MAT.copper, MAT.watch]) {
+    if (m) {
+      m.roughness = rough;
+      if ("clearcoatRoughness" in m) m.clearcoatRoughness = Math.min(0.9, rough * 0.75);
+      m.needsUpdate = true;
+    }
   }
-};
+  MAT.bench.roughness = Math.min(0.95, rough * 0.85 + 0.08);
+  MAT.bench.needsUpdate = true;
+}
+["dr-light", "dr-azi", "dr-rough"].forEach(id => $(id)?.addEventListener("input", updateDR));
+if ($("btn-dr-rand")) {
+  $("btn-dr-rand").onclick = () => {
+    $("dr-light").value = (0.6 + Math.random() * 3.6).toFixed(1);
+    $("dr-azi").value = Math.round(-175 + Math.random() * 350);
+    $("dr-rough").value = (0.05 + Math.random() * 0.85).toFixed(2);
+    sun.color.setHSL(Math.random() * 0.14 + 0.04, 0.30, 0.96);
+    updateDR();
+    if ($("watch-status")) {
+      $("watch-status").textContent = `Randomized scene: Light ${$("drv-light").textContent}, Angle ${$("drv-azi").textContent}, Roughness ${$("drv-rough").textContent}`;
+    }
+  };
+}
+if ($("btn-dr-pose")) {
+  $("btn-dr-pose").onclick = () => {
+    if (st.station !== 0) setStation(0);
+    setClosed(false, false);
+    const jx = (Math.random() - 0.5) * 0.075;
+    const jy = (Math.random() - 0.5) * 0.075;
+    const nx = Math.max(0.105, Math.min(0.195, 0.15 + jx));
+    const ny = Math.max(-0.115, Math.min(-0.035, -0.075 + jy));
+    const randYaw = Math.round((Math.random() - 0.5) * 70);
+    for (const d of [4, 6]) {
+      st.arm[d].held = false;
+      st.arm[d].done[0] = false;
+      st.arm[d].battP = [nx, ny, 0.013];
+      st.arm[d].battR = poseR(randYaw, 0, 0);
+    }
+    if ($("watch-status")) {
+      $("watch-status").textContent = `Perturbed Cell Pose -> x=${(nx * 1000).toFixed(0)} mm, y=${(ny * 1000).toFixed(0)} mm, yaw=${randYaw}°`;
+    }
+  };
+}
+// Ensure any collapsible <details> drawer automatically scrolls into view when opened
+document.querySelectorAll("details.drawer").forEach(det => {
+  det.addEventListener("toggle", () => {
+    if (det.open) det.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+});
 $("btn-bboxes").onclick = () => {
   st.showBBoxes = !st.showBBoxes;
   $("btn-bboxes").textContent = `2D/3D BBoxes: ${st.showBBoxes ? "ON" : "OFF"}`;
@@ -2581,12 +2619,12 @@ function tick(now) {
   const wRatio = Math.min(0.99, Math.max(0.15, wRight / 0.145));
   if (wRight < 0.035 || dqPeak > 2.2) {
     $("nemo-tier").className = "pill warn";
-    $("nemo-tier").textContent = "Near Wrist Singularity";
-    $("nemo-rationale").textContent = `Wrist pitch q5=${Math.round(st.q6[4] * R2D)}° approaching collinear lock (w=${wRight.toFixed(3)}, peak |dq|=${Math.round(dqPeak * R2D)}°/s). Damped least-squares active.`;
+    $("nemo-tier").textContent = "Near Gimbal Lock";
+    $("nemo-rationale").textContent = `Wrist pitch (J5=${Math.round(st.q6[4] * R2D)}°) is nearly straight, aligning J4 & J6 axes (Manipulability w=${wRight.toFixed(3)}, speed=${Math.round(dqPeak * R2D)}°/s). Damped solver active.`;
   } else {
     $("nemo-tier").className = "pill ok";
-    $("nemo-tier").textContent = "Full Rank · Well-Conditioned";
-    $("nemo-rationale").textContent = `6-DOF spherical wrist Jacobian well-conditioned (w=${wRight.toFixed(3)}, Sim-to-Real Δp=${sim2realPosMm} mm, ΔR=${sim2realOriDeg}°).`;
+    $("nemo-tier").textContent = "Healthy Posture";
+    $("nemo-rationale").textContent = `Wrist joints are well-spaced away from gimbal lock (Manipulability w=${wRight.toFixed(3)}, where 0.000 = locked).`;
   }
 
   if (now - lastUi > 180) {
@@ -2597,10 +2635,10 @@ function tick(now) {
     }
     if ($("watch-lag-pill")) {
       const sign = st.utcOffsetMs >= 0 ? "+" : "";
-      $("watch-lag-pill").textContent = `UTC Δt: ${sign}${st.utcOffsetMs.toFixed(1)} ms`;
+      $("watch-lag-pill").textContent = `Clock Sync: ${sign}${st.utcOffsetMs.toFixed(1)} ms`;
     }
     if ($("fusion-att")) {
-      $("fusion-att").textContent = `6-Axis Fusion Attitude: Pitch ${st.fusedPitchDeg.toFixed(1)}° · Roll ${st.fusedRollDeg.toFixed(1)}°`;
+      $("fusion-att").textContent = `Wrist Attitude (Accel + Gyro): Pitch ${st.fusedPitchDeg.toFixed(1)}° · Roll ${st.fusedRollDeg.toFixed(1)}°`;
     }
     const qLeftArr = is4v6 ? st.q4 : st.q6;
     const qRightArr = is4v6 ? st.q6 : st.q6Real;
@@ -2617,25 +2655,25 @@ function tick(now) {
       $("s2r-verdict-pill").textContent = is4v6
         ? `4D vs 6D Diff: ${Math.abs(vLeft.oriDeg - vRight.oriDeg).toFixed(0)}°`
         : lagHigh
-          ? `Hardware Lagging (${sim2realPosMm} mm)`
+          ? `Servo Lagging (${sim2realPosMm} mm)`
           : `Synced (${sim2realPosMm} mm lag)`;
     }
     if ($("s2r-plain-summary")) {
       if (is4v6) {
         $("s2r-plain-summary").innerHTML =
-          `<b>Left Arm (4-DOF Planar)</b> lacks wrist roll/yaw (${vLeft.oriDeg}° off target).<br/>` +
-          `<b>Right Arm (6-DOF Spherical Wrist)</b> aligns all 3 orientation axes (${vRight.oriDeg}° off target).`;
+          `<b>Left Arm (4-DOF Planar)</b> cannot roll or yaw its wrist (${vLeft.oriDeg}° off target).<br/>` +
+          `<b>Right Arm (6-DOF Wrist)</b> aligns all 3 wrist angles (${vRight.oriDeg}° off target).`;
       } else {
         const hasW = st.imuHistory.some(h => h.watchAccRaw !== null);
         $("s2r-plain-summary").innerHTML =
-          `<b>Left (Ideal Sim)</b>: Instantaneous 6-DOF inverse kinematics.<br/>` +
-          `<b>Right (Hardware Twin)</b>: Trails Sim by <b>${sim2realPosMm} mm / ${sim2realOriDeg}°</b> due to ROS2 1.0° servo deadband + 150 ms quintic smoothing. ` +
-          (hasW ? `<span style="color:#38bdf8">Watch IMU active &amp; Kabsch-aligned.</span>` : `<span>Connect Watch or load CSV to compare real IMU.</span>`);
+          `<b>Left Arm (Ideal Math)</b> moves immediately to your commanded angle.<br/>` +
+          `<b>Right Arm (Real Servo Twin)</b> trails by <b>${sim2realPosMm} mm / ${sim2realOriDeg}°</b> (models real 1° motor deadband, 10 Hz update rate, and 150 ms smooth ramp). ` +
+          (hasW ? `<span style="color:#38bdf8">Watch IMU active &amp; 3D-aligned.</span>` : `<span>Pair Watch or load CSV to compare real sensor data.</span>`);
       }
     }
     $("div-readout").textContent = is4v6
-      ? `Δori: ${Math.abs(vLeft.oriDeg - vRight.oriDeg).toFixed(0)}° · peak |dq|: ${Math.round(dqPeak * R2D)}°/s`
-      : `Sim-Real Δp: ${sim2realPosMm}mm · ΔR: ${sim2realOriDeg}° · |dq|: ${Math.round(dqPeak * R2D)}°/s`;
+      ? `Angle diff: ${Math.abs(vLeft.oriDeg - vRight.oriDeg).toFixed(0)}° · max speed: ${Math.round(dqPeak * R2D)}°/s`
+      : `Lag: ${sim2realPosMm}mm / ${sim2realOriDeg}° · max speed: ${Math.round(dqPeak * R2D)}°/s`;
     $("nemo-prob").textContent = wRatio.toFixed(2);
     $("nemo-cost").textContent = `w=${wRight.toFixed(3)}`;
 

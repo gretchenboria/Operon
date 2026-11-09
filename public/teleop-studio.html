@@ -105,7 +105,7 @@
     /* 3-COLUMN WORKSPACE */
     .workspace {
       display: grid;
-      grid-template-columns: 312px 1fr 364px;
+      grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(320px, 368px);
       gap: 8px;
       min-height: 0;
     }
@@ -117,6 +117,7 @@
       display: flex;
       flex-direction: column;
       min-height: 0;
+      min-width: 0;
       overflow: hidden;
       box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
     }
@@ -127,6 +128,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 6px;
+      min-width: 0;
       font-family: var(--mono);
       font-size: 10.5px;
       font-weight: 700;
@@ -138,19 +141,22 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      min-width: 0;
       color: var(--surface-grey);
     }
     .pb {
       padding: 8px 10px;
       overflow-y: auto;
+      overflow-x: hidden;
       flex: 1;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
 
-    .row { display: flex; align-items: center; gap: 6px; }
-    .col { display: flex; flex-direction: column; gap: 5px; }
+    .row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
     .wrap { flex-wrap: wrap; }
     .between { justify-content: space-between; }
 
@@ -164,12 +170,16 @@
       flex-direction: column;
       gap: 6px;
       flex-shrink: 0;
+      min-width: 0;
+      max-width: 100%;
     }
     .step-hdr {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
       gap: 6px;
+      min-width: 0;
     }
     .step-title {
       display: flex;
@@ -178,11 +188,14 @@
       font-weight: 700;
       font-size: 11.5px;
       color: var(--surface-grey);
+      min-width: 0;
     }
     .help-line {
       font-size: 10.5px;
       color: var(--ink-3);
       line-height: 1.35;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     /* COLLAPSIBLE DRAWERS */
@@ -191,6 +204,8 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       flex-shrink: 0;
+      min-width: 0;
+      max-width: 100%;
     }
     details.drawer > summary {
       padding: 7px 10px;
@@ -199,6 +214,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 6px;
+      min-width: 0;
       font-weight: 600;
       font-size: 11.5px;
       color: var(--ink-2);
@@ -222,11 +239,13 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+      min-width: 0;
     }
     .pose-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 5px 10px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 5px 8px;
+      min-width: 0;
     }
 
     /* BUTTONS & SEGMENTED CONTROLS */
@@ -321,6 +340,7 @@
       position: relative;
       flex: 1;
       min-height: 0;
+      min-width: 0;
       background: radial-gradient(circle at 50% 38%, #23293d 0%, #121521 68%, #0b0d14 100%);
       display: flex;
       flex-direction: column;
@@ -347,49 +367,42 @@
     }
 
     .vp-dock-top {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      right: 10px;
+      background: #141826;
+      border-bottom: 1px solid var(--border);
+      padding: 6px 8px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
-      pointer-events: none;
+      flex-wrap: wrap;
+      gap: 6px;
       z-index: 3;
+      flex-shrink: 0;
     }
-    .vp-dock-top > * { pointer-events: auto; }
     .glass-bar {
-      background: var(--panel-glass);
+      background: #0d1018;
       border: 1px solid var(--border-hi);
-      backdrop-filter: blur(12px);
-      padding: 4px 6px;
-      border-radius: 8px;
+      padding: 3px 6px;
+      border-radius: 7px;
       display: flex;
       align-items: center;
-      gap: 6px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+      flex-wrap: wrap;
+      gap: 5px;
+      max-width: 100%;
     }
 
     /* AOV & Hover Inspector Banner */
     .aov-explain-banner {
-      position: absolute;
-      top: 50px;
-      left: 10px;
-      right: 10px;
-      background: rgba(16, 19, 30, 0.92);
-      border: 1px solid var(--border-hi);
+      background: rgba(16, 19, 30, 0.96);
+      border-bottom: 1px solid var(--border);
       border-left: 3px solid var(--purple);
-      backdrop-filter: blur(12px);
-      border-radius: 8px;
-      padding: 7px 11px;
+      padding: 6px 10px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      z-index: 4;
-      pointer-events: auto;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      z-index: 3;
+      flex-shrink: 0;
     }
     .aov-explain-main {
       display: flex;
@@ -577,15 +590,20 @@
 
     .slider-row {
       display: grid;
-      grid-template-columns: 40px 1fr 38px;
+      grid-template-columns: 38px minmax(0, 1fr) 36px;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
+      min-width: 0;
       font-family: var(--mono);
       font-size: 10px;
       color: var(--ink-2);
     }
+    .slider-row span:last-child {
+      text-align: right;
+    }
     input[type="range"] {
       width: 100%;
+      min-width: 0;
       accent-color: var(--purple);
       height: 5px;
       cursor: pointer;
@@ -594,8 +612,9 @@
     /* RIGHT COLUMN TELEMETRY */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 6px;
+      min-width: 0;
     }
     .kpi-card {
       background: #10131d;
@@ -605,23 +624,34 @@
       display: flex;
       flex-direction: column;
       gap: 2px;
+      min-width: 0;
+      overflow: hidden;
     }
     .kpi-lbl {
       font-family: var(--mono);
       font-size: 9px;
       color: var(--ink-3);
       text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .kpi-val {
       font-family: var(--mono);
-      font-size: 14.5px;
+      font-size: 13.5px;
       font-weight: 700;
       color: var(--surface-grey);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .kpi-sub {
       font-family: var(--mono);
       font-size: 9.5px;
       color: var(--ink-2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .chart-cv {
@@ -712,30 +742,30 @@
 
       <div class="row wrap" style="gap:5px;justify-content:flex-end">
         <!-- RIG COMPARISON SELECTOR -->
-        <div class="seg nv" id="rig-mode-bar" title="Rig Comparison Mode: Compare 6-DOF Ideal Sim vs 6-DOF Real/Watch Twin side by side, inspect a Single 6-DOF rig, or enable the 4-DOF planar baseline">
-          <button class="sel" data-rm="6d_sim2real" title="6-DOF Sim vs 6-DOF Real: Left rig runs ideal zero-noise 6-DOF IK; Right rig runs 6-DOF Real/Watch Twin with ROS2 hardware streamer deadband + 150ms quintic interpolation">6D Sim vs Real</button>
-          <button data-rm="6d_single" title="Single 6-DOF Rig: Focus the viewport on one 6-DOF UR5e manipulator with forearm IMU telemetry">Single 6D</button>
-          <button data-rm="4d_vs_6d" title="4-DOF vs 6-DOF Baseline: Compare a 4-DOF planar-constrained arm (no wrist roll) against a 6-DOF spherical-wrist arm">4D vs 6D</button>
+        <div class="seg nv" id="rig-mode-bar" title="View Mode: Compare the Ideal Math Arm (Left) against the Real Servo Hardware Twin (Right), view a Single 6-DOF Arm, or compare 4-DOF vs 6-DOF">
+          <button class="sel" data-rm="6d_sim2real" title="Sim vs Real (2 Arms): Left arm runs instant ideal math; Right arm models real servo hardware delay (1 deg deadband + 150 ms smoothing)">Sim vs. Real (2 Arms)</button>
+          <button data-rm="6d_single" title="Single 6-DOF Arm: Focus on one 6-DOF UR5e robot arm in the center of the bench">Single 6-DOF</button>
+          <button data-rm="4d_vs_6d" title="4-DOF vs 6-DOF: Compare a 4-joint arm (no wrist twist) against a 6-joint arm">4-DOF vs. 6-DOF</button>
         </div>
 
         <!-- STATION SELECTOR -->
-        <div class="seg" id="st-bar" title="Select manipulation benchmark station">
-          <button class="sel" data-st="0" title="Station 1 (Cell Pick &amp; Place): Grasp the 21700 cell at (0.15, -0.075, 0.032) m and place it on the target pad at (0.15, +0.075, 0.032) m">1. Cell</button>
-          <button data-st="1" title="Station 2 (Compound-Angle Charger Slot): Insert the cell into a tilted dock requiring simultaneous pitch and roll alignment">2. Charger</button>
-          <button data-st="2" title="Station 3 (Valve Rotation): Approach horizontally (+X) and rotate the tool flange 90 degrees">3. Valve</button>
+        <div class="seg" id="st-bar" title="Choose a manipulation task on the workbench">
+          <button class="sel" data-st="0" title="Task 1 (Pick &amp; Place Cell): Pick up the blue battery cell on the left pad and place it on the right pad">1. Pick &amp; Place</button>
+          <button data-st="1" title="Task 2 (Slot into Charger): Tilt and twist the wrist to slide the battery into the angled charger dock">2. Charger Slot</button>
+          <button data-st="2" title="Task 3 (Turn Valve 90°): Grasp the purple valve wheel and twist your forearm 90 degrees">3. Turn Valve</button>
         </div>
 
-        <button class="btn sm nv" id="btn-pick-place" title="Pick &amp; Place Cycle: Execute full approach, jaw close, lift, lateral transfer, and placement trajectory">
+        <button class="btn sm nv" id="btn-pick-place" title="Auto Demo: Watch the arms automatically pick up, lift, and place the battery cell">
           <svg class="ico sm" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-          <span>Pick &amp; Place</span>
+          <span>Auto Demo</span>
         </button>
-        <button class="btn sm watch" id="btn-quintic" title="5th-Order Quintic IMU Sweep: Execute minimum-jerk polynomial joint trajectories (max vel 120 deg/s, max acc 200 deg/s^2) to benchmark Sim vs Watch IMU">
+        <button class="btn sm watch" id="btn-quintic" title="Preset Calibration Motion (YAML): Runs a repeatable 5th-order smooth calibration dance to compare Simulated IMU against Watch IMU">
           <svg class="ico sm" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          <span>YAML Sweep</span>
+          <span>Calibration Sweep</span>
         </button>
-        <button class="btn sm" id="btn-snap" title="Align to Target: Move gripper to the active station target pose">Align</button>
-        <button class="btn sm" id="btn-grab" title="Grasp / Release: Close parallel jaws to grasp the 21700 cell (auto-approaches if away) or open jaws to release">Grasp</button>
-        <button class="btn sm" id="btn-reset" title="Reset State: Return arms and props to initial coordinates">Reset</button>
+        <button class="btn sm" id="btn-snap" title="Align to Target: Automatically move the gripper over the active station target">Align</button>
+        <button class="btn sm" id="btn-grab" title="Grasp / Release: Close jaws to pick up the cell (auto-approaches if nearby) or open jaws to release">Grasp</button>
+        <button class="btn sm" id="btn-reset" title="Reset: Return arms and objects to their starting positions">Reset</button>
         <button id="btn-auto" style="display:none"></button>
       </div>
     </header>
@@ -743,125 +773,128 @@
     <!-- 3-COLUMN WORKSPACE -->
     <div class="workspace">
 
-      <!-- LEFT COLUMN: 6-DOF POSE CONTROL & SENSOR INPUT -->
+      <!-- LEFT COLUMN: CONTROL, CALIBRATION & SCENE SETUP -->
       <section class="panel">
         <div class="ph">
           <span class="ph-title">
             <svg class="ico" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/></svg>
-            <span>1. Kinematics &amp; Sensor Input</span>
+            <span>Control, Scene &amp; Calibration</span>
           </span>
           <span class="pill" data-live="status">local</span>
         </div>
         <div class="pb">
 
-          <!-- PRIMARY: 6-DOF GRIPPER POSE SLIDERS -->
-          <div class="step-card">
+          <!-- CARD 1: MOVE THE ROBOT (WRIST TELEOP + SLIDERS) -->
+          <div class="step-card" style="border-color:var(--purple)">
             <div class="step-hdr">
-              <div class="step-title">6-DOF Tool Pose (Cartesian + Euler)</div>
-              <span class="mono" id="cmd-src" style="font-size:9.5px;color:var(--purple-hi)">Direct 60Hz</span>
+              <div class="step-title">1. Move the Robot (Wrist or Sliders)</div>
+              <span class="pill warn" id="auto-assist-pill" title="Magnetic Target Assist: within 85 mm of a target, the gripper gently snaps into alignment so grasping is effortless">Auto-Magnet: ON</span>
             </div>
-            <div class="help-line">Hover any axis to highlight its 3D gizmo ring on the gripper. Right-handed robotics frame (+X forward, +Y left, +Z up).</div>
+            <div class="help-line">
+              <b style="color:#60a5fa">Point L/R (±10°)</b> sweeps across table · <b style="color:#34d399">Tilt U/D (±10°)</b> lowers/lifts · <b style="color:#c084fc">Twist</b> rotates wrist · <b style="color:#38bdf8">Grasp</b> auto-picks nearby cell.
+            </div>
             <div class="pose-grid" id="pose-sliders">
-              <div class="slider-row" data-axis-hover="yaw" title="Yaw (Z-Axis Rotation): Rotates the arm horizontally left (+deg) or right (-deg) around the vertical Z axis"><span style="color:#60a5fa;font-weight:700">yaw</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
-              <div class="slider-row" data-axis-hover="x" title="X Reach (Meters): Moves tool forward away from base (+X) or backward toward base (-X)"><span style="color:#f43f5e;font-weight:700">x (m)</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
-              <div class="slider-row" data-axis-hover="pitch" title="Pitch (Elevation Tilt): Tilts the tool nose up (+deg) or down (-deg) relative to vertical grasp"><span style="color:#34d399;font-weight:700">pitch</span><input type="range" data-p="pitch" min="-90" max="90" step="1" value="0"><span data-pv="pitch">0°</span></div>
-              <div class="slider-row" data-axis-hover="y" title="Y Lateral (Meters): Moves tool left (+Y) or right (-Y) across the optical table"><span style="color:#34d399;font-weight:700">y (m)</span><input type="range" data-p="y" min="-0.15" max="0.15" step="0.002" value="0.000"><span data-pv="y">0.000</span></div>
-              <div class="slider-row" data-axis-hover="roll" title="Roll (Tool Axis Twist): Rotates the wrist flange around the tool approach vector"><span style="color:#c084fc;font-weight:700">roll</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
-              <div class="slider-row" data-axis-hover="z" title="Z Height (Meters): Raises (+Z) or lowers (-Z) the tool above the workbench surface"><span style="color:#60a5fa;font-weight:700">z (m)</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
+              <div class="slider-row" data-axis-hover="yaw" title="Left/Right Angle (Yaw): Sweeps the arm left (+deg) or right (-deg)"><span style="color:#60a5fa;font-weight:700">L/R</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
+              <div class="slider-row" data-axis-hover="x" title="Forward Reach (X in meters): Moves gripper forward away from base"><span style="color:#f43f5e;font-weight:700">reach</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
+              <div class="slider-row" data-axis-hover="pitch" title="Up/Down Tilt (Pitch): Tilts gripper nose up or down"><span style="color:#34d399;font-weight:700">U/D</span><input type="range" data-p="pitch" min="-90" max="90" step="1" value="0"><span data-pv="pitch">0°</span></div>
+              <div class="slider-row" data-axis-hover="y" title="Side-to-Side Position (Y in meters): Moves gripper left (+Y) or right (-Y)"><span style="color:#34d399;font-weight:700">side</span><input type="range" data-p="y" min="-0.15" max="0.15" step="0.002" value="0.000"><span data-pv="y">0.000</span></div>
+              <div class="slider-row" data-axis-hover="roll" title="Wrist Twist (Roll): Spins the gripper around its own axis (needed for Charger &amp; Valve)"><span style="color:#c084fc;font-weight:700">twist</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
+              <div class="slider-row" data-axis-hover="z" title="Height Above Table (Z in meters): Lifts (+Z) or lowers (-Z) the gripper"><span style="color:#60a5fa;font-weight:700">height</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
             </div>
-            <div class="row between" style="margin-top:2px;padding-top:5px;border-top:1px solid var(--border)">
-              <span class="sub-label" title="Compact Desk Mode maps +/-22 deg of comfortable wrist movement right in front of your screen to the full X/Y/Z robot workspace">Wrist Motion Scale</span>
+            <div class="row between wrap" style="margin-top:2px;padding-top:5px;border-top:1px solid var(--border);gap:5px">
+              <span class="sub-label" title="Controls how little you need to move your wrist to cover the whole table">Sensitivity</span>
               <div class="seg" id="studio-gain-bar">
-                <button data-sg="1.0" title="1x Full Reach: Wide arm swings">1x Full</button>
-                <button data-sg="2.5" class="sel" title="2.5x Desk Mode: Small wrist tilts in front of screen cover the full X/Y/Z workspace">2.5x Desk</button>
-                <button data-sg="4.0" title="4x Micro: Finger/wrist micro-movements cover the entire workspace">4x Micro</button>
+                <button data-sg="2.0" title="2.0x Standard: ~20 deg wrist movement spans table">2.0x</button>
+                <button data-sg="3.8" class="sel" title="3.8x Watch Mode (Default): Just +/-10 deg of subtle movement spans the whole table">3.8x Watch</button>
+                <button data-sg="5.2" title="5.2x Micro: Tiny +/-7 deg wrist movements cover the whole table">5.2x Micro</button>
               </div>
-              <button class="btn sm" id="btn-recenter-wrist" title="Zero / Recenter: Anchors the robot tool at (0.15, 0.00, 0.12) m relative to your current hand posture">Zero Here</button>
+              <button class="btn sm" id="btn-recenter-wrist" title="Set Neutral Center: Makes your current wrist position the center of the table">Zero</button>
+              <span class="mono" id="cmd-src" style="font-size:9px;color:var(--purple-hi)">Sliders (60Hz)</span>
             </div>
           </div>
 
-          <!-- FOREARM 6-AXIS IMU SOURCE & YAML TRAJECTORY LOADER -->
+          <!-- CARD 2: LIGHTING, SURFACE ROUGHNESS & POSE PERTURBATION (ALWAYS OPEN & VISIBLE) -->
+          <div class="step-card" id="dr-card">
+            <div class="step-hdr">
+              <div class="step-title">2. Lighting, Roughness &amp; Pose Perturbation</div>
+              <button class="btn sm nv" id="btn-dr-rand" title="Randomize light brightness, light angle, and metal shininess all at once">Randomize Scene</button>
+            </div>
+            <div class="help-line">
+              <b>Why this matters (Domain Randomization):</b> Vision AI trained under one fixed light fails in the real world. Adjust sliders to test shiny vs. matte metal, moving shadows, and shifted battery positions.
+            </div>
+            <div class="slider-row" title="Sun Light Brightness (0.3x dim to 4.5x bright studio flood)"><span>Light</span><input type="range" id="dr-light" min="0.3" max="4.5" step="0.1" value="2.8"><span id="drv-light">2.8x</span></div>
+            <div class="slider-row" title="Light Direction Angle (-180 deg to +180 deg): Rotates shadows around the workbench"><span>Angle</span><input type="range" id="dr-azi" min="-180" max="180" step="5" value="35"><span id="drv-azi">35°</span></div>
+            <div class="slider-row" title="Surface Roughness (0.05 mirror-like polished metal to 0.95 matte brushed finish)"><span>Rough</span><input type="range" id="dr-rough" min="0.05" max="0.95" step="0.05" value="0.22"><span id="drv-rough">0.22</span></div>
+            <div class="row between wrap" style="margin-top:2px;gap:5px">
+              <button class="btn sm" id="btn-dr-pose" style="flex:1" title="Randomly shift and rotate the battery cell on the pick pad to test grasping from new positions">Perturb Cell Pose</button>
+              <button class="btn sm" id="btn-bboxes" style="flex:1" title="Show 2D/3D object detection bounding boxes overlaid on the camera view">2D/3D BBoxes: OFF</button>
+            </div>
+          </div>
+
+          <!-- CARD 3: PRESET MOTION SWEEPS (YAML) & WATCH IMU CALIBRATION -->
           <div class="step-card">
             <div class="step-hdr">
-              <div class="step-title">Forearm 6-Axis IMU Calibration</div>
-              <span id="watch-lag-pill" class="pill ok">UTC dt: 0.0 ms</span>
+              <div class="step-title">3. Preset Motion Sweeps &amp; Watch CSV</div>
+              <span id="watch-lag-pill" class="pill ok">Clock Sync: 0.0 ms</span>
             </div>
-            <div class="help-line">Executes canonical <code>config/trajectories/*.yaml</code> firmware quintic trajectories (`home=[90,90,90,90]`, `URDF_rad = (servo_deg - 90) * pi / 180`) and compares analytic forearm IMU against real Watch CSV or live DeviceMotion.</div>
+            <div class="help-line">
+              <b>What is a YAML Sweep?</b> Plays a repeatable, smooth preset robot motion (5th-order polynomial curves with zero motor jerk) so you can compare what an Apple Watch strapped to a real arm recorded against the simulator.
+            </div>
             <div class="row between" style="gap:5px">
-              <span class="sub-label">Trajectory YAML</span>
-              <select id="traj-select" class="mono" style="flex:1;background:#0d1018;color:var(--ink);border:1px solid var(--border-hi);border-radius:5px;padding:3px 6px;font-size:10px" title="Select canonical trajectory YAML from config/trajectories/">
-                <option value="imu_calibration">imu_calibration.yaml (7 sweeps, 24.5s)</option>
-                <option value="wave">wave.yaml (base wave, auto-clamped)</option>
-                <option value="nod_yes">nod_yes.yaml (elbow nod, auto-clamped)</option>
+              <span class="sub-label" style="flex-shrink:0">Preset</span>
+              <select id="traj-select" class="mono" style="flex:1;min-width:0;max-width:100%;background:#0d1018;color:var(--ink);border:1px solid var(--border-hi);border-radius:5px;padding:4px 6px;font-size:10px;text-overflow:ellipsis" title="Choose a preset robot motion from config/trajectories/*.yaml">
+                <option value="imu_calibration">imu_calibration.yaml — 7-Step Calibration Dance (24.5s)</option>
+                <option value="wave">wave.yaml — Side-to-Side Arm Wave</option>
+                <option value="nod_yes">nod_yes.yaml — Up-and-Down Wrist/Elbow Nod</option>
               </select>
             </div>
             <div class="row wrap" style="gap:5px">
-              <button class="btn sm watch" id="btn-synth-watch" style="flex:1" title="Run Selected Trajectory YAML: Executes exact 5th-order polynomial waypoints from config/trajectories/*.yaml">
-                <span>Run YAML Sweep</span>
+              <button class="btn sm watch" id="btn-synth-watch" style="flex:1;min-width:110px" title="Play the selected preset YAML motion on the robot arms">
+                <span>Run Preset Sweep</span>
               </button>
-              <label class="btn sm" style="cursor:pointer;flex:1" title="Load Watch CSV: Upload a real SensorLog or Sensor Logger CSV file from Apple Watch to solve Wahba/SVD alignment, tap lag, and RMSE">
+              <label class="btn sm" style="cursor:pointer;flex:1;min-width:110px" title="Upload a recorded Apple Watch CSV (SensorLog or Sensor Logger) to align 3D axes and measure sensor error">
                 <span>Load Watch CSV</span>
                 <input type="file" id="watch-file" accept=".csv" style="display:none" />
               </label>
             </div>
-            <div class="row between" style="font-family:var(--mono);font-size:9.5px;color:var(--ink-3)">
-              <span title="HTTP POST endpoint for Sensor Logger live streaming">POST: <b id="imu-push-url" style="color:var(--cyan);cursor:pointer">/api/room/OPERON/imu</b></span>
-              <div class="row" style="gap:4px">
-                <button class="btn sm" id="btn-clear-watch" title="Clear loaded Watch CSV and return to live stream awaiting mode">Clear Watch</button>
-                <button class="btn sm" id="btn-export-imu" title="Download sim_imu.csv (and watch.csv if recorded) with synchronized timestamps">Export CSVs</button>
+            <div class="row between wrap" style="font-family:var(--mono);font-size:9.5px;color:var(--ink-3);gap:4px">
+              <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Click to copy HTTP POST URL for live Sensor Logger app streaming">Live POST: <b id="imu-push-url" style="color:var(--cyan);cursor:pointer">/api/room/OPERON/imu</b></span>
+              <div class="row" style="gap:4px;flex-shrink:0">
+                <button class="btn sm" id="btn-clear-watch" title="Clear uploaded Watch CSV">Clear</button>
+                <button class="btn sm" id="btn-export-imu" title="Download simulated and Watch IMU data as synchronized CSV files">Export CSVs</button>
               </div>
             </div>
-            <div class="mono" id="watch-status" style="font-size:9.5px;color:var(--ink-2)">Watch Input: Awaiting Live Stream or CSV Upload</div>
+            <div class="mono" id="watch-status" style="font-size:9.5px;color:var(--ink-2);overflow-wrap:anywhere">Ready: Run a preset sweep, connect Watch, or load a Watch CSV</div>
           </div>
 
-          <!-- PHONE / WATCH TELEOP RELAY -->
+          <!-- CARD 4: PHONE / APPLE WATCH LIVE TELEOP LINK -->
           <details class="drawer" open>
             <summary>
-              <span>Phone / Apple Watch Live Teleop</span>
+              <span>4. Connect Apple Watch or Phone</span>
               <span class="pill" id="room-pill">Room OPERON</span>
             </summary>
             <div class="drawer-body">
               <div class="qr-card">
                 <div class="qr-box" data-live="qr"></div>
                 <div class="col" style="gap:3px;min-width:0">
-                  <div style="font-weight:600;font-size:11px;color:var(--surface-grey)">Scan on iPhone or Open on Watch</div>
+                  <div style="font-weight:600;font-size:11px;color:var(--surface-grey)">Scan on iPhone or Open Link on Watch</div>
                   <a class="mono" data-live="url" target="_blank" rel="noopener" style="font-size:9.5px;color:var(--cyan);word-break:break-all"></a>
                   <div class="row wrap" style="margin-top:2px;gap:4px">
-                    <a class="btn sm watch" id="sms-watch" href="#" title="Send clickable controller link to Apple Watch via iMessage">iMessage Link</a>
+                    <a class="btn sm watch" id="sms-watch" href="#" title="Send clickable controller link to your Apple Watch via iMessage">iMessage to Watch</a>
                     <span class="pill" id="team-pill">6D: 0</span>
                   </div>
                 </div>
               </div>
-              <div class="row between">
-                <span class="sub-label">Input Mode</span>
+              <div class="row between wrap" style="gap:4px">
+                <span class="sub-label">Control Mode</span>
                 <div class="seg" id="drive-mode">
-                  <button class="sel" data-v="crowd" title="Blend connected controller inputs">Stream</button>
-                  <button data-v="pilot" title="Lock control to a single device">Single Device</button>
-                  <button data-v="joints" title="Direct per-joint angle sliders on device">Joints</button>
+                  <button class="sel" data-v="crowd" title="Stream live wrist pose from connected device">Wrist Pose</button>
+                  <button data-v="pilot" title="Lock control to one chosen device">Single Pilot</button>
+                  <button data-v="joints" title="Control individual robot joints with sliders">Per-Joint</button>
                 </div>
-                <button class="btn sm" id="btn-dice" title="Select active device">Select</button>
+                <button class="btn sm" id="btn-dice" title="Pick active pilot device">Pick</button>
               </div>
               <div id="pilot-list" class="row wrap" style="gap:4px"></div>
-            </div>
-          </details>
-
-          <!-- LIGHTING & SURFACE RANDOMIZATION -->
-          <details class="drawer">
-            <summary>
-              <span>Lighting, Roughness &amp; Pose Perturbation</span>
-            </summary>
-            <div class="drawer-body">
-              <div class="row between">
-                <span class="sub-label">PBR Shader &amp; Light Parameters</span>
-                <button class="btn sm nv" id="btn-dr-rand" title="Randomize light intensity, azimuth angle, and metallic surface roughness">Randomize</button>
-              </div>
-              <div class="slider-row" title="Key directional light intensity multiplier"><span>Light</span><input type="range" id="dr-light" min="0.3" max="4.5" step="0.1" value="2.8"><span id="drv-light">2.8x</span></div>
-              <div class="slider-row" title="Directional light azimuth angle in degrees"><span>Azim</span><input type="range" id="dr-azi" min="-180" max="180" step="5" value="35"><span id="drv-azi">35°</span></div>
-              <div class="slider-row" title="Microfacet surface roughness (0.05 specular to 0.95 matte)"><span>Rough</span><input type="range" id="dr-rough" min="0.05" max="0.95" step="0.05" value="0.22"><span id="drv-rough">0.22</span></div>
-              <div class="row between" style="margin-top:3px">
-                <button class="btn sm" id="btn-dr-pose" title="Apply random XY position offset to the 21700 cell on the pick pad">Jitter Cell Pose</button>
-                <button class="btn sm" id="btn-bboxes" title="Project 3D object bounding boxes into 2D camera pixel coordinates">2D/3D BBoxes: OFF</button>
-              </div>
             </div>
           </details>
 
@@ -893,16 +926,16 @@
           <div class="aov-explain-banner" id="aov-explain-banner">
             <div class="aov-explain-main">
               <div class="aov-explain-title" id="aov-banner-title">
-                <span>WebGL2 PBR Pass | 6-DOF Ideal Sim (Left) vs 6-DOF Real Streamer Twin (Right)</span>
+                <span>Station 1: Cell Pick &amp; Place | Point Wrist Left/Right &amp; Tilt Down to Grasp</span>
               </div>
               <div class="aov-explain-desc" id="aov-banner-desc">
-                Browser kinematic &amp; analytic IMU twin with fixture collision clamping (table floor, charger dock, and valve hub). Export OpenUSD (.usda) to run full PhysX / RTX raytracing in NVIDIA Isaac Sim.
+                Move wrist within 85 mm of the blue 21700 cell (magnetic funnel pulls gripper onto target), then click <b>Grasp</b> (or pinch/clench wrist). Sweep wrist right to the target pad and click <b>Release</b>.
               </div>
             </div>
             <div class="aov-legend" id="aov-banner-legend">
-              <span class="swatch" title="Yaw rotates horizontally around Z"><i style="background:#60a5fa"></i>Yaw (Z)</span>
-              <span class="swatch" title="Pitch tilts nose up/down"><i style="background:#34d399"></i>Pitch (Y)</span>
-              <span class="swatch" title="Roll twists wrist around approach axis"><i style="background:#c084fc"></i>Roll (Z_tool)</span>
+              <span class="swatch" title="Sweep wrist Left/Right (±14 deg covers full table)"><i style="background:#60a5fa"></i>Wrist L/R = Table Y</span>
+              <span class="swatch" title="Tilt hand Up/Down (±12 deg covers full height &amp; reach)"><i style="background:#34d399"></i>Wrist U/D = Height + Reach</span>
+              <span class="swatch" title="Twist forearm to rotate tool roll"><i style="background:#c084fc"></i>Forearm Twist = Roll</span>
             </div>
           </div>
 
@@ -940,40 +973,38 @@
         <div class="ph">
           <span class="ph-title">
             <svg class="ico" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            <span>2. Sim-to-Real Residuals &amp; Export</span>
+            <span>Sim-to-Real Analysis &amp; Data Export</span>
           </span>
           <span class="pill" id="rec-badge">IDLE | 0 frames</span>
         </div>
         <div class="pb">
 
-          <!-- PLAIN-ENGLISH SIM VS REAL SUMMARY CARD -->
+          <!-- CARD 1: SIM VS REAL SUMMARY + 3 KEY METRICS -->
           <div class="step-card" style="border-color:var(--border-hi);background:#141826">
             <div class="row between">
-              <span class="sub-label" style="color:var(--surface-grey)">Sim vs. Real Plain Summary</span>
+              <span class="sub-label" style="color:var(--surface-grey)">1. Sim vs. Real Hardware Comparison</span>
               <span class="pill ok" id="s2r-verdict-pill">Synced (0.0 mm lag)</span>
             </div>
             <div id="s2r-plain-summary" style="font-size:11px;line-height:1.42;color:var(--ink-2)">
-              <b>Left Arm (Ideal Sim)</b> moves instantaneously via analytical IK.<br/>
-              <b>Right Arm (Real Streamer Twin)</b> runs the ROS2 <code>AbelArmHardwareInterface</code> (1.0° servo deadband, 10 Hz packet rate, 150 ms quintic smoothing).
+              <b>Left Arm (Ideal Math)</b> moves immediately to your commanded angle.<br/>
+              <b>Right Arm (Real Servo Twin)</b> models real motor delay (1.0° deadband, 10 Hz update rate, 150 ms smooth ramp).
             </div>
-          </div>
-
-          <!-- 3 CLEAR KPI CARDS -->
-          <div class="kpi-grid">
-            <div class="kpi-card" title="Position and angle lag between the Left Ideal Sim Arm and the Right Real Streamer Arm caused by 1.0 deg servo quantization and 150 ms quintic segment smoothing">
-              <span class="kpi-lbl" id="kpi-err-lbl">Sim vs Real Lag</span>
-              <span class="kpi-val" id="m-dof-pos" style="color:var(--purple-hi)">0.0 mm</span>
-              <span class="kpi-sub">Angle lag: <b id="m-dof-ori">0.0°</b></span>
-            </div>
-            <div class="kpi-card" title="Pearson correlation coefficient r (-1 to +1) between Simulated Forearm IMU and Real Apple Watch IMU (requires Watch CSV or live stream)">
-              <span class="kpi-lbl">Watch IMU Match (r)</span>
-              <span class="kpi-val" id="m-acc-r" style="color:#38bdf8">Awaiting Watch</span>
-              <span class="kpi-sub">Gyro r: <b id="m-gyr-r">--</b></span>
-            </div>
-            <div class="kpi-card" title="Root Mean Square Error between Simulated and Real Apple Watch linear acceleration (m/s^2) and angular velocity (rad/s)">
-              <span class="kpi-lbl">Watch IMU Error</span>
-              <span class="kpi-val" id="m-acc-rmse">--</span>
-              <span class="kpi-sub">m/s² | <b id="m-gyr-rmse">--</b> rad/s</span>
+            <div class="kpi-grid" style="margin-top:2px">
+              <div class="kpi-card" title="How far the Right Arm (Real Servo Twin) lags behind the Left Arm (Ideal Math) in millimeters and degrees">
+                <span class="kpi-lbl" id="kpi-err-lbl">Sim vs Real Lag</span>
+                <span class="kpi-val" id="m-dof-pos" style="color:var(--purple-hi)">0.0 mm</span>
+                <span class="kpi-sub">Angle lag: <b id="m-dof-ori">0.0°</b></span>
+              </div>
+              <div class="kpi-card" title="Shape similarity (Pearson correlation r from -1 to +1; 1.00 = identical motion curve) between the Simulated Arm IMU and your Apple Watch IMU">
+                <span class="kpi-lbl">Watch Match (r)</span>
+                <span class="kpi-val" id="m-acc-r" style="color:#38bdf8">No Watch</span>
+                <span class="kpi-sub">Gyro r: <b id="m-gyr-r">--</b></span>
+              </div>
+              <div class="kpi-card" title="Average sensor difference (Root Mean Square Error) between Simulated Arm IMU and Apple Watch IMU in m/s² (accel) and rad/s (gyro)">
+                <span class="kpi-lbl">Sensor Error (RMSE)</span>
+                <span class="kpi-val" id="m-acc-rmse">--</span>
+                <span class="kpi-sub">m/s² | <b id="m-gyr-rmse">--</b> rad/s</span>
+              </div>
             </div>
           </div>
           <span id="m-acc-mae" style="display:none">N/A</span>
@@ -981,76 +1012,76 @@
           <span id="m-dof-w" style="display:none">w=0.05</span>
           <span id="wahba-ang" style="display:none">N/A</span>
 
-          <!-- CHART 1: FOREARM 6-AXIS IMU FUSION OVERLAY -->
+          <!-- CARD 2: FOREARM 6-AXIS IMU SIGNALS -->
           <div class="step-card">
-            <div class="row between" style="gap:4px">
-              <span class="sub-label" style="white-space:nowrap"><b style="color:var(--blue-hi)">|a| Sim</b> + <b style="color:var(--purple-hi)">|w| Sim</b> vs <b style="color:#e879f9">Watch</b></span>
+            <div class="row between wrap" style="gap:4px">
+              <span class="sub-label">2. Forearm IMU: <b style="color:var(--blue-hi)">Sim Accel</b> + <b style="color:var(--purple-hi)">Gyro</b> vs <b style="color:#e879f9">Watch</b></span>
               <div class="seg" id="imu-chart-mode" style="flex-shrink:0">
-                <button class="sel" data-ic="fused" title="6-Axis Overlay: Simultaneous linear proper acceleration |a| (m/s^2) and angular rate |w| (rad/s)">6-Axis</button>
-                <button data-ic="acc" title="Accelerometer Magnitude: |a| = ||R^T(a_world + g)|| in m/s^2">Accel</button>
-                <button data-ic="gyro" title="Gyroscope Magnitude: |w| = ||(R^T R_dot)^vee|| in rad/s">Gyro</button>
-                <button data-ic="psd" title="Power Spectral Density: Log-magnitude frequency spectrum (0 to 30 Hz)">PSD</button>
+                <button class="sel" data-ic="fused" title="Combined View: Shows linear acceleration |a| (m/s²) and rotation rate |w| (rad/s) together">Combined</button>
+                <button data-ic="acc" title="Accelerometer Only: Gravity + motion acceleration in m/s²">Accel</button>
+                <button data-ic="gyro" title="Gyroscope Only: Rotational speed in rad/s">Gyro</button>
+                <button data-ic="psd" title="Frequency Spectrum (Power Spectral Density): Shows vibration frequencies from 0 to 30 Hz">Freq (PSD)</button>
               </div>
             </div>
-            <div class="row between" style="font-family:var(--mono);font-size:9.5px;color:var(--ink-2)">
-              <span id="fusion-att">Complementary Filter: Pitch 0.0° | Roll 0.0°</span>
-              <span id="fusion-explain" style="color:var(--ink-3)">a=m/s² | w=rad/s</span>
+            <div class="row between wrap" style="font-family:var(--mono);font-size:9.5px;color:var(--ink-2);gap:4px">
+              <span id="fusion-att">Wrist Attitude (Accel + Gyro): Pitch 0.0° | Roll 0.0°</span>
+              <span id="fusion-explain" style="color:var(--ink-3)">m/s² &amp; rad/s</span>
             </div>
             <canvas class="chart-cv" id="chart-imu" width="600" height="108"></canvas>
           </div>
 
-          <!-- CHART 2: POSE TRACKING ERROR & JOINT VELOCITY -->
+          <!-- CARD 3: JOINT LAG & WRIST HEALTH (GIMBAL LOCK CHECK) -->
           <div class="step-card">
-            <div class="row between">
-              <span class="sub-label" id="chart2-title"><b style="color:var(--purple-hi)">Left Ori Err</b> vs <b style="color:var(--blue-hi)">Right Ori Err</b></span>
-              <span class="mono" id="div-readout" style="font-size:9.5px;color:var(--ink-2)">gap: 0° | peak |dq|: 0°/s</span>
+            <div class="row between wrap" style="gap:4px">
+              <span class="sub-label" id="chart2-title">3. <b style="color:var(--purple-hi)">Sim vs. Real Lag</b> &amp; <b style="color:#cbd5e1">Joint Speed</b></span>
+              <span class="mono" id="div-readout" style="font-size:9.5px;color:var(--ink-2)">Lag: 0mm / 0° | max speed: 0°/s</span>
             </div>
-            <div class="help-line" id="chart2-help">Tracks orientation lag, backlash deadband, and peak joint velocity (deg/s) between rigs.</div>
             <canvas class="chart-cv sm" id="chart-err" width="480" height="74"></canvas>
-          </div>
-
-          <!-- KINEMATIC FEASIBILITY & SINGULARITY MONITOR -->
-          <div class="step-card">
-            <div class="row between">
-              <span class="sub-label" style="color:var(--purple-hi)" title="Evaluates Yoshikawa manipulability index w = sqrt(det(J*J^T)) and tracking residual to flag wrist singularities">Kinematic Singularity &amp; Envelope Monitor</span>
-              <span class="pill ok" id="nemo-tier">Nominal Envelope</span>
+            <div class="row between wrap" style="margin-top:2px;padding-top:4px;border-top:1px solid var(--border);gap:4px">
+              <span class="sub-label" style="color:var(--purple-hi)" title="Checks if two wrist joints are lining up (gimbal lock), which causes sudden wrist flips. Manipulability w > 0.04 is healthy; w = 0 is locked.">Wrist Gimbal-Lock Check</span>
+              <span class="pill ok" id="nemo-tier">Healthy Posture</span>
             </div>
-            <div class="row between" style="font-family:var(--mono);font-size:10px">
-              <span title="Feasibility score based on manipulability and orientation residual">Feasibility Score: <b id="nemo-prob">0.96</b></span>
-              <span title="Yoshikawa manipulability index w (approaches 0 near singular configurations)">Manipulability: <b id="nemo-cost">w = 0.082</b></span>
+            <div class="row between wrap" style="font-family:var(--mono);font-size:9.5px;color:var(--ink-2);gap:4px">
+              <span title="0.00 = locked, 1.00 = maximum freedom of motion">Health Score: <b id="nemo-prob">0.96</b></span>
+              <span title="Yoshikawa manipulability index w = sqrt(det(J*J^T))">Dexterity (w): <b id="nemo-cost">w = 0.082</b></span>
             </div>
-            <div class="mono" id="nemo-rationale" style="font-size:9.5px;color:var(--ink-2);line-height:1.35">
-              Spherical wrist outside gimbal-lock cone; analytical IK solution continuous.
+            <div class="mono" id="nemo-rationale" style="font-size:9.5px;color:var(--ink-3);line-height:1.35">
+              Wrist joints are well-spaced away from gimbal lock.
             </div>
           </div>
 
-          <!-- EPISODE RECORDER & UNRESTRICTED RESEARCH EXPORTS -->
+          <!-- CARD 4: RECORD & EXPORT ROBOTICS DATASETS -->
           <div class="step-card">
+            <div class="step-hdr">
+              <div class="step-title">4. Record &amp; Export Robotics Formats</div>
+            </div>
+            <div class="help-line">Record live movement at 30 Hz and download standard files for AI training (<b>LeRobot</b>), 3D simulation (<b>OpenUSD</b>), or vision (<b>BBoxes</b>).</div>
             <div class="row" style="gap:6px">
-              <button class="btn rec" id="btn-rec" style="flex:1" title="Record 30 Hz kinematic, joint, and 6-axis IMU time-series frames into memory">
+              <button class="btn rec" id="btn-rec" style="flex:1" title="Start or stop recording 30 Hz robot joint and sensor frames">
                 <span>Record 30Hz Episode</span>
               </button>
-              <button class="btn sm" id="btn-clear-ep" title="Clear recorded episode buffer">Clear</button>
+              <button class="btn sm" id="btn-clear-ep" title="Clear recorded frames">Clear</button>
             </div>
             <div class="row wrap" style="gap:5px">
-              <button class="btn sm primary" id="exp-lerobot" style="flex:1" title="Download recorded episode in HuggingFace LeRobot / RLDS JSON Lines (.jsonl) format">LeRobot (.jsonl)</button>
-              <button class="btn sm nv" id="exp-usd" style="flex:1" title="Download OpenUSD stage (.usda) with PhysicsArticulationRootAPI and time-sampled joint positions">OpenUSD (.usda)</button>
-              <button class="btn sm" id="exp-coco" style="flex:1" title="Download 2D/3D bounding box and semantic class annotations (.json)">BBoxes (.json)</button>
+              <button class="btn sm primary" id="exp-lerobot" style="flex:1" title="LeRobot (.jsonl): Standard HuggingFace format for training robot imitation learning policies">LeRobot (.jsonl)</button>
+              <button class="btn sm nv" id="exp-usd" style="flex:1" title="OpenUSD (.usda): 3D scene and joint animation file for NVIDIA Omniverse / Isaac Sim">OpenUSD (.usda)</button>
+              <button class="btn sm" id="exp-coco" style="flex:1" title="2D/3D Bounding Boxes (.json): Object coordinates and labels for training computer vision models">BBoxes (.json)</button>
             </div>
           </div>
 
-          <!-- RAW SCHEMA & WAHBA SVD INSPECTOR -->
-          <details class="drawer" open>
+          <!-- COLLAPSIBLE RAW DATA & CALIBRATION MATRIX INSPECTOR -->
+          <details class="drawer">
             <summary>
-              <span>Live Telemetry Frame &amp; Wahba/SVD Report</span>
+              <span>Raw Telemetry &amp; 3D Calibration Matrix (Advanced)</span>
             </summary>
             <div class="drawer-body">
-              <div class="seg" id="schema-tabs" style="width:100%">
-                <button class="sel" data-s="sim2real" style="flex:1" title="View live Kabsch/Wahba SVD rotation matrix R_watch_to_sim, tap lag, and channel RMSE/MAE/Pearson r">Wahba / IMU</button>
-                <button data-s="yaml" style="flex:1" title="View exact config/trajectories/*.yaml file and expanded quintic segment durations">YAML Contract</button>
-                <button data-s="lerobot" style="flex:1" title="View current 30 Hz LeRobot observation/action JSON frame">LeRobot JSON</button>
-                <button data-s="usd" style="flex:1" title="View generated OpenUSD ASCII articulation hierarchy">OpenUSD</button>
-                <button data-s="coco" style="flex:1" title="View 2D/3D camera bounding box projections">BBoxes</button>
+              <div class="help-line">Inspect the solved 3x3 Watch-to-Arm rotation matrix (<b>Wahba SVD</b>), raw <b>YAML</b> trajectory steps, or live export previews.</div>
+              <div class="seg" id="schema-tabs" style="width:100%;flex-wrap:wrap">
+                <button class="sel" data-s="sim2real" style="flex:1;padding:4px 5px" title="3x3 rotation matrix R_watch_to_sim aligning the Watch's coordinate frame to the robot forearm">3D Align (SVD)</button>
+                <button data-s="yaml" style="flex:1;padding:4px 5px" title="Preset trajectory waypoints and 5th-order polynomial segment durations">YAML Steps</button>
+                <button data-s="lerobot" style="flex:1;padding:4px 5px" title="Live 30 Hz LeRobot JSON frame">LeRobot JSON</button>
+                <button data-s="usd" style="flex:1;padding:4px 5px" title="OpenUSD ASCII file preview">OpenUSD</button>
+                <button data-s="coco" style="flex:1;padding:4px 5px" title="2D/3D camera bounding box coordinates">BBoxes</button>
               </div>
               <div class="term-box" id="schema-preview"></div>
             </div>
