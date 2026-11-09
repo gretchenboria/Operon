@@ -299,7 +299,7 @@ const st = {
   watchLagMs: 0.0,
   estimatedR: [1, 0, 0, 0, 1, 0, 0, 0, 1],
   selectedTraj: "imu_calibration",
-  studioGain: 2.5,
+  studioGain: 3.2,
   deskBasePos: [0.15, 0.0, 0.11],
   hwStreamer: {
     lastSentMs: 0,
@@ -987,12 +987,30 @@ const AOV_EXPLAIN = {
   }
 };
 
+const STATION_GUIDES = [
+  {
+    title: "Station 1: Cell Pick & Place | Point Wrist Left/Right & Tilt Down to Grasp",
+    desc: "Move wrist within 85 mm of the blue 21700 cell (magnetic funnel guides the gripper onto target), then click Grasp (or pinch/clench wrist). Sweep wrist right to the target pad and click Release."
+  },
+  {
+    title: "Station 2: Compound-Angle Charger Dock | Tilt & Twist Wrist to Slot Cell",
+    desc: "Guide the grasped cell toward the tilted dock at right. Within 85 mm, the magnetic funnel aligns pitch and roll; click Release (or pinch/clench wrist) to slot the cell into the charger."
+  },
+  {
+    title: "Station 3: Process Valve Handwheel | Grasp Hub & Twist Forearm 90°",
+    desc: "Bring the gripper to the purple valve wheel and click Grasp (auto-aligns horizontally if away). Then twist your forearm 90° to rotate the valve wheel."
+  }
+];
+
 function renderAOVBanner(mode) {
   const info = AOV_EXPLAIN[mode] || AOV_EXPLAIN.rtx;
+  const stGuide = STATION_GUIDES[st.station] || STATION_GUIDES[0];
+  const titleText = mode === "rtx" ? stGuide.title : info.title;
+  const descText = mode === "rtx" ? stGuide.desc : info.desc;
   if ($("aov-banner-title")) {
-    $("aov-banner-title").innerHTML = `<svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span>${info.title}</span>`;
+    $("aov-banner-title").innerHTML = `<svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span>${titleText}</span>`;
   }
-  if ($("aov-banner-desc")) $("aov-banner-desc").textContent = info.desc;
+  if ($("aov-banner-desc")) $("aov-banner-desc").textContent = descText;
   if ($("aov-banner-legend")) $("aov-banner-legend").innerHTML = info.legend;
 }
 
@@ -1266,13 +1284,8 @@ onLive((m) => {
     const num = (x, lo, hi, d) => Number.isFinite(+x) ? Math.max(lo, Math.min(hi, +x)) : d;
     p.g = v.g ? 1 : 0;
     if (v.grabToggle && (!st.pilot || st.pilot === m.from)) {
-      setClosed(!!v.g);
-      if (v.gesture) {
-        st.lastGestureBanner = v.gesture;
-        $("watch-status").textContent = `Watch Gesture: ${v.gesture}`;
-      }
-      const s = ST[st.station];
-      if (s.id === "valve" && st.closed) tweenTo(s.ypr, s.p, 950);
+      if (v.gesture) st.lastGestureBanner = v.gesture;
+      triggerSmartGraspOrRelease(v.gesture || "Watch GRASP/RELEASE");
     }
     if (v.snap && (!st.pilot || st.pilot === m.from)) snapToStation();
     if (v.recenter && (!st.pilot || st.pilot === m.from)) {
@@ -1366,6 +1379,7 @@ function setStation(i) {
     setClosed(false);
   }
   $("st-bar").querySelectorAll("button").forEach(b => b.classList.toggle("sel", +b.dataset.st === i));
+  renderAOVBanner(st.aov);
   pushState();
 }
 
@@ -1381,48 +1395,63 @@ function snapToStation() {
   tweenTo(t.ypr, t.p, 520);
 }
 $("btn-snap").onclick = snapToStation;
-$("btn-grab").onclick = () => {
+function triggerSmartGraspOrRelease(gestureLabel) {
   const s = ST[st.station];
   if (!st.closed) {
     // Check if either arm is already close enough to grasp directly
     const f4 = fk4(st.q4), f6 = fk6(st.q6);
     const d4 = Math.hypot(f4.tip[0] - st.arm[4].battP[0], f4.tip[1] - st.arm[4].battP[1]);
     const d6 = Math.hypot(f6.tip[0] - st.arm[6].battP[0], f6.tip[1] - st.arm[6].battP[1]);
-    if (s.id === "battery" && !st.arm[4].held && !st.arm[6].held && Math.min(d4, d6) > 0.065) {
-      // Auto-approach cell, grasp, and lift so Grasp always works on first click!
+    if (s.id === "battery" && !st.arm[4].held && !st.arm[6].held && Math.min(d4, d6) > 0.068) {
+      // Auto-approach cell, grasp, and lift so Grasp always works on first click or watch pinch!
       const bp = [st.arm[6].battP[0], st.arm[6].battP[1], 0.032];
-      $("watch-status").textContent = "Auto-aligning to cell -> Grasping…";
-      tweenTo([-25, 0, 0], bp, 380, () => {
+      $("watch-status").textContent = gestureLabel ? `${gestureLabel} -> Auto-aligning & Grasping Cell…` : "Auto-aligning to cell -> Grasping…";
+      tweenTo([-25, 0, 0], bp, 340, () => {
         setClosed(true, true);
-        $("watch-status").textContent = "Cell grasped! Click Pick & Place or Align -> Release.";
+        $("watch-status").textContent = "Cell grasped! Point wrist right toward Target Pad & tap Release.";
       });
       return;
     }
     if (s.id === "valve") {
       const dv = Math.hypot(f6.tip[0] - s.p[0], f6.tip[1] - s.p[1], f6.tip[2] - s.p[2]);
       if (dv > POS_TOL) {
-        tweenTo(s.yprGrip, s.p, 380, () => {
+        tweenTo(s.yprGrip, s.p, 340, () => {
           setClosed(true);
-          later(250, () => tweenTo(s.ypr, s.p, 850));
+          later(220, () => tweenTo(s.ypr, s.p, 800));
         });
         return;
       }
     }
   } else if (s.id === "battery" && (st.arm[4].held || st.arm[6].held)) {
+    const destP = st.arm[6].dest === "pick" ? PICK_P : PLACE_P;
+    const destYaw = st.arm[6].dest === "pick" ? -25 : 25;
     const f6 = fk6(st.q6);
-    const dPlace = Math.hypot(f6.tip[0] - PLACE_P[0], f6.tip[1] - PLACE_P[1]);
-    if (dPlace > 0.055) {
-      $("watch-status").textContent = "Moving to target pad -> Releasing…";
-      tweenTo([25, 0, 0], PLACE_P, 420, () => {
+    const dDest = Math.hypot(f6.tip[0] - destP[0], f6.tip[1] - destP[1]);
+    if (dDest > 0.052) {
+      $("watch-status").textContent = gestureLabel ? `${gestureLabel} -> Guiding to Target Pad & Releasing…` : "Guiding to Target Pad -> Releasing…";
+      tweenTo([destYaw, 0, 0], destP, 360, () => {
         setClosed(false, true);
-        $("watch-status").textContent = "Cell placed on target pad!";
+        $("watch-status").textContent = "Cell placed on Target Pad!";
+      });
+      return;
+    }
+  } else if (s.id === "charger" && (st.arm[4].held || st.arm[6].held)) {
+    const f6 = fk6(st.q6);
+    const dCharger = Math.hypot(f6.tip[0] - s.p[0], f6.tip[1] - s.p[1], f6.tip[2] - s.p[2]);
+    if (dCharger > POS_TOL) {
+      $("watch-status").textContent = "Guiding into Charger Slot -> Slotting Cell…";
+      tweenTo(s.ypr, s.p, 380, () => {
+        setClosed(false, true);
+        $("watch-status").textContent = "Cell slotted into Charger Dock!";
       });
       return;
     }
   }
   setClosed(!st.closed);
-  if (s.id === "valve" && st.closed) tweenTo(s.ypr, s.p, 850);
-};
+  if (gestureLabel) $("watch-status").textContent = `Watch Gesture: ${gestureLabel}`;
+  if (s.id === "valve" && st.closed) tweenTo(s.ypr, s.p, 800);
+}
+$("btn-grab").onclick = () => triggerSmartGraspOrRelease();
 $("btn-reset").onclick = () => {
   st.arm = { 4: freshArm(), 6: freshArm() };
   st.quinticPlan = null;
@@ -1668,7 +1697,7 @@ if ($("btn-gizmo-toggle")) {
 
 if ($("studio-gain-bar")) {
   $("studio-gain-bar").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-    st.studioGain = parseFloat(b.dataset.sg) || 2.5;
+    st.studioGain = parseFloat(b.dataset.sg) || 3.2;
     $("studio-gain-bar").querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
   }));
 }
@@ -2257,46 +2286,54 @@ function tick(now) {
       $("cmd-src").textContent = "Command: Auto Trajectory";
     } else if (c) {
       const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-      const gainScale = (st.studioGain || 2.5) / 2.5;
+      const gainScale = (st.studioGain || 3.2) / 3.2;
       if (c.aim === "tilt" && Math.hypot(c.vx, c.vy, c.vz) < 0.04) {
-        // SCREEN-ALIGNED COMPACT DESK WORKSPACE MODE (Position-Proportional + Magnetic Station Assist):
-        // Because the camera sits at +X looking toward the robot origin:
-        //   - Screen Left/Right is Robot -Y / +Y
-        //   - Screen Up/Down is Robot +Z / -Z (height) and Forward/Back (+X / -X)
-        // Moving your wrist Left/Right (c.yaw) sweeps the gripper across Screen Left/Right (Y).
-        // Tilting your wrist Up/Down (c.pitch) raises/lowers and reaches the gripper toward the active station!
-        const baseP = activeT ? activeT.p : [0.15, 0.0, 0.09];
-        let targetX = cl(0.150 + (c.pitch / 55) * 0.045 * gainScale, 0.075, 0.205);
-        let targetY = cl((c.yaw / 50) * 0.125 * gainScale, -0.135, 0.135);
-        let targetZ = cl(0.085 + (c.pitch / 50) * 0.075 * gainScale, 0.024, 0.210);
+        // SCREEN-ALIGNED EFFORTLESS WRIST MIRROR MODE (1:1 Anatomical Mapping + 85 mm Magnetic Station Funnel):
+        // With 3.2x Desk Gain, just +/-14 deg of physical wrist motion spans +/-45 deg in c.yaw/c.pitch,
+        // mapping directly across the full optical table without reaching or straining your arm:
+        //   - Point Wrist Left/Right (c.yaw) -> Sweeps Gripper Left/Right (Y from -0.135m to +0.135m)
+        //   - Tilt Hand Down/Up (c.pitch)    -> Lowers Gripper to Table (Z=0.024m) or Lifts Up (Z=0.205m) & Reaches Forward (X)
+        //   - Twist Forearm (c.roll)         -> Rotates Tool Roll directly
+        const baseP = activeT ? activeT.p : [0.15, 0.0, 0.08];
+        let targetX = cl(0.150 + (c.pitch / 42) * 0.048 * gainScale, 0.075, 0.205);
+        let targetY = cl((c.yaw / 38) * 0.130 * gainScale, -0.135, 0.135);
+        let targetZ = cl(0.078 + (c.pitch / 38) * 0.082 * gainScale, 0.022, 0.210);
 
-        // Magnetic Target Funnel: when wrist brings the tool within 65 mm of the active station target,
-        // gently pull (x, y, z) into alignment so picking cells or slotting the charger feels effortless
+        let wantYPR = [c.yaw, c.pitch * 0.45, c.roll];
+        // Magnetic Target Funnel (85 mm radius): when wrist brings the gripper near the active cell, pad, charger, or valve,
+        // smoothly pull (x, y, z) AND tool orientation into alignment so grasping/releasing feels effortless
         if (activeT) {
           const distToTgt = Math.hypot(targetX - baseP[0], targetY - baseP[1], targetZ - baseP[2]);
-          if (distToTgt < 0.065) {
-            const pull = (1 - distToTgt / 0.065) * 0.55;
+          if (distToTgt < 0.085) {
+            const pull = Math.pow(1 - distToTgt / 0.085, 1.35) * 0.68;
             targetX += (baseP[0] - targetX) * pull;
             targetY += (baseP[1] - targetY) * pull;
             targetZ += (baseP[2] - targetZ) * pull;
+            if (activeT.ypr && st.station !== 2) {
+              wantYPR = wantYPR.map((ang, idx) => ang + (activeT.ypr[idx] - ang) * pull);
+            }
           }
         }
-        const kp = Math.min(1, dt * 28);
+        const kp = Math.min(1, dt * 32);
         st.cmd.x += (targetX - st.cmd.x) * kp;
         st.cmd.y += (targetY - st.cmd.y) * kp;
         st.cmd.z += (targetZ - st.cmd.z) * kp;
+        for (const [i, key] of ["yaw", "pitch", "roll"].entries()) {
+          let d = wantYPR[i] - st.cmd[key];
+          if (key === "yaw") { while (d > 180) d -= 360; while (d < -180) d += 360; }
+          st.cmd[key] += d * kp;
+        }
       } else {
         st.cmd.x = cl(st.cmd.x + c.vx * SPEED * gainScale * dt, 0.05, 0.22);
         st.cmd.y = cl(st.cmd.y + c.vy * SPEED * gainScale * dt, -0.14, 0.14);
         st.cmd.z = cl(st.cmd.z + c.vz * SPEED * gainScale * dt, 0.01, 0.25);
-      }
-
-      const want = c.aim === "tilt" ? [c.yaw, c.pitch, c.roll] : activeT.ypr;
-      const k = c.aim === "tilt" ? Math.min(1, dt * 28) : Math.min(1, dt * 8);
-      for (const [i, key] of ["yaw", "pitch", "roll"].entries()) {
-        let d = want[i] - st.cmd[key];
-        if (key === "yaw") { while (d > 180) d -= 360; while (d < -180) d += 360; }
-        st.cmd[key] += d * k;
+        const want = activeT.ypr;
+        const k = Math.min(1, dt * 10);
+        for (const [i, key] of ["yaw", "pitch", "roll"].entries()) {
+          let d = want[i] - st.cmd[key];
+          if (key === "yaw") { while (d > 180) d -= 360; while (d < -180) d += 360; }
+          st.cmd[key] += d * k;
+        }
       }
       $("cmd-src").textContent = st.drive === "pilot" ? `Live Pilot (${st.studioGain}x Desk)` : `Live Watch/Phone (${st.studioGain}x Desk)`;
     } else {

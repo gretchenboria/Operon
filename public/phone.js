@@ -29,8 +29,8 @@ const STATIC = {
   "t-team": T("Your arm", "Tu brazo"),
   "t-pose": T("Tilt to steer the gripper", "Inclina para mover la pinza"),
   "t-pose-sub": T("Phone flat, screen up = gripper pointing down. Tilt forward = pitch, sideways = roll, turn = yaw.", "Teléfono plano = pinza hacia abajo. Inclina al frente = pitch, de lado = roll, gira = yaw."),
-  "enable-tilt": T("Enable tilt", "Activar inclinación"), zero: T("Zero", "Cero"), manual: T("Sliders instead", "Usar deslizadores"),
-  "t-pad": T("Move the hand", "Mueve la mano"), "t-away": T("▲ away", "▲ lejos"),
+  "enable-tilt": T("Enable Watch IMU", "Activar IMU"), zero: T("ZERO HERE (Set Neutral)", "CERO AQUÍ (Centrar)"), manual: T("Manual Angle Sliders", "Usar deslizadores"),
+  "t-pad": T("Optional Touch Pad", "Pad táctil opcional"), "t-away": T("▲ away", "▲ lejos"),
   "t-base": T("▼ robot", "▼ robot"), "t-height": T("height", "altura"),
   "t-joints": T("You are a motor", "Eres un motor"),
   "t-joints-sub": T("These are the joints your phone drives. Your teammates hold the others.", "Estas son las articulaciones que mueves. Tu equipo tiene las demás.")
@@ -143,7 +143,7 @@ const DEFAULT_QUIZ = {
   ]
 };
 let lastQuizMsg = DEFAULT_QUIZ;
-if ($("hint")) $("hint").textContent = T("Drag joystick to steer · tap ALIGN or GRASP", "Arrastra el joystick · toca ALINEAR o AGARRAR");
+if ($("hint")) $("hint").textContent = T("1. Hold wrist comfortably in front of screen & tap ZERO HERE · 2. Move ±14° to steer & tap GRASP", "1. Pon la muñeca frente a la pantalla y toca CERO AQUÍ · 2. Mueve ±14° y toca AGARRAR");
 if ($("tab-teleop")) $("tab-teleop").textContent = T("Robot Teleop", "Teleop Robot");
 if ($("tab-quiz")) $("tab-quiz").textContent = T("Live Quiz", "Quiz en Vivo");
 if ($("mode-bar")) {
@@ -229,7 +229,7 @@ $("team").querySelectorAll("button").forEach(b => b.addEventListener("click", ()
 // ---------- pose: tilt + pad + live IMU + Wrist Clench / Flick Grip Detector + Watch Wake Lock ----------
 const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
 let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false, lastGestureAt = 0;
-let deskGain = 2.5; // Default 2.5x Desk Mode: +/-22 deg comfortable wrist movement in front of screen spans full robot workspace
+let deskGain = 3.2; // Default 3.2x Effortless Desk Mode: +/-14 deg natural wrist movement spans the full robot workspace
 let wearMode = "left"; // "left" (Left Wrist Watch) | "right" (Right Wrist Watch) | "phone" (Phone in Hand)
 let flipLR = 1, flipUD = 1;
 let fusedAtt = { yaw: 0, pitch: 0, roll: 0, lastT: 0 };
@@ -304,10 +304,10 @@ if ($("flip-ud")) {
   });
 }
 
-// Gain selector on Watch / Phone (1x Full Arm, 2.5x Desk Mode, 4x Micro)
+// Gain selector on Watch / Phone (1.5x Standard, 3.2x Desk Mode, 4.8x Micro)
 if ($("gain-bar")) {
   $("gain-bar").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-    deskGain = parseFloat(b.dataset.g) || 2.5;
+    deskGain = parseFloat(b.dataset.g) || 3.2;
     $("gain-bar").querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
     touched = true;
   }));
@@ -320,26 +320,29 @@ if ($("gain-bar")) {
 // - Sweeping forearm Left/Right rotates around Z_device (alpha)
 function mapDeviceAnglesToRobot(rawYaw, rawPitch, rawRoll) {
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  // Soft 1.2-deg jitter deadzone so holding your wrist steady keeps the robot rock-solid
+  const dz = (v, d = 1.2) => Math.abs(v) < d ? 0 : (v > 0 ? v - d : v + d);
+  const y = dz(rawYaw, 1.0), p = dz(rawPitch, 1.0), r = dz(rawRoll, 1.0);
   let lrDeg, udDeg, twistDeg;
   if (wearMode === "left") {
     // Left Wrist Watch held in front of chest facing screen:
-    // - Sweeping arm right/left (yaw) + rolling wrist -> Screen Left/Right
+    // - Sweeping arm right/left (yaw) or gently rolling wrist -> Screen Left/Right
     // - Raising/lowering hand or tilting watch up/down -> Screen Up/Down & Forward/Back
-    lrDeg = (-rawYaw * 0.85 + rawRoll * 0.55) * flipLR;
-    udDeg = (rawPitch) * flipUD;
-    twistDeg = rawRoll;
+    lrDeg = (-y * 1.15 + r * 0.65) * flipLR;
+    udDeg = (p * 1.20) * flipUD;
+    twistDeg = r * 1.10;
   } else if (wearMode === "right") {
     // Right Wrist Watch (+X_device points left toward fingers): invert pitch/roll sign relative to left wrist
-    lrDeg = (-rawYaw * 0.85 - rawRoll * 0.55) * flipLR;
-    udDeg = (-rawPitch) * flipUD;
-    twistDeg = -rawRoll;
+    lrDeg = (-y * 1.15 - r * 0.65) * flipLR;
+    udDeg = (-p * 1.20) * flipUD;
+    twistDeg = -r * 1.10;
   } else {
     // Phone held in hand pointing at screen:
     // - Turning/tilting phone right (+gamma / -alpha) -> Screen Right (-Y)
     // - Tilting phone nose up (+beta) -> Screen Up/Forward
-    lrDeg = (-rawYaw * 0.70 - rawRoll * 0.75) * flipLR;
-    udDeg = rawPitch * flipUD;
-    twistDeg = rawRoll;
+    lrDeg = (-y * 0.90 - r * 0.85) * flipLR;
+    udDeg = (p * 1.15) * flipUD;
+    twistDeg = r * 1.10;
   }
   pose.yaw = Math.round(clamp(lrDeg * deskGain, -180, 180));
   pose.pitch = Math.round(clamp(udDeg * deskGain, -90, 90));
@@ -390,6 +393,17 @@ function onMotion(e) {
     mapDeviceAnglesToRobot(fusedAtt.yaw - zero.a, fusedAtt.pitch - zero.b, fusedAtt.roll - zero.g);
     tiltOn = true;
     readout();
+  } else {
+    // Even when DeviceOrientation (onOrient) is firing, fuse its compass yaw with our gravity-referenced 60Hz gyro+accel pitch/roll
+    // so forearm elevation and wrist twist never suffer from Euler gimbal lock!
+    let yaw = (lastO.a || 0) - (zero ? zero.a : 0);
+    while (yaw > 180) yaw -= 360;
+    while (yaw < -180) yaw += 360;
+    const fPitch = fusedAtt.pitch - (zero && zero.fPitch !== undefined ? zero.fPitch : accElev);
+    const fRoll = fusedAtt.roll - (zero && zero.fRoll !== undefined ? zero.fRoll : accTwist);
+    if (zero && zero.fPitch === undefined) { zero.fPitch = fusedAtt.pitch; zero.fRoll = fusedAtt.roll; }
+    mapDeviceAnglesToRobot(yaw, fPitch, fRoll);
+    readout();
   }
 
   // Stream at 30 Hz directly on motion callback for crisp low-latency response
@@ -400,17 +414,17 @@ function onMotion(e) {
     pose.tap = 0;
   }
 
-  // Hands-free Wrist Clench / Double-Tap Impulse or Pronation Roll Flick -> Toggle Grip/Release
+  // Hands-free Apple Watch Pinch / Wrist Tendon Clench Impulse or Pronation Roll Flick -> Toggle Grip/Release
   const aDelta = Math.abs(Math.hypot(pose.ax, pose.ay, pose.az) - 9.80665);
   const gMag = Math.hypot(pose.gx, pose.gy, pose.gz);
-  if (now - lastGestureAt > 850 && ((aDelta > 3.6 && gMag < 1.9) || Math.abs(pose.gx) > 2.5)) {
+  if (now - lastGestureAt > 700 && ((aDelta > 2.35 && gMag < 2.2) || Math.abs(pose.gx) > 2.1)) {
     lastGestureAt = now;
     touched = true;
     pose.g = pose.g ? 0 : 1;
     paintGrab();
-    const gesture = Math.abs(pose.gx) > 2.5
+    const gesture = Math.abs(pose.gx) > 2.1
       ? (pose.g ? "Wrist Roll Flick -> GRASP" : "Wrist Roll Flick -> RELEASE")
-      : (pose.g ? "Clench Impulse -> GRASP" : "Tendon Impulse -> RELEASE");
+      : (pose.g ? "Pinch/Clench Impulse -> GRASP" : "Pinch/Clench Impulse -> RELEASE");
     send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, gesture, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll, ax: pose.ax, ay: pose.ay, az: pose.az, gx: pose.gx, gy: pose.gy, gz: pose.gz, tap: 1 } });
     if (navigator.vibrate) navigator.vibrate([40, 30, 50]);
   }
@@ -484,7 +498,9 @@ $("enable-tilt").addEventListener("click", activateMotionSensorsFromUserGesture)
 $("zero").addEventListener("click", () => {
   if (!tiltOn) activateMotionSensorsFromUserGesture();
   else acquireWatchWakeLock();
-  zero = lastO ? { ...lastO } : { a: fusedAtt.yaw, b: fusedAtt.pitch, g: fusedAtt.roll };
+  zero = lastO
+    ? { ...lastO, fPitch: fusedAtt.pitch, fRoll: fusedAtt.roll }
+    : { a: fusedAtt.yaw, b: fusedAtt.pitch, g: fusedAtt.roll, fPitch: fusedAtt.pitch, fRoll: fusedAtt.roll };
   pose.yaw = pose.pitch = pose.roll = 0;
   readout();
   send({ t: "pose", v: { vx: 0, vy: 0, vz: 0, g: pose.g, aim, gain: deskGain, yaw: 0, pitch: 0, roll: 0, recenter: 1 } });

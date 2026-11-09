@@ -784,29 +784,46 @@
         </div>
         <div class="pb">
 
+          <!-- SELF-EXPLANATORY QUICK START & WRIST CONTROL GUIDE -->
+          <div class="step-card" style="border-color:var(--purple);background:linear-gradient(135deg, rgba(157,114,255,0.10), rgba(59,130,246,0.08))">
+            <div class="step-hdr">
+              <div class="step-title">
+                <svg class="ico sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>Quick-Start Wrist Control Guide</span>
+              </div>
+              <span class="pill warn" id="auto-assist-pill" title="Proximity Grasp/Release Assist is ON: moving the gripper within 75 mm of the target automatically guides alignment">Auto-Magnet: ON</span>
+            </div>
+            <div style="font-size:10.5px;line-height:1.42;color:var(--ink-2);display:grid;gap:3px">
+              <div><b style="color:#60a5fa">1. Point Wrist Left / Right (±15°):</b> Moves gripper Left / Right between pads.</div>
+              <div><b style="color:#34d399">2. Tilt Hand Down / Up (±12°):</b> Reaches down to table or lifts up.</div>
+              <div><b style="color:#c084fc">3. Twist Forearm (±20°):</b> Rotates wrist roll (for Charger &amp; Valve).</div>
+              <div><b style="color:#38bdf8">4. Grasp / Release:</b> Tap <b>Grasp</b> (or pinch/clench wrist) anywhere near the cell; it auto-snaps and lifts.</div>
+            </div>
+          </div>
+
           <!-- PRIMARY: 6-DOF GRIPPER POSE SLIDERS -->
           <div class="step-card">
             <div class="step-hdr">
               <div class="step-title">6-DOF Tool Pose (Cartesian + Euler)</div>
               <span class="mono" id="cmd-src" style="font-size:9.5px;color:var(--purple-hi)">Direct 60Hz</span>
             </div>
-            <div class="help-line">Hover any axis to highlight its 3D gizmo ring on the gripper. Right-handed robotics frame (+X forward, +Y left, +Z up).</div>
+            <div class="help-line">Drag sliders to test manually or stream from Watch/Phone. Right-handed frame (+X forward, +Y left, +Z up).</div>
             <div class="pose-grid" id="pose-sliders">
-              <div class="slider-row" data-axis-hover="yaw" title="Yaw (Z-Axis Rotation): Rotates the arm horizontally left (+deg) or right (-deg) around the vertical Z axis"><span style="color:#60a5fa;font-weight:700">yaw</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
-              <div class="slider-row" data-axis-hover="x" title="X Reach (Meters): Moves tool forward away from base (+X) or backward toward base (-X)"><span style="color:#f43f5e;font-weight:700">x (m)</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
-              <div class="slider-row" data-axis-hover="pitch" title="Pitch (Elevation Tilt): Tilts the tool nose up (+deg) or down (-deg) relative to vertical grasp"><span style="color:#34d399;font-weight:700">pitch</span><input type="range" data-p="pitch" min="-90" max="90" step="1" value="0"><span data-pv="pitch">0°</span></div>
-              <div class="slider-row" data-axis-hover="y" title="Y Lateral (Meters): Moves tool left (+Y) or right (-Y) across the optical table"><span style="color:#34d399;font-weight:700">y (m)</span><input type="range" data-p="y" min="-0.15" max="0.15" step="0.002" value="0.000"><span data-pv="y">0.000</span></div>
-              <div class="slider-row" data-axis-hover="roll" title="Roll (Tool Axis Twist): Rotates the wrist flange around the tool approach vector"><span style="color:#c084fc;font-weight:700">roll</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
-              <div class="slider-row" data-axis-hover="z" title="Z Height (Meters): Raises (+Z) or lowers (-Z) the tool above the workbench surface"><span style="color:#60a5fa;font-weight:700">z (m)</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
+              <div class="slider-row" data-axis-hover="yaw" title="Yaw (Left/Right Sweep): Rotates the arm horizontally left (+deg) or right (-deg) around the vertical Z axis"><span style="color:#60a5fa;font-weight:700">L/R</span><input type="range" data-p="yaw" min="-180" max="180" step="1" value="-15"><span data-pv="yaw">-15°</span></div>
+              <div class="slider-row" data-axis-hover="x" title="X Reach (Meters): Moves tool forward away from base (+X) or backward toward base (-X)"><span style="color:#f43f5e;font-weight:700">reach</span><input type="range" data-p="x" min="0.04" max="0.22" step="0.002" value="0.150"><span data-pv="x">0.150</span></div>
+              <div class="slider-row" data-axis-hover="pitch" title="Pitch (Up/Down Tilt): Tilts the tool nose up (+deg) or down (-deg) relative to vertical grasp"><span style="color:#34d399;font-weight:700">U/D</span><input type="range" data-p="pitch" min="-90" max="90" step="1" value="0"><span data-pv="pitch">0°</span></div>
+              <div class="slider-row" data-axis-hover="y" title="Y Lateral (Meters): Moves tool left (+Y) or right (-Y) across the optical table"><span style="color:#34d399;font-weight:700">left</span><input type="range" data-p="y" min="-0.15" max="0.15" step="0.002" value="0.000"><span data-pv="y">0.000</span></div>
+              <div class="slider-row" data-axis-hover="roll" title="Roll (Forearm Twist): Rotates the wrist flange around the tool approach vector"><span style="color:#c084fc;font-weight:700">twist</span><input type="range" data-p="roll" min="-90" max="90" step="1" value="0"><span data-pv="roll">0°</span></div>
+              <div class="slider-row" data-axis-hover="z" title="Z Height (Meters): Raises (+Z) or lowers (-Z) the tool above the workbench surface"><span style="color:#60a5fa;font-weight:700">up (z)</span><input type="range" data-p="z" min="0.00" max="0.25" step="0.002" value="0.120"><span data-pv="z">0.120</span></div>
             </div>
             <div class="row between wrap" style="margin-top:2px;padding-top:5px;border-top:1px solid var(--border);gap:5px">
-              <span class="sub-label" title="Compact Desk Mode maps +/-22 deg of comfortable wrist movement right in front of your screen to the full X/Y/Z robot workspace">Wrist Scale</span>
+              <span class="sub-label" title="Controls how many degrees of physical wrist motion are needed to span the full robot workspace">Wrist Effort</span>
               <div class="seg" id="studio-gain-bar">
-                <button data-sg="1.0" title="1x Full Reach: Wide arm swings">1x</button>
-                <button data-sg="2.5" class="sel" title="2.5x Desk Mode: Small wrist tilts in front of screen cover the full X/Y/Z workspace">2.5x Desk</button>
-                <button data-sg="4.0" title="4x Micro: Finger/wrist micro-movements cover the entire workspace">4x Micro</button>
+                <button data-sg="1.5" title="1.5x Standard: ~25 deg wrist tilt spans workspace">1.5x</button>
+                <button data-sg="3.2" class="sel" title="3.2x Effortless Desk Mode (Default): Just +/-14 deg of natural wrist tilt covers the entire table">3.2x Desk</button>
+                <button data-sg="4.8" title="4.8x Feather Micro: +/-9 deg tiny wrist micro-tilts cover the entire workspace">4.8x Micro</button>
               </div>
-              <button class="btn sm" id="btn-recenter-wrist" title="Zero / Recenter: Anchors the robot tool at (0.15, 0.00, 0.12) m relative to your current hand posture">Zero</button>
+              <button class="btn sm" id="btn-recenter-wrist" title="Zero / Recenter: Makes your current wrist posture the neutral center point">Zero</button>
             </div>
           </div>
 
@@ -923,16 +940,16 @@
           <div class="aov-explain-banner" id="aov-explain-banner">
             <div class="aov-explain-main">
               <div class="aov-explain-title" id="aov-banner-title">
-                <span>WebGL2 PBR Pass | 6-DOF Ideal Sim (Left) vs 6-DOF Real Streamer Twin (Right)</span>
+                <span>Station 1: Cell Pick &amp; Place | Point Wrist Left/Right &amp; Tilt Down to Grasp</span>
               </div>
               <div class="aov-explain-desc" id="aov-banner-desc">
-                Browser kinematic &amp; analytic IMU twin with fixture collision clamping (table floor, charger dock, and valve hub). Export OpenUSD (.usda) to run full PhysX / RTX raytracing in NVIDIA Isaac Sim.
+                Move wrist within 85 mm of the blue 21700 cell (magnetic funnel pulls gripper onto target), then click <b>Grasp</b> (or pinch/clench wrist). Sweep wrist right to the target pad and click <b>Release</b>.
               </div>
             </div>
             <div class="aov-legend" id="aov-banner-legend">
-              <span class="swatch" title="Yaw rotates horizontally around Z"><i style="background:#60a5fa"></i>Yaw (Z)</span>
-              <span class="swatch" title="Pitch tilts nose up/down"><i style="background:#34d399"></i>Pitch (Y)</span>
-              <span class="swatch" title="Roll twists wrist around approach axis"><i style="background:#c084fc"></i>Roll (Z_tool)</span>
+              <span class="swatch" title="Sweep wrist Left/Right (±14 deg covers full table)"><i style="background:#60a5fa"></i>Wrist L/R = Table Y</span>
+              <span class="swatch" title="Tilt hand Up/Down (±12 deg covers full height &amp; reach)"><i style="background:#34d399"></i>Wrist U/D = Height + Reach</span>
+              <span class="swatch" title="Twist forearm to rotate tool roll"><i style="background:#c084fc"></i>Forearm Twist = Roll</span>
             </div>
           </div>
 
