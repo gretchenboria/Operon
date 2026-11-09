@@ -14,6 +14,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { poseR, oriError, ik4, ik6, fk4, fk6, JOINTS, G } from "./demos/arms3d.js";
 import { onLive, send, qrSVG, phoneUrl, ROOM } from "./live.js";
+import { initPhysics } from "./mujoco-physics.js?v=23";
 
 const D2R = Math.PI / 180;
 const R2D = 180 / Math.PI;
@@ -264,6 +265,18 @@ const ST = [
 ];
 ST.forEach(s => { s.ypr = yprOf(s.R); if (s.grip) s.yprGrip = yprOf(s.grip); });
 const POS_TOL = 0.052, ORI_TOL = 32, SPEED = 0.34, ASSIST_R = 0.088;
+// Height above the cell's centre to put the TCP for a top-down clamp. The cell
+// lies on its side (radius 12 mm) and the finger pads are 22 mm tall, reaching
+// 14 mm below the TCP, so gripping dead-centre drives the fingertips into the
+// 1 mm locating pad: the jaws then jam open and one pad reads a crushing load
+// against the table instead of against the cell. +11 mm grips the upper half
+// with ~7 mm of fingertip clearance, which is the margin the firmware-streamed
+// arm needs (1 deg servo deadband is several mm at the tool), while still
+// leaving ~15 mm of pad-to-cell overlap.
+const PHYS_GRASP_H = 0.011;
+// World position of the charger pocket's mouth, derived from the MJCF body
+// pose (ST[1].p + z*0.024, then +z*0.006 to the slot site).
+const CHARGER_SLOT_P = [0.1, 0.157185, 0.107314];
 
 // ── 4. Studio State ──
 const st = {
@@ -313,8 +326,149 @@ const st = {
     segDurS: 0.150
   },
   recoilUntil: 0,
-  lastGestureBanner: ""
+  lastGestureBanner: "",
+  // ── MuJoCo 3.x rigid-body contact physics ──
+  // mode "mujoco": position-actuator servos drive both arms under real gravity,
+  //   link inertia and joint damping, and the cell is held by pad friction only.
+  // mode "kinematic": the original analytic IK path (fallback when WASM is
+  //   unavailable, and available as an explicit A/B comparison).
+  phys: {
+    available: false,
+    mode: "mujoco",
+    reason: "booting",
+    arms: {},
+    readL: null,
+    readR: null,
+    substeps: 0,
+    costMs: 0
+  }
 };
+
+// Physics owns the arm whenever MuJoCo is live and selected.
+const physArmOn = () => st.phys.available && st.phys.mode === "mujoco";
+
+// Badge + mode switch for the Contact Physics card.
+function setPhysBadge() {
+  const b = $("phys-badge");
+  if (!b) return;
+  if (!st.phys.available) {
+    b.textContent = "unavailable";
+    b.title = `MuJoCo could not start, running analytic kinematics: ${st.phys.reason}`;
+    b.style.color = "var(--amber, #fbbc04)";
+  } else if (st.phys.mode === "mujoco") {
+    b.textContent = `MuJoCo ${(st.phys.timestepMs || 0.5).toFixed(1)} ms`;
+    b.title = "Position-actuator servos under real gravity, link inertia, joint damping and elliptic-cone pad friction.";
+    b.style.color = "var(--green, #34a853)";
+  } else {
+    b.textContent = "kinematic";
+    b.title = "Analytic IK only: no contact solver, the cell is parented to the tool.";
+    b.style.color = "var(--purple-hi)";
+  }
+  const bar = $("phys-mode-bar");
+  if (bar) {
+    bar.querySelectorAll("button").forEach((btn) => {
+      btn.classList.toggle("sel", btn.dataset.pm === st.phys.mode);
+      btn.disabled = !st.phys.available && btn.dataset.pm === "mujoco";
+    });
+  }
+}
+
+if ($("phys-mode-bar")) {
+  $("phys-mode-bar").querySelectorAll("button").forEach((btn) => {
+    btn.onclick = () => {
+      const want = btn.dataset.pm;
+      if (want === "mujoco" && !st.phys.available) return;
+      st.phys.mode = want;
+      // Re-seat the solver at the current analytic pose so switching back into
+      // MuJoCo does not snap the arm or fling the cell.
+      if (want === "mujoco") {
+        const is4v6 = st.rigMode === "4d_vs_6d";
+        st.phys.arms[4]?.teleportTo(is4v6 ? [st.q4[0], st.q4[1], st.q4[2], 0, st.q4[3], 0] : st.q6, st.closed ? 0 : 1);
+        st.phys.arms[6]?.teleportTo(is4v6 ? st.q6 : st.q6Real, st.closed ? 0 : 1);
+      }
+      setPhysBadge();
+    };
+  });
+}
+
+// Per-frame numbers for the Contact Physics card. These are solver outputs,
+// not display estimates: jaw gap is the real finger slide position, pad load
+// comes from the touch sensors on the nitrile pads.
+let physUiNextMs = 0;
+function updatePhysReadout(nowMs) {
+  if (nowMs < physUiNextMs) return;
+  physUiNextMs = nowMs + 100;
+  const r = st.phys.readR;
+  const set = (id, txt) => { const e = $(id); if (e) e.textContent = txt; };
+  if (!r) {
+    for (const id of ["phys-gap", "phys-grip", "phys-pads", "phys-ncon", "phys-cost"]) set(id, "—");
+    return;
+  }
+  set("phys-gap", `${r.jawGapMm.toFixed(1)} mm`);
+  set("phys-grip", `${r.gripForceN.toFixed(1)} N${r.held ? " · holding" : ""}`);
+  set("phys-pads", `${r.padLoadN[0].toFixed(1)} / ${r.padLoadN[1].toFixed(1)} N`);
+  set("phys-ncon", String(r.contacts));
+  set("phys-cost", `${st.phys.costMs.toFixed(2)} ms · ${st.phys.substeps} steps`);
+}
+// The cell is a real rigid body at Station 0 (pick & place) and Station 1
+// (charger dock insertion). Station 2 manipulates the valve handwheel, which
+// is a real revolute joint with stem friction rather than the cell.
+// Station 0 only. The charger dock's normal is (0, 0.906, -0.423) -- it faces
+// partly DOWNWARD, so gravity pushes a cell out of the pocket, and the jaws
+// (about 40 mm across the finger arms while holding a cell) cannot enter the
+// slot to place one anyway. Physical retention there needs a sprung clip or a
+// re-angled dock, so Station 1's cell logic stays analytic rather than ship a
+// task that silently never completes.
+const physCellOn = () => physArmOn() && st.station === 0;
+// Station 2's handwheel is a real revolute joint in the MJCF (validated
+// breakaway torque 0.14 N*m, holds its angle after release, damps out instead
+// of free-spinning) and real collision geometry the arm can hit, but the 90
+// deg turn itself is still driven by the task logic and the wheel is servoed
+// to follow it: see the valve_act comment in the MJCF.
+
+/**
+ * Approach yaw (degrees) that lines the jaws up across the cell's curved wall.
+ *
+ * The cell's axis is its body-local +Z, i.e. column 2 of the solved rotation
+ * matrix. The gripper closes along its own local X, so the cell's axis must be
+ * parallel to the gripper's local Y, which for poseR(yaw,0,0) is
+ * (sin yaw, -cos yaw, 0). Solving for yaw gives atan2(-ax, ay). A parallel jaw
+ * is symmetric under a 180 deg spin, so the result is folded into [-90, 90] to
+ * pick the branch the arm can actually reach. Without this, a randomised cell
+ * presents an end cap to the pads and the jaws jam open on it.
+ */
+function physCellGraspYaw(r, fallbackDeg) {
+  if (!r || !r.cellR) return fallbackDeg;
+  const ax = r.cellR[2], ay = r.cellR[5];
+  if (!Number.isFinite(ax) || Math.hypot(ax, ay) < 1e-6) return fallbackDeg;
+  let yaw = Math.atan2(-ax, ay) / D2R;
+  while (yaw > 90) yaw -= 180;
+  while (yaw < -90) yaw += 180;
+  return yaw;
+}
+
+/**
+ * Wait until the arm has PHYSICALLY arrived near `targetP` before continuing.
+ *
+ * A fixed setTimeout is not good enough once the arm has real dynamics: the
+ * right-hand rig follows the firmware quintic streamer (1 deg deadband, 100 ms
+ * send interval, 150 ms segments), so it reaches a commanded pose several
+ * hundred milliseconds later than the tween that commanded it, and clamping on
+ * a timer closes the jaws while the tool is still travelling. Resolves with
+ * true on arrival, false on timeout (caller still proceeds, just late).
+ */
+function physWaitArrival(targetP, tolM, timeoutMs, done) {
+  const t0 = performance.now();
+  const iv = setInterval(() => {
+    const r = st.phys.readR;
+    const d = r ? Math.hypot(r.tip[0] - targetP[0], r.tip[1] - targetP[1], r.tip[2] - targetP[2]) : Infinity;
+    const timedOut = performance.now() - t0 > timeoutMs;
+    if (d < tolM || timedOut) {
+      clearInterval(iv);
+      done(d < tolM);
+    }
+  }, 25);
+}
 
 // Technical Scope & Engineering Reality Modal + Unrestricted Non-Commercial Exports
 function requireLicense(_actionName, callback) {
@@ -337,6 +491,29 @@ function freshArm() {
   st.hwStreamer.segQ0Deg = initDeg.slice();
   st.hwStreamer.segQfDeg = initDeg.slice();
 }
+
+// ── Boot MuJoCo contact physics (async, non-blocking) ──
+// The studio renders on the analytic path until this resolves, then upgrades
+// in place. A failure here is not fatal: physArmOn() simply stays false.
+(async () => {
+  const t0 = performance.now();
+  const p = await initPhysics({ rigs: [4, 6], modelUrl: "/models/operon_station0.xml?v=23" });
+  st.phys.available = p.available;
+  st.phys.reason = p.reason;
+  st.phys.arms = p.arms;
+  st.phys.timestepMs = (p.timestep || 0) * 1000;
+  if (!p.available) {
+    console.warn("[operon] MuJoCo physics unavailable, staying on analytic kinematics:", p.reason);
+    setPhysBadge();
+    return;
+  }
+  // Start both arms at the current analytic pose so the handover is seamless.
+  const is4v6 = st.rigMode === "4d_vs_6d";
+  p.arms[4].teleportTo(is4v6 ? [st.q4[0], st.q4[1], st.q4[2], 0, st.q4[3], 0] : st.q6, st.closed ? 0 : 1);
+  p.arms[6].teleportTo(is4v6 ? st.q6 : st.q6Real, st.closed ? 0 : 1);
+  console.info(`[operon] MuJoCo ${p.timestep * 1000} ms timestep, 2 arms, booted in ${(performance.now() - t0).toFixed(0)} ms`);
+  setPhysBadge();
+})();
 
 // Compute Yoshikawa manipulability proxy w = sqrt(det(J*J^T))
 function manipulability(q, dof) {
@@ -898,6 +1075,7 @@ function updateRig(dof, fk, props) {
   });
   poseObj(r.grip, fk.tip, fk.R);
   r.grip.userData.setOpen(props.open);
+  r.grip.userData.lastOpen = props.open;
   if (r.gizmo) {
     r.gizmo.visible = st.showGizmos && st.aov === "rtx";
     poseObj(r.gizmo, fk.tip, fk.R);
@@ -928,7 +1106,18 @@ function updateRig(dof, fk, props) {
   r.valve.visible = r.post.visible = (stIdx === 2);
 
   const b = props.battery;
-  if (b.held) { poseObj(r.battery, fk.tip, fk.R); r.battery.rotateZ(Math.PI / 2); r.battery.translateZ(0.004); }
+  if (b.physPose) {
+    // MuJoCo owns the cell. Its pose is the solver's, so no parenting to the
+    // tool frame and no rotateZ/translateZ fudge: the body already carries its
+    // own orientation from contact. The mesh's own axis offset is the only
+    // correction applied.
+    // The battery group's own cell axis runs along its local +X (every child
+    // mesh is pre-rotated by z=90 deg), while the MJCF cylinder's axis is its
+    // body-local +Z, so map X onto Z with a single -90 deg turn about Y.
+    poseObj(r.battery, b.physPose.p, b.physPose.R);
+    r.battery.rotateY(-Math.PI / 2);
+  }
+  else if (b.held) { poseObj(r.battery, fk.tip, fk.R); r.battery.rotateZ(Math.PI / 2); r.battery.translateZ(0.004); }
   else if (b.inserted) { poseObj(r.battery, b.inserted.p, b.inserted.R); r.battery.rotateZ(Math.PI / 2); }
   else { poseObj(r.battery, b.rest.p, b.rest.R); r.battery.rotateZ(Math.PI / 2); }
 
@@ -1123,6 +1312,14 @@ function setClosed(v, lift = true, forceAction = null) {
     : `<svg class="ico sm" viewBox="0 0 24 24"><path d="M7 4v8l3 3v5M17 4v8l-3 3v5M4 8h4M16 8h4"/></svg><span>Grasp</span>`;
   $("btn-grab").classList.toggle("on", next);
   send({ t: "grip", g: next ? 1 : 0 });
+
+  // Under MuJoCo at Station 0 the jaws are simply commanded; whether the cell
+  // is picked up, slips, or is dropped is decided by pad friction in the
+  // solver. All of the destination-snapping below is the kinematic fallback.
+  if (physCellOn()) {
+    try { pushState(); } catch {}
+    return;
+  }
 
   const is4v6 = st.rigMode === "4d_vs_6d";
   const f6Now = fk6(st.q6);
@@ -1430,6 +1627,27 @@ if ($("rig-mode-bar")) {
 function setStation(i) {
   st.station = i;
   st.quinticPlan = null;
+  // Make the solver's solid geometry match what the renderer draws: only the
+  // active station's props stay collidable, the rest are parked below the
+  // table. Otherwise the arm hits invisible obstacles mid-traverse.
+  for (const d of [4, 6]) st.phys.arms[d]?.setStation(i);
+  // Hand the cell's pose between the two representations so they never
+  // disagree: leaving Station 0 copies the solved pose into the analytic
+  // placeholder, returning to it puts the rigid body back where the analytic
+  // path left it.
+  if (physArmOn()) {
+    for (const d of [4, 6]) {
+      const sim = st.phys.arms[d];
+      if (!sim) continue;
+      if (i === 0) {
+        const bp = st.arm[d].battP;
+        sim.placeCell(bp[0], bp[1], yprOf(st.arm[d].battR)[0]);
+      } else {
+        const r = sim.read();
+        if (r) st.arm[d].battP = [r.cellP[0], r.cellP[1], 0.013];
+      }
+    }
+  }
   if (i === 0) {
     if (!st.arm[4].held && !st.arm[6].held) setClosed(false);
   } else if (i === 1) {
@@ -1462,6 +1680,46 @@ function triggerSmartGraspOrRelease(gestureLabel) {
   const s = ST[st.station];
   const isHolding = st.arm[6].held || st.arm[4].held;
   const liveTilt = crowdPose() !== null;
+
+  // ── MuJoCo Station 0: the solver decides, so there is nothing to gate ──
+  // The old dxy < 0.068 m test existed only to stop the kinematic proximity
+  // snap from magnetising the cell into the jaws. With real pad friction,
+  // clamping in empty air simply closes on nothing, which is the honest
+  // outcome, so the gate is gone and the jaws always obey the gesture.
+  if (s.id === "battery" && physCellOn()) {
+    if (st.closed) {
+      setClosed(false, false);
+      if ($("watch-status")) {
+        $("watch-status").textContent = isHolding
+          ? "Jaws opened -> cell dropping under gravity"
+          : "Jaws opened";
+      }
+      return;
+    }
+    if (liveTilt) {
+      // Clamp in place: never hijack the arm away from the user's live tilt.
+      setClosed(true, false);
+      if ($("watch-status")) $("watch-status").textContent = "Clamping -> friction decides the grasp";
+      return;
+    }
+    // Scripted pick: approach, descend onto the cell's upper half, let the
+    // contact settle, THEN clamp, then lift. An instant clamp would close on
+    // air because the arm is still travelling.
+    const pr = st.phys.readR;
+    const cp = pr ? pr.cellP : st.arm[6].battP;
+    const graspYaw = physCellGraspYaw(pr, cp[1] > 0.02 ? 25 : -25);
+    const zGrasp = cp[2] + PHYS_GRASP_H;
+    const graspP = [cp[0], cp[1], zGrasp];
+    tweenTo([graspYaw, 0, 0], [cp[0], cp[1], zGrasp + 0.055], 320, () =>
+      tweenTo([graspYaw, 0, 0], graspP, 420, () =>
+        physWaitArrival(graspP, 0.0035, 2200, () => {
+          setClosed(true, false);
+          later(380, () => tweenTo([graspYaw, 0, 0], [cp[0], cp[1], zGrasp + 0.095], 520));
+        })));
+    st.holdCrowd = performance.now() + 4200;
+    if ($("watch-status")) $("watch-status").textContent = "Approaching cell -> clamp -> lift";
+    return;
+  }
 
   if (s.id === "battery") {
     if (liveTilt) {
@@ -1560,6 +1818,8 @@ $("btn-reset").onclick = () => {
   st.quinticPlan = null;
   setClosed(false);
   setStation(0);
+  // Put the physical cell back on the pick pad at rest, in both solvers.
+  for (const d of [4, 6]) st.phys.arms[d]?.resetCell();
 };
 
 const later = (ms, fn) => setTimeout(fn, ms);
@@ -1575,6 +1835,45 @@ function runPickAndPlaceCycle() {
   }
   setClosed(false, false);
   $("watch-status").textContent = "Executing Pick & Place (Approach -> Grasp -> Lift -> Place -> Release)";
+
+  if (physCellOn()) {
+    // Physical cycle. Heights are measured from the CELL's own solved pose,
+    // not from the nominal pad coordinate, because the cell may have been
+    // knocked, rolled or left somewhere else by a previous run. Dwell times
+    // let contact settle before and after clamping; a scripted instant clamp
+    // would close on air while the arm is still travelling.
+    const pr = st.phys.readR;
+    const cp = pr ? pr.cellP.slice() : [PICK_P[0], PICK_P[1], 0.0135];
+    const zGrasp = cp[2] + PHYS_GRASP_H;
+    const gy = physCellGraspYaw(pr, -25);   // line the jaws up with the cell
+    const place = [PLACE_P[0], PLACE_P[1], zGrasp];
+    const overCell = [cp[0], cp[1], zGrasp + 0.075];
+    const overPlace = [place[0], place[1], place[2] + 0.085];
+    const graspP = [cp[0], cp[1], zGrasp];
+    st.holdCrowd = performance.now() + 9000;
+    tweenTo([gy, 0, 0], overCell, 520, () =>
+      tweenTo([gy, 0, 0], graspP, 520, () =>
+        // Clamp only once the tool is genuinely at the grasp pose.
+        physWaitArrival(graspP, 0.0035, 2200, () => {
+          setClosed(true, false);                       // friction decides
+          later(380, () => {                            // let the pads load
+            tweenTo([gy, 0, 0], overCell, 560, () =>
+              tweenTo([25, 0, 0], overPlace, 720, () =>
+                tweenTo([25, 0, 0], place, 560, () =>
+                  physWaitArrival(place, 0.0045, 2200, () => {
+                    setClosed(false, false);            // open; the cell falls
+                    later(420, () => tweenTo([25, 0, 0], overPlace, 480));
+                  })
+                )
+              )
+            );
+          });
+        })
+      )
+    );
+    return;
+  }
+
   const abovePick = [PICK_P[0], PICK_P[1], PICK_P[2] + 0.07];
   const abovePlace = [PLACE_P[0], PLACE_P[1], PLACE_P[2] + 0.09];
   tweenTo([-25, 0, 0], abovePick, 480, () =>
@@ -1883,6 +2182,10 @@ if ($("btn-dr-pose")) {
       st.arm[d].done[0] = false;
       st.arm[d].battP = [nx, ny, 0.013];
       st.arm[d].battR = poseR(randYaw, 0, 0);
+      // Move the physical body too, then let it settle on the table under
+      // gravity, so domain randomisation perturbs the real contact state and
+      // not just the kinematic placeholder.
+      st.phys.arms[d]?.placeCell(nx, ny, randYaw);
     }
     if ($("watch-status")) {
       $("watch-status").textContent = `Perturbed Cell Pose -> x=${(nx * 1000).toFixed(0)} mm, y=${(ny * 1000).toFixed(0)} mm, yaw=${randYaw}°`;
@@ -2793,8 +3096,72 @@ function tick(now) {
 
   const f4 = fk4(st.q4), f6Sim = fk6(st.q6), f6Real = fk6(st.q6Real);
   const is4v6 = st.rigMode === "4d_vs_6d";
-  const fLeft = is4v6 ? f4 : f6Sim;
-  const fRight = is4v6 ? f6Sim : f6Real;
+
+  // ── MuJoCo: analytic IK becomes the SERVO SETPOINT, not the pose ──
+  // What gets rendered is what the solver achieved against gravity, link
+  // inertia, joint damping and contact. The left rig tracks the ideal IK (or
+  // the 4-DOF-constrained chain), the right rig tracks the firmware quintic
+  // streamer, so sim-vs-real now compares two genuinely dynamic arms.
+  let fLeft, fRight;
+  if (physArmOn()) {
+    const pa = st.phys.arms[4], pb = st.phys.arms[6];
+    const tgtL = is4v6 ? [st.q4[0], st.q4[1], st.q4[2], 0, st.q4[3], 0] : st.q6;
+    const tgtR = is4v6 ? st.q6 : st.q6Real;
+    // Commanded jaw opening. Contact decides where the jaws actually stop.
+    const sqz = c && c.squeeze ? c.squeeze : 0;
+    const gripCmd = st.closed ? Math.min(0.35, sqz * 0.35) : Math.max(0.12, 1 - sqz * 0.88);
+    const tPhys = performance.now();
+    pa.setArmTarget(tgtL); pb.setArmTarget(tgtR);
+    pa.setGripTarget(gripCmd); pb.setGripTarget(gripCmd);
+    st.phys.substeps = pa.advance(dt) + pb.advance(dt);
+    const rA = pa.read(dt), rB = pb.read(dt);
+    st.phys.costMs = 0.8 * st.phys.costMs + 0.2 * (performance.now() - tPhys);
+    st.phys.readL = rA; st.phys.readR = rB;
+    // The MJCF chain reproduces fk6() to under a nanometre, so fk6(achieved q)
+    // is both the true physical pose and the full link/joint structure the
+    // renderer needs. In 4-DOF mode the two roll joints are held at 0, so the
+    // same state collapses exactly onto fk4().
+    fLeft = is4v6 ? fk4([rA.q[0], rA.q[1], rA.q[2], rA.q[4]]) : fk6(rA.q);
+    fRight = fk6(rB.q);
+    // Ground truth for "holding it": both nitrile pads carrying load.
+    if (physCellOn()) {
+      for (const [dof, r] of [[4, rA], [6, rB]]) {
+        const a = st.arm[dof];
+        a.held = r.held;
+        const atRest = !r.held && r.cellVel < 0.02;
+        if (st.station === 0) {
+          // Task completion is physical: released, at rest, actually on the pad.
+          if (atRest && r.cellP[2] < 0.030) {
+            const dPlace = Math.hypot(r.cellP[0] - PLACE_P[0], r.cellP[1] - PLACE_P[1]);
+            if (dPlace < 0.030) a.done[0] = true;
+          }
+        } else if (st.station === 1) {
+          // Seated in the dock = the cell is resting inside the pocket, held
+          // there by the slot walls rather than by a proximity test on the tool.
+          const dSlot = Math.hypot(
+            r.cellP[0] - CHARGER_SLOT_P[0],
+            r.cellP[1] - CHARGER_SLOT_P[1],
+            r.cellP[2] - CHARGER_SLOT_P[2]);
+          const seated = atRest && dSlot < 0.032;
+          a.inserted = seated ? { p: r.cellP.slice(), R: r.cellR.slice() } : null;
+          if (seated) a.done[1] = true;
+        }
+      }
+    }
+    if (st.station === 2) {
+      // Keep the solver's handwheel at the angle the task logic is showing, so
+      // the collision geometry the arm can hit is always posed exactly as it
+      // is drawn. Servoed through a weak torque-limited actuator rather than
+      // teleported, so tool contact resolves smoothly.
+      pa.setValveTarget(st.arm[4].valve * D2R);
+      pb.setValveTarget(st.arm[6].valve * D2R);
+    }
+  } else {
+    st.phys.readL = st.phys.readR = null;
+    fLeft = is4v6 ? f4 : f6Sim;
+    fRight = is4v6 ? f6Sim : f6Real;
+  }
+
   const vLeft = evaluateArm(4, fLeft, dt);
   const vRight = evaluateArm(6, fRight, dt);
 
@@ -2818,6 +3185,15 @@ function tick(now) {
     Rt[3] * Rdot[0] + Rt[4] * Rdot[1] + Rt[5] * Rdot[2]
   ];
   prevSiteP = site.p.slice(); prevSiteV = siteVel; prevSiteR = site.R.slice();
+
+  // MuJoCo's own forearm IMU site replaces the finite-difference estimate: a
+  // true accelerometer/gyro reading off the solved rigid-body state, including
+  // the contact impulses that the analytic derivative cannot see. An external
+  // Isaac/PhysX bridge still outranks it (next block).
+  if (physArmOn() && st.phys.readR && !st.quinticPlan) {
+    simAcc = st.phys.readR.imuAcc.slice();
+    simGyro = st.phys.readR.imuGyro.slice();
+  }
 
   if (st.isaacConnected && st.isaacImu && (now - (st.isaacLastFrameMs || 0) < 2500)) {
     simAcc = [st.isaacImu.ax || 0, st.isaacImu.ay || 0, st.isaacImu.az || G0];
@@ -2901,17 +3277,58 @@ function tick(now) {
   st.openVis += (targetOpen - st.openVis) * Math.min(1, dt * 16);
   const makeProps = (slot, v, watchSiteObj) => {
     const a = st.arm[slot], tgt = armTarget(slot);
+    const pr = slot === 4 ? st.phys.readL : st.phys.readR;
+    // Jaw aperture: under MuJoCo this is the real finger slide position, which
+    // stops on the cell at its own width and compresses the nitrile pad into
+    // it. There is no eased 0->1 snap and no closing through the object.
+    const open = pr ? pr.open : st.openVis;
     return {
-      station: st.station, open: st.openVis, aligned: v.aligned,
+      station: st.station, open, aligned: v.aligned,
       target: { p: tgt.p, R: tgt.R, open: a.held ? 0 : 1 },
       watchSite: watchSiteObj,
-      battery: { held: a.held, inserted: a.inserted, rest: { p: a.battP, R: a.battR } },
+      // physPose, when present, is the cell's own rigid-body state: it is
+      // carried by friction, falls under gravity when released, and is never
+      // parented to the tool or teleported to a destination.
+      battery: {
+        held: a.held, inserted: a.inserted, rest: { p: a.battP, R: a.battR },
+        physPose: (pr && physCellOn()) ? { p: pr.cellP, R: pr.cellR } : null
+      },
       charger: { p: ST[1].p, R: ST[1].R, lit: a.done[1] },
       valve: { p: ST[2].p, angle: a.valve * D2R }
     };
   };
   updateRig(4, fLeft, makeProps(4, vLeft, is4v6 ? siteLeft : null));
   updateRig(6, fRight, makeProps(6, vRight, siteRight));
+
+  updatePhysReadout(now);
+
+  // Read-only verification hook: lets an automated check confirm that what is
+  // DRAWN is the solver's state, rather than a decorative pose that merely
+  // looks right. Returns the three.js world transform of the rendered cell
+  // alongside the rigid-body pose MuJoCo solved for it.
+  window.__operonRenderProbe = () => {
+    const out = {};
+    for (const dof of [4, 6]) {
+      const r = rigs[dof];
+      if (!r || !r.battery) continue;
+      const w = new THREE.Vector3();
+      r.battery.getWorldPosition(w);
+      // Undo the scene convention T3(x,y,z) = (x, z, -y) to get back to the
+      // arm's own Z-up metres, then remove the rig's display offset, which
+      // T3 also places on three's z axis.
+      const robot = [w.x, -w.z, w.y];
+      const offsetY = r.rig ? -r.rig.position.z : 0;
+      robot[1] -= offsetY;
+      const pr = dof === 4 ? st.phys.readL : st.phys.readR;
+      out[dof] = {
+        renderedRobotFrame: robot,
+        solved: pr ? pr.cellP.slice() : null,
+        jawOpenRendered: r.grip?.userData?.lastOpen ?? null,
+        jawOpenSolved: pr ? pr.open : null
+      };
+    }
+    return out;
+  };
 
   syncViewportSize();
   controls.update();
@@ -2929,6 +3346,32 @@ function tick(now) {
     utc_sync_offset_ms: st.utcOffsetMs,
     rig_mode: st.rigMode,
     station_id: ST[st.station].id,
+    // Physics provenance for the dataset: whether this step came from the
+    // MuJoCo contact solver or the analytic kinematic path, and if the former,
+    // the measured contact state. Downstream training needs to know which.
+    physics: (() => {
+      if (!physArmOn() || !st.phys.readR) {
+        return { engine: "analytic_kinematic", contact_solver: false };
+      }
+      const r = st.phys.readR;
+      return {
+        engine: "mujoco",
+        engine_version: "3.1.16",
+        contact_solver: true,
+        cell_owned_by_solver: physCellOn(),
+        timestep_s: +(st.phys.timestepMs / 1000).toFixed(5),
+        substeps_this_frame: st.phys.substeps,
+        jaw_gap_mm: +r.jawGapMm.toFixed(2),
+        grip_force_n: +r.gripForceN.toFixed(3),
+        pad_load_n: r.padLoadN.map(v => +v.toFixed(3)),
+        tcp_force_n: +r.tcpForceN.toFixed(3),
+        n_contacts: r.contacts,
+        held: r.held,
+        cell_pos_m: r.cellP.map(v => +v.toFixed(5)),
+        cell_speed_ms: +r.cellVel.toFixed(4),
+        sim_time_s: +r.simTime.toFixed(4)
+      };
+    })(),
     observation: {
       q4_rad: st.q4.map(v => +v.toFixed(4)),
       q6_sim_rad: st.q6.map(v => +v.toFixed(4)),

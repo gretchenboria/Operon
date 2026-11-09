@@ -1,0 +1,337 @@
+<!--
+  Operon — Station 0 (Battery Pick & Place) MuJoCo 3.x scene.
+
+  ONE arm per model instance. The studio compiles this file twice (once for the
+  4-DOF-constrained rig, once for the 6-DOF rig) so the two rigs can never
+  contact each other and each keeps its own independent mjData state.
+
+  Frames & geometry are an exact mirror of public/demos/arms3d.js:
+      h0 = 0.090 m   shoulder height
+      L1 = 0.100 m   upper arm
+      L2 = 0.100 m   forearm
+      L3 = 0.060 m   tool (wrist -> TCP)
+  Chain:  yaw(Z) -> shoulder(Y) -> elbow(Y) -> wrist_roll(Z) -> wrist_pitch(Y) -> tool_roll(Z)
+  so that body "hand" origin coincides exactly with fk6(q).tip and the hand
+  frame equals fk6(q).R. A 4-DOF arm is this same chain with wrist_roll and
+  tool_roll commanded to 0 (see fk4: R = Rz(t1)*Ry(t2+t3+t4)).
+
+  Z is up, metres, SI. Gravity is real; the cell is a free body and is held by
+  friction alone — there is no welding, no teleporting and no proximity magnet.
+-->
+<mujoco model="operon_station0">
+  <compiler angle="radian" autolimits="true" balanceinertia="true"/>
+
+  <!--
+    elliptic friction cone + impratio 10 is the standard MuJoCo configuration
+    for grasping: it stops the cell shearing out from between the pads under
+    tangential load the way the default pyramidal cone does.
+  -->
+  <option timestep="0.0005"
+          gravity="0 0 -9.80665"
+          integrator="implicitfast"
+          cone="elliptic"
+          impratio="10"
+          noslip_iterations="3"/>
+
+  <size memory="4M"/>
+
+  <!--
+    Collision bitmasks. A pair collides iff
+        (A.contype & B.conaffinity) || (B.contype & A.conaffinity).
+    Groups: arm = 1, environment = 2, manipulated object = 4.
+      arm  contype=1 conaffinity=6  -> hits env + object, NEVER itself
+      env  contype=2 conaffinity=5  -> hits arm + object
+      cell contype=4 conaffinity=3  -> hits arm + env
+    Without this the serial chain self-collides (gripper housing against the
+    forearm capsule) and physically jams the wrist mid-reach.
+  -->
+  <default>
+    <!-- Harmonic-drive-like joint: real damping + reflected rotor inertia. -->
+    <default class="arm">
+      <joint type="hinge" damping="1.6" armature="0.012" frictionloss="0.012"/>
+      <geom type="capsule" density="1700" condim="3" friction="0.7 0.05 0.002"
+            contype="1" conaffinity="6"
+            solref="0.004 1" solimp="0.95 0.99 0.001" rgba="0.62 0.64 0.68 1"/>
+    </default>
+
+    <!-- Finger prismatic drive: stiff, light, low friction rail. -->
+    <default class="finger">
+      <joint type="slide" axis="1 0 0" damping="4.0" armature="0.0008" frictionloss="0.05"/>
+      <geom type="box" density="2700" condim="3" friction="0.7 0.05 0.002"
+            contype="1" conaffinity="6"
+            solref="0.004 1" solimp="0.95 0.99 0.001" rgba="0.70 0.72 0.76 1"/>
+    </default>
+
+    <!--
+      Nitrile pad: high tangential AND torsional friction (condim=6) so a
+      grasped cylinder cannot spin about the pad normal. softer solref so the
+      pad visibly compresses into the cell instead of rattling.
+    -->
+    <!-- Static workcell structure: environment collision group. -->
+    <default class="env">
+      <geom density="2400" condim="3" friction="0.85 0.05 0.002"
+            contype="2" conaffinity="5"
+            solref="0.004 1" solimp="0.95 0.99 0.001" rgba="0.38 0.40 0.45 1"/>
+    </default>
+
+    <default class="pad">
+      <geom type="box" density="1100" condim="6"
+            friction="1.35 0.02 0.008" contype="1" conaffinity="6"
+            solref="0.009 1" solimp="0.92 0.98 0.001" rgba="0.12 0.12 0.14 1"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <light pos="0.2 -0.3 0.7" dir="-0.3 0.4 -1" diffuse="0.8 0.8 0.8"/>
+
+    <!-- Optical table. The studio clamps commands to z >= 0.018; this is the
+         physical backstop that makes that clamp real. -->
+    <geom name="table" type="plane" size="1 1 0.05" pos="0 0 0"
+          condim="3" friction="0.8 0.05 0.002" solref="0.003 1"
+          contype="2" conaffinity="5"
+          rgba="0.18 0.19 0.21 1"/>
+
+    <!-- 1 mm locating pads the cell rests on (pick at -Y, place at +Y). -->
+    <geom name="pick_pad" type="box" size="0.026 0.026 0.001" pos="0.15 -0.075 0.001"
+          condim="3" friction="0.95 0.05 0.002" contype="2" conaffinity="5" rgba="0.20 0.42 0.78 1"/>
+    <geom name="drop_pad" type="box" size="0.026 0.026 0.001" pos="0.15 0.075 0.001"
+          condim="3" friction="0.95 0.05 0.002" contype="2" conaffinity="5" rgba="0.18 0.62 0.36 1"/>
+
+    <!-- ───────────────────────── arm ───────────────────────── -->
+    <body name="pedestal" pos="0 0 0">
+      <geom class="arm" name="pedestal_g" type="cylinder" size="0.032 0.025" pos="0 0 0.025"
+            density="4000" rgba="0.26 0.27 0.30 1"/>
+
+      <body name="base" pos="0 0 0.05">
+        <joint class="arm" name="yaw" axis="0 0 1" range="-3.14159265 3.14159265" damping="2.2"/>
+        <geom class="arm" name="base_g" type="cylinder" size="0.028 0.02" pos="0 0 0.02"
+              rgba="0.30 0.31 0.34 1"/>
+
+        <!-- shoulder pitch sits at h0 = 0.090 (0.05 pedestal + 0.04 bracket) -->
+        <body name="upper_arm" pos="0 0 0.04">
+          <joint class="arm" name="shoulder" axis="0 1 0" range="-2.0943951 2.0943951" damping="2.4"/>
+          <geom class="arm" name="shoulder_g" type="sphere" size="0.024" pos="0 0 0"/>
+          <!-- L1 = 0.100 along local +Z -->
+          <geom class="arm" name="upper_arm_g" fromto="0 0 0.012 0 0 0.094" size="0.0165"/>
+
+          <body name="forearm" pos="0 0 0.100">
+            <joint class="arm" name="elbow" axis="0 1 0" range="-2.61799388 2.61799388" damping="1.9"/>
+            <geom class="arm" name="elbow_g" type="sphere" size="0.021" pos="0 0 0"/>
+            <!-- L2 = 0.100 along local +Z -->
+            <geom class="arm" name="forearm_g" fromto="0 0 0.011 0 0 0.090" size="0.0145"/>
+
+            <!-- Apple-Watch-equivalent forearm IMU site: matches
+                 forearmSiteFK() in teleop-studio.js (imu_z = L2/2). -->
+            <site name="forearm_imu" pos="0 0 0.050" size="0.004" rgba="1 0.45 0 1"/>
+
+            <body name="wrist_roll_link" pos="0 0 0.100">
+              <joint class="arm" name="wrist_roll" axis="0 0 1" range="-3.14159265 3.14159265" damping="0.9"/>
+              <geom class="arm" name="wrist_roll_g" type="cylinder" size="0.0155 0.010" pos="0 0 0.008"/>
+
+              <body name="wrist_pitch_link" pos="0 0 0">
+                <joint class="arm" name="wrist_pitch" axis="0 1 0" range="-2.61799388 2.61799388" damping="0.8"/>
+                <geom class="arm" name="wrist_pitch_g" type="sphere" size="0.0165" pos="0 0 0.018"/>
+
+                <body name="tool_roll_link" pos="0 0 0">
+                  <joint class="arm" name="tool_roll" axis="0 0 1" range="-3.14159265 3.14159265" damping="0.6"/>
+
+                  <!--
+                    hand origin == fk6(q).tip (TCP), hand frame == fk6(q).R.
+                    L3 = 0.060 from the wrist centre.
+                  -->
+                  <body name="hand" pos="0 0 0.060">
+                    <!-- ATI 6-axis F/T ring + ISO 9409-1-50-4-M6 flange -->
+                    <geom class="arm" name="ft_ring_g" type="cylinder" size="0.0175 0.0045" pos="0 0 -0.058"
+                          density="2600" rgba="0.72 0.45 0.20 1"/>
+                    <geom class="arm" name="flange_g" type="cylinder" size="0.0165 0.004" pos="0 0 -0.050"/>
+                    <!-- parallel-jaw servo housing + rail -->
+                    <geom class="arm" name="grip_body_g" type="box" size="0.036 0.014 0.013" pos="0 0 -0.037"
+                          density="1500" rgba="0.14 0.15 0.17 1"/>
+                    <geom class="arm" name="grip_rail_g" type="box" size="0.038 0.0045 0.0035" pos="0 0 -0.023"/>
+
+                    <!-- TCP site: used for the tool-frame F/T sensor. -->
+                    <site name="tcp" pos="0 0 0" size="0.003" rgba="0 1 1 1"/>
+
+                    <!--
+                      Fingers travel along ±X, exactly mirroring makeGripper():
+                      finger x = ±(0.009 + 0.022 * open), so slide range
+                      0 (fully closed, 9 mm half-gap) .. 0.022 (fully open).
+                    -->
+                    <body name="finger_l" pos="-0.009 0 0">
+                      <joint class="finger" name="finger_l" range="-0.022 0" axis="1 0 0"/>
+                      <geom class="finger" name="finger_l_base" size="0.0055 0.0105 0.008" pos="0 0 -0.014"/>
+                      <geom class="finger" name="finger_l_arm" size="0.004 0.0095 0.017" pos="0 0 -0.003"/>
+                      <geom class="pad" name="pad_l" size="0.00175 0.009 0.011" pos="0.0055 0 0.003"/>
+                      <site name="pad_l_site" type="box" size="0.0022 0.0092 0.0112" pos="0.0055 0 0.003"
+                            rgba="1 0 0 0.25"/>
+                    </body>
+
+                    <body name="finger_r" pos="0.009 0 0">
+                      <joint class="finger" name="finger_r" range="0 0.022" axis="1 0 0"/>
+                      <geom class="finger" name="finger_r_base" size="0.0055 0.0105 0.008" pos="0 0 -0.014"/>
+                      <geom class="finger" name="finger_r_arm" size="0.004 0.0095 0.017" pos="0 0 -0.003"/>
+                      <geom class="pad" name="pad_r" size="0.00175 0.009 0.011" pos="-0.0055 0 0.003"/>
+                      <site name="pad_r_site" type="box" size="0.0022 0.0092 0.0112" pos="-0.0055 0 0.003"
+                            rgba="1 0 0 0.25"/>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+
+    <!-- ──────────────── the manipulation target ────────────────
+         18650-class cell: Ø24 mm × 54 mm, 45 g. Free body, lying on its side
+         on the pick pad with its axis along +Y so the jaws (which close along
+         the hand's X) grip the curved wall. Held by friction only.
+    -->
+    <!--
+      Rest orientation = Rz(-25 deg) * Rx(90 deg), i.e. the cell lies on its
+      side with its axis parallel to the HAND's y axis at the station's
+      approach yaw (PICK_R = poseR(-25,0,0) in teleop-studio.js). That is what
+      lets the jaws close across the curved wall instead of catching an end
+      cap, exactly as battR = PICK_R already implies in the studio.
+    -->
+    <body name="cell" pos="0.15 -0.075 0.0135" quat="0.690352 0.690352 -0.153115 -0.153115">
+      <freejoint name="cell_free"/>
+      <geom name="cell_g" type="cylinder" size="0.012 0.027" mass="0.045"
+            condim="6" friction="1.1 0.02 0.006" contype="4" conaffinity="3"
+            solref="0.006 1" solimp="0.95 0.99 0.001" rgba="0.80 0.72 0.22 1"/>
+    </body>
+
+    <!-- ════════════ Station 1: tilted side-charger insertion dock ════════════
+      Static structure. The pocket is built from five boxes because MuJoCo
+      geoms are convex: a "slot" has to be walls, not one hollow box. Interior
+      is 62 x 30 x 19 mm, so the 24 x 54 mm cell slides in lengthways and is
+      retained by the lips. Pose matches ST[1] in teleop-studio.js exactly:
+      p + z*0.024 with R = fromZX([0,0.9,-0.42],[1,0,0]), verified by
+      round-tripping the matrix through its quaternion (max err 6e-16).
+    -->
+    <body name="charger_mount" pos="0.100 0.18175 0">
+      <geom class="env" name="charger_stand" type="capsule" size="0.0065" fromto="0 0 0 0 0 0.08985"/>
+    </body>
+    <body name="charger" pos="0.100000 0.151748 0.109851" quat="0.537175 -0.843471 0 0">
+      <geom class="env" name="charger_panel" type="box" size="0.056 0.051 0.008" pos="0 0 -0.012"/>
+      <!--
+        Pocket long axis runs along the dock's LOCAL Y, because a cell carried
+        at the dock's own approach orientation (ST[1].R) has its axis parallel
+        to the tool's y, which is the dock's y. Orienting the pocket along
+        local X instead would present a 54 mm cell to a 30 mm opening and it
+        could never be inserted. Interior: 30 x 62 x 19 mm.
+      -->
+      <geom class="env" name="charger_floor" type="box" size="0.015 0.031 0.003" pos="0 0 -0.003"/>
+      <geom class="env" name="charger_end_n" type="box" size="0.015 0.003 0.012" pos="0 -0.034 0.012"/>
+      <geom class="env" name="charger_end_p" type="box" size="0.015 0.003 0.012" pos="0 0.034 0.012"/>
+      <geom class="env" name="charger_lip_n" type="box" size="0.003 0.031 0.012" pos="-0.018 0 0.012"/>
+      <geom class="env" name="charger_lip_p" type="box" size="0.003 0.031 0.012" pos="0.018 0 0.012"/>
+      <site name="charger_slot" pos="0 0 0.006" size="0.004" rgba="0 0.8 1 0.4"/>
+    </body>
+
+    <!-- ════════════ Station 2: industrial process valve handwheel ════════════
+      A real revolute joint about world +X at the wheel centre, with high
+      frictionloss so the wheel STAYS where it is turned, like a packed valve
+      stem: the arm must do work against it, and it holds its angle when let
+      go. The rim is 12 capsule segments (a torus is not a MuJoCo primitive)
+      plus three spokes and a hub, matching the rendered handwheel.
+    -->
+    <body name="valve_mount" pos="0.200 0 0">
+      <geom class="env" name="valve_post" type="capsule" size="0.008" fromto="0 0 0 0 0 0.140"/>
+    </body>
+    <body name="valve" pos="0.184 0 0.140">
+      <joint name="valve_hinge" type="hinge" axis="1 0 0" damping="0.22"
+             frictionloss="0.085" armature="0.004"/>
+      <geom class="env" name="valve_hub" type="cylinder" size="0.0095 0.007"
+            zaxis="1 0 0" pos="0 0 0"/>
+        <geom class="env" name="valve_rim_0" type="capsule" size="0.0055" fromto="0 0.03100 0.00000 0 0.02685 0.01550"/>
+        <geom class="env" name="valve_rim_1" type="capsule" size="0.0055" fromto="0 0.02685 0.01550 0 0.01550 0.02685"/>
+        <geom class="env" name="valve_rim_2" type="capsule" size="0.0055" fromto="0 0.01550 0.02685 0 0.00000 0.03100"/>
+        <geom class="env" name="valve_rim_3" type="capsule" size="0.0055" fromto="0 0.00000 0.03100 0 -0.01550 0.02685"/>
+        <geom class="env" name="valve_rim_4" type="capsule" size="0.0055" fromto="0 -0.01550 0.02685 0 -0.02685 0.01550"/>
+        <geom class="env" name="valve_rim_5" type="capsule" size="0.0055" fromto="0 -0.02685 0.01550 0 -0.03100 0.00000"/>
+        <geom class="env" name="valve_rim_6" type="capsule" size="0.0055" fromto="0 -0.03100 0.00000 0 -0.02685 -0.01550"/>
+        <geom class="env" name="valve_rim_7" type="capsule" size="0.0055" fromto="0 -0.02685 -0.01550 0 -0.01550 -0.02685"/>
+        <geom class="env" name="valve_rim_8" type="capsule" size="0.0055" fromto="0 -0.01550 -0.02685 0 -0.00000 -0.03100"/>
+        <geom class="env" name="valve_rim_9" type="capsule" size="0.0055" fromto="0 -0.00000 -0.03100 0 0.01550 -0.02685"/>
+        <geom class="env" name="valve_rim_10" type="capsule" size="0.0055" fromto="0 0.01550 -0.02685 0 0.02685 -0.01550"/>
+        <geom class="env" name="valve_rim_11" type="capsule" size="0.0055" fromto="0 0.02685 -0.01550 0 0.03100 -0.00000"/>
+        <geom class="env" name="valve_spoke_0" type="capsule" size="0.0032" fromto="0 -0.03000 -0.00000 0 0.03000 0.00000"/>
+        <geom class="env" name="valve_spoke_1" type="capsule" size="0.0032" fromto="0 -0.01500 -0.02598 0 0.01500 0.02598"/>
+        <geom class="env" name="valve_spoke_2" type="capsule" size="0.0032" fromto="0 0.01500 -0.02598 0 -0.01500 0.02598"/>
+      <site name="valve_ref" pos="0 0.031 0" size="0.003" rgba="1 0 1 0.5"/>
+    </body>
+  </worldbody>
+
+  <!--
+    Single-drive parallel linkage: the two finger slides are mechanically
+    coupled, as on a Robotiq 2F-85, so one actuator opens/closes both jaws
+    symmetrically. finger_l range is negative, hence polycoef -1.
+  -->
+  <equality>
+    <joint name="finger_couple" joint1="finger_r" joint2="finger_l"
+           polycoef="0 -1 0 0 0" solref="0.002 1" solimp="0.98 0.999 0.001"/>
+  </equality>
+
+  <actuator>
+    <!-- Arm: position servos. kp/kv are sized to hold the link masses against
+         gravity with a little sag, which is what makes the motion read as a
+         real arm rather than a kinematic puppet. forcerange caps joint torque. -->
+    <position name="yaw_act"          joint="yaw"          kp="90" kv="7.0" forcerange="-28 28" ctrlrange="-3.14159265 3.14159265"/>
+    <position name="shoulder_act"     joint="shoulder"     kp="150" kv="11.0" forcerange="-42 42" ctrlrange="-2.0943951 2.0943951"/>
+    <position name="elbow_act"        joint="elbow"        kp="95" kv="7.5" forcerange="-30 30" ctrlrange="-2.61799388 2.61799388"/>
+    <position name="wrist_roll_act"   joint="wrist_roll"   kp="60" kv="4.0" forcerange="-14 14"  ctrlrange="-3.14159265 3.14159265"/>
+    <position name="wrist_pitch_act"  joint="wrist_pitch"  kp="60" kv="4.0" forcerange="-14 14"  ctrlrange="-2.61799388 2.61799388"/>
+    <position name="tool_roll_act"    joint="tool_roll"    kp="40" kv="2.6" forcerange="-10 10"  ctrlrange="-3.14159265 3.14159265"/>
+
+    <!--
+      Grip drive on the right finger (the left follows via the equality).
+      ctrl is the commanded HALF-APERTURE TRAVEL in metres:
+        ctrl = 0.022 -> jaws fully open, ctrl = 0 -> jaws fully closed.
+      forcerange is the real clamp limit: the jaws stop on the cell at its own
+      width and squeeze with a bounded force, instead of closing through it.
+    -->
+    <position name="grip_act" joint="finger_r" kp="900" kv="22" forcerange="-85 85" ctrlrange="0 0.022"/>
+
+    <!--
+      Valve stem drive. The handwheel is a genuine friction joint (0.14 N*m
+      breakaway, holds its angle, damps out), but a reliable two-pad grasp of
+      the 11 mm rim plus a coordinated arc sweep is a motion-planning problem
+      the studio's scripted sequence does not solve. Rather than ship a task
+      that silently never completes, the wheel is SERVOED to the task angle
+      with a weak, torque-limited actuator: it stays real collision geometry
+      posed exactly as drawn, and the arm can still push against it.
+    -->
+    <!-- kp is sized against the stem's 0.085 N*m frictionloss: steady-state
+         error is frictionloss/kp, so kp=12 keeps the simulated wheel within
+         ~0.4 deg of the angle being drawn, while forcerange keeps it a
+         physical object the arm can still push against. -->
+    <position name="valve_act" joint="valve_hinge" kp="12.0" kv="1.2"
+              forcerange="-3.0 3.0" ctrlrange="-3.2 3.2"/>
+  </actuator>
+
+  <sensor>
+    <!-- Real PhysX-grade forearm IMU, replaces the analytic finite-difference
+         estimate when MuJoCo is driving. -->
+    <accelerometer name="forearm_acc" site="forearm_imu"/>
+    <gyro name="forearm_gyro" site="forearm_imu"/>
+
+    <!-- Tool-frame 6-axis F/T, as on the real UR5e wrist. -->
+    <force name="tcp_force" site="tcp"/>
+    <torque name="tcp_torque" site="tcp"/>
+
+    <!-- Pad normal load: the ground truth for "am I actually holding it". -->
+    <touch name="pad_l_touch" site="pad_l_site"/>
+    <touch name="pad_r_touch" site="pad_r_site"/>
+
+    <!-- Commanded vs achieved jaw travel, and the cell's own state. -->
+    <jointpos name="grip_pos" joint="finger_r"/>
+    <jointpos name="valve_angle" joint="valve_hinge"/>
+    <actuatorfrc name="grip_frc" actuator="grip_act"/>
+    <framepos name="cell_pos" objtype="body" objname="cell"/>
+    <framequat name="cell_quat" objtype="body" objname="cell"/>
+    <framelinvel name="cell_linvel" objtype="body" objname="cell"/>
+    <framepos name="tcp_pos" objtype="site" objname="tcp"/>
+  </sensor>
+</mujoco>

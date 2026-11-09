@@ -14,6 +14,10 @@ import { WebSocketServer, WebSocket } from "ws";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, "public");
 const TRAJ_DIR = path.join(__dirname, "config", "trajectories");
+// Official Google DeepMind MuJoCo 3.x WASM bindings (npm "mujoco", Apache-2.0).
+// Served straight out of node_modules so the 8 MB .wasm never enters the repo.
+const MUJOCO_DIR = path.join(__dirname, "node_modules", "mujoco");
+const MUJOCO_FILES = new Set(["mujoco.js", "mujoco.wasm", "mujoco.d.ts"]);
 const PORT = parseInt(process.env.PORT || "8787", 10);
 
 // Deterministic parser for config/trajectories/*.yaml (shared firmware contract)
@@ -70,7 +74,9 @@ const MIME = {
   ".glb": "model/gltf-binary",
   ".stl": "model/stl",
   ".woff": "font/woff",
-  ".woff2": "font/woff2"
+  ".woff2": "font/woff2",
+  ".wasm": "application/wasm",
+  ".xml": "application/xml; charset=utf-8"
 };
 
 class Room {
@@ -496,6 +502,34 @@ const server = http.createServer((req, res) => {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end('{"ok":false}');
       }
+    });
+    return;
+  }
+
+  // Serve the MuJoCo WASM runtime from node_modules under /vendor/mujoco/.
+  // Allow-listed filenames only, and cached immutably: the .wasm is 8.2 MB and
+  // is versioned by the pinned "mujoco" dependency, so it must not be
+  // re-downloaded on every studio load the way ./public assets are.
+  if (url.pathname.startsWith("/vendor/mujoco/")) {
+    const name = url.pathname.slice("/vendor/mujoco/".length);
+    if (!MUJOCO_FILES.has(name)) {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Not found");
+      return;
+    }
+    const f = path.join(MUJOCO_DIR, name);
+    fs.stat(f, (err, stat) => {
+      if (err || !stat.isFile()) {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("MuJoCo WASM not installed (npm install mujoco)");
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": MIME[path.extname(f).toLowerCase()] || "application/octet-stream",
+        "Content-Length": stat.size,
+        "Cache-Control": "public, max-age=31536000, immutable"
+      });
+      fs.createReadStream(f).pipe(res);
     });
     return;
   }

@@ -1,10 +1,11 @@
 # Operon — Agent Handoff Document (`HANDOFF.md`)
 
-**Last Updated:** 2026-11-08 22:50 PST  
+**Last Updated:** 2026-11-08 23:40 PST  
 **Author / Owner:** Gretchen Boria, PhD  
 **Workspace:** `/Users/dr.gretchenboria/Operon`  
 **GitHub Repository:** `https://github.com/gretchenboria/Operon.git` (`main` branch)  
-**Latest Live Cloud Run Revision:** `operon-00041-c4q` (commit `decdd72`, cache version `?v=22`)
+**Latest Live Cloud Run Revision:** `operon-00041-c4q` (commit `decdd72`, cache version `?v=22`)  
+**Local HEAD (not yet deployed):** MuJoCo 3.x contact physics, cache version `?v=23`
 
 ---
 
@@ -22,6 +23,48 @@
   ```
 - **Untracked Local File to NEVER Commit:**
   - `/Users/dr.gretchenboria/Operon/Screen Recording 2026-11-08 at 4.35.49 PM.mov`
+
+---
+
+## 1b. MuJoCo 3.x Rigid-Body Contact Physics (NEW, `?v=23`)
+
+The studio no longer fakes the grasp. It runs the **official Google DeepMind MuJoCo WebAssembly bindings** (npm [`mujoco@3.1.16`](https://github.com/google-deepmind/mujoco/tree/main/wasm), Apache-2.0) in the browser. There is **no MuJoCo 4** — 3.x is the current line.
+
+- **[`public/models/operon_station0.xml`](file:///Users/dr.gretchenboria/Operon/public/models/operon_station0.xml)** — the MJCF scene. One instance is compiled **per arm rig** (two independent `mjModel`/`mjData`), so the rigs can never contact each other.
+  - The chain reproduces `fk6()` from `arms3d.js` **to under a nanometre** (verified: worst case 0.00 nm position, 6.66e-16 orientation). A 4-DOF arm is the same chain with `wrist_roll` and `tool_roll` held at 0, which reproduces `fk4()` exactly.
+  - Arm is driven by **position actuators** (`kp` 16–150, `forcerange` 6–42 N·m). The analytic `ik6` result is the *servo setpoint*; what renders is what the solver achieved.
+  - **Collision bitmasks are load-bearing:** arm `contype=1 conaffinity=6`, environment `2/5`, cell `4/3`. Without them the gripper housing self-collides with the forearm capsule and **physically jams the wrist at ~48° of tracking error**. Do not remove.
+  - Grip: two finger slides coupled by an `<equality>` joint constraint (single-drive 2F-85 linkage), one `position` actuator, `forcerange ±85 N`.
+  - Cell: Ø24 mm × 54 mm, 45 g **free body**, `condim=6`, elliptic friction cone, `impratio=10`. Held by friction only. Rest quat `Rz(-25°)·Rx(90°)` lays its axis parallel to the hand's Y so the jaws close across the curved wall.
+- **[`public/mujoco-physics.js`](file:///Users/dr.gretchenboria/Operon/public/mujoco-physics.js)** — loader + per-arm `ArmSim` wrapper (`setArmTarget`, `setGripTarget`, `advance`, `read`, `placeCell`, `resetCell`, `recover`, `dispose`). Caches every Embind handle once (they are WASM heap objects, not GC'd). Fails safe: `available=false` keeps the studio on the analytic path.
+- **`server.mjs`** serves the 8.2 MB `.wasm` from `node_modules/mujoco` at `/vendor/mujoco/` with `application/wasm` (streaming compile) and `Cache-Control: immutable`. It is **not** committed to the repo.
+
+### What this fixed
+| | before | after |
+|---|---|---|
+| grasp | distance heuristic + proximity snap | pad friction; `held` from `touch` sensors |
+| jaws | binary 0/1 eased snap, closed *through* the cell | stop at the cell's width, 0.4 mm pad compression |
+| release | cell teleported to the destination pad | **falls under gravity** (67 mm in 0.12 s) |
+| RMS TCP jerk (pick & place) | 43.1 m/s³ | **29.2 m/s³ (−32 %)** |
+| RMS TCP jerk (live wrist tilt) | 108 m/s³ | **47.1 m/s³ (−56 %)** |
+| peak TCP jerk (hard step) | 62 217 m/s³ | **3 835 m/s³ (−94 %)** |
+| peak TCP speed | 8.88 m/s (impossible) | 1.32 m/s |
+| forearm IMU | finite-difference estimate | real MuJoCo `accelerometer`/`gyro` sensor |
+
+### Gotchas for the next agent
+1. **`PHYS_GRASP_H = 0.011` is not arbitrary.** Finger pads reach 14 mm below the TCP. Grasping at the cell's centre drives the fingertips into the 1 mm locating pad; one pad then reads a ~48 N crush load against the table, the jaws jam open, and the grasp fails on the lift. This only shows up on the **right-hand rig**, which follows the firmware quintic streamer (1° deadband ⇒ several mm of tool error) — the ideal-IK left rig hides the bug. It was caught only by the headless-browser test, never by the Node tests.
+2. **Clamp on arrival, never on a timer.** `physWaitArrival()` polls the achieved TCP. A fixed `setTimeout` closes the jaws while the firmware-streamed arm is still travelling.
+3. **`physCellGraspYaw()`** derives the approach yaw from the cell's solved axis (column 2 of `cellR`). Needed for `Perturb Cell`; a fixed −25° approach catches an end cap on a randomised cell (verified 8/8 random yaws grasp and lift).
+4. **All three stations are in the MJCF now**, but only Station 0's *object* is physics-owned (`physCellOn()`).
+   - Station props are **parked below the table when inactive** (`ArmSim.setStation`). This is required, not cosmetic: the renderer hides inactive props, and leaving them solid makes the arm clip the charger dock mid-traverse during pick-and-place. Any test that builds the model directly instead of through `ArmSim` must park them too, or it will reproduce that collision.
+   - Station 1's cell insertion stays analytic: the dock normal `(0, 0.906, -0.423)` faces partly **downward** so gravity ejects the cell, and the jaws are ~40 mm across the finger arms versus a 30 mm slot. Fixing it properly needs a sprung retention clip or a re-angled dock.
+   - Station 2's handwheel is a real hinge but is **servoed** to the task angle via `valve_act` (kp=12 against 0.085 N·m frictionloss ⇒ ~0.4 deg steady-state error). Letting the grasp drive it was tried and regressed: the scripted sequence nudges the wheel to 37 deg and loses it, so the task never completed.
+5. **`jawGapMm` is the pad-to-pad gap, not finger-body separation.** The pads close to 3.5 mm; the finger bodies are 18 mm apart at full close. An earlier version reported the latter and made a correct 24 mm grasp look like a failure.
+6. Cost is ~1.5 ms/frame for both arms at the 0.5 ms timestep (~9 % of a 60 fps budget).
+7. `window.__operonRenderProbe()` is a read-only hook returning the rendered vs solved cell pose and jaw aperture. Remember `T3(x,y,z) = (x, z, -y)`: the scene is Y-up, the arm is Z-up, and the rig's display offset lands on three's **z**.
+
+### Test harnesses (scratchpad, not committed)
+`validate.mjs` (MJCF vs `fk6`, 13 checks) · `module_test.mjs` (module API, 22 checks) · `cdp_test.mjs` (real Chrome over DevTools Protocol, drives the page and reads the physics panel) · `smooth.mjs` (jerk comparison). The CDP test is the one that catches integration bugs.
 
 ---
 
