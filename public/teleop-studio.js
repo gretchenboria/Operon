@@ -1137,11 +1137,12 @@ function setClosed(v, lift = true, forceAction = null) {
   let releasedAny = false, grabbedAny = false;
   for (const dof of [4, 6]) {
     const a = st.arm[dof], f = fks[dof];
-    // Only grasp when jaws actively close (!wasClosed -> next) right over the cell (no proximity magnet!)
-    if (next && !wasClosed) {
+    // Only grasp when user triggers a grasp over the cell (never passively during evaluateArm!)
+    if (next) {
       const dxy = Math.hypot(f.tip[0] - a.battP[0], f.tip[1] - a.battP[1]);
       const dz = Math.abs(f.tip[2] - 0.032);
-      if (forceAction === "grasp_cell" || (!a.held && !a.inserted && dxy < 0.052 && dz < 0.058)) {
+      const nearCell = dxy < 0.075 && dz < 0.115;
+      if (forceAction === "grasp_cell" || (!a.held && !a.inserted && (forceAction === "grasp_near" || !wasClosed) && nearCell)) {
         a.held = true;
         a.inserted = null;
         a.dest = a.battP[1] > 0.02 ? "pick" : "place";
@@ -1154,13 +1155,13 @@ function setClosed(v, lift = true, forceAction = null) {
       const dPlace = Math.hypot(f.tip[0] - PLACE_P[0], f.tip[1] - PLACE_P[1]);
       const dPick = Math.hypot(f.tip[0] - PICK_P[0], f.tip[1] - PICK_P[1]);
       const dCharger = Math.hypot(f.tip[0] - ST[1].p[0], f.tip[1] - ST[1].p[1], f.tip[2] - ST[1].p[2]);
-      if (st.station === 0 && (forceAction === "release_cell" || dPlace < 0.055)) {
+      if (st.station === 0 && (forceAction === "release_cell" || dPlace < 0.078)) {
         const destCoord = a.dest === "pick" && dPick < dPlace ? PICK_P : PLACE_P;
         const destRot = a.dest === "pick" && dPick < dPlace ? PICK_R : PLACE_R;
         a.battP = [destCoord[0], destCoord[1], 0.013];
         a.battR = destRot;
         a.done[0] = true;
-      } else if (st.station === 0 && dPick < 0.055 && a.dest === "pick") {
+      } else if (st.station === 0 && dPick < 0.078 && a.dest === "pick") {
         a.battP = [PICK_P[0], PICK_P[1], 0.013]; a.battR = PICK_R; a.done[0] = true;
       } else if (st.station === 1 && (forceAction === "slot_charger" || (dCharger < POS_TOL * 2.2 && oriError(f.R, ST[1].R) < ORI_TOL * 2.2))) {
         a.inserted = { p: [...ST[1].p], R: [...ST[1].R] }; a.done[1] = true;
@@ -1453,13 +1454,21 @@ function triggerSmartGraspOrRelease(gestureLabel) {
 
   if (s.id === "battery") {
     if (liveTilt) {
-      // Pure 1:1 Watch/Phone tilt: toggle jaws at current pose with NO magnet teleport!
-      // Only grasps the cell if the jaws are actually positioned over the cell (dxy < 52mm, dz < 58mm)
-      setClosed(!st.closed, false);
-      if ($("watch-status")) {
-        $("watch-status").textContent = st.arm[6].held
-          ? "Grasped Cell -> Tilt to Target Pad & Release"
-          : (st.closed ? "Jaws Closed (Move over cell & re-grasp)" : "Jaws Opened / Released");
+      if (!isHolding) {
+        // Check if gripper is hovering over the cell (within 75mm XY); if so, always grasp it even if jaws were already closed!
+        const bp = st.arm[6].battP;
+        const dxy = Math.hypot(st.cmd.x - bp[0], st.cmd.y - bp[1]);
+        if (dxy < 0.075) {
+          setClosed(true, false, "grasp_near");
+          if ($("watch-status")) $("watch-status").textContent = "Grasped Cell -> Tilt to Target Pad & Release";
+        } else {
+          setClosed(!st.closed, false);
+          if ($("watch-status")) $("watch-status").textContent = st.closed ? "Jaws Closed (Tilt over cell & grasp)" : "Jaws Opened";
+        }
+      } else {
+        // Holding the cell -> release it right at current tilt pose!
+        setClosed(false, false);
+        if ($("watch-status")) $("watch-status").textContent = "Released Cell!";
       }
       return;
     }

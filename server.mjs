@@ -416,15 +416,14 @@ const server = http.createServer((req, res) => {
         room.lastImuMs = nowMs;
         const da3D = room.prevImuAcc ? Math.hypot(ax - room.prevImuAcc[0], ay - room.prevImuAcc[1], az - room.prevImuAcc[2]) : 0;
         room.prevImuAcc = [ax, ay, az];
-        const netJerk = Math.max(0, da3D - 9.81 * gMag * dtS);
-        const tendonSignal = netJerk - 0.46;
-        if (tendonSignal > 0 && gMag < 0.44) {
-          const fillRate = Math.min(7.5, 3.2 + tendonSignal * 4.5);
+        const steerRate = Math.hypot(gy, gz);
+        const aDelta = Math.abs(aMag - 9.80665);
+        const tendonSignal = Math.max(da3D - 0.20, aDelta - 0.26);
+        if (steerRate < 0.92 && (da3D > 0.72 || tendonSignal > 0)) {
+          const fillRate = da3D > 0.72 ? 60.0 : Math.min(9.5, 4.8 + tendonSignal * 6.5);
           room.squeezeProgress = Math.min(1.0, (room.squeezeProgress || 0) + fillRate * dtS);
-        } else if (gMag >= 0.55) {
-          room.squeezeProgress = 0;
         } else {
-          room.squeezeProgress = Math.max(0.0, (room.squeezeProgress || 0) - 3.2 * dtS);
+          room.squeezeProgress = Math.max(0.0, (room.squeezeProgress || 0) - 2.0 * dtS);
         }
         let grabToggle = 0, gesture = "";
         const naturalGraspDone = (room.squeezeProgress >= 1.0) && (nowMs - (room.lastImuGrabMs || 0) > 650);

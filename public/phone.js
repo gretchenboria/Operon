@@ -441,26 +441,27 @@ function onMotion(e) {
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
 
   // Natural Hand Grasp / Release Envelope (Biomechanical MMG + Tenodesis integration):
-  // - Requires wrist tilt to be poised/steady (gMag < 0.44 rad/s) so tilting to steer NEVER triggers an auto-grasp
-  // - Subtracts gravity-rotation change (9.81 * gMag * dt) from da3D so only true finger/tendon contraction is integrated
-  const netJerk = Math.max(0, da3D - 9.81 * gMag * dt);
-  if (now - lastGrabActionMs > 950 && gMag < 0.44) {
-    const tendonSignal = Math.max(netJerk - 0.46, uaMag - 0.42);
-    if (tendonSignal > 0) {
-      const rate = Math.min(7.5, 3.2 + tendonSignal * 4.5);
+  // - Uses pitch/yaw steering rate (steerRate = hypot(gy, gz)) rather than roll (gx) because closing the hand naturally twists the forearm tendons around gx
+  // - Instant trigger on a crisp fist clench (da3D > 0.72 or uaMag > 0.56), OR smooth ~120ms accumulation for a gentle natural hand grasp
+  const steerRate = Math.hypot(pose.gy, pose.gz);
+  if (now - lastGrabActionMs > 550 && steerRate < 0.92) {
+    const crispClench = da3D > 0.72 || uaMag > 0.56;
+    const tendonSignal = Math.max(da3D - 0.20, uaMag - 0.16, aDelta - 0.26);
+    if (crispClench) {
+      squeezeProgress = 0;
+      triggerWatchGraspToggle(pose.g ? "Natural Hand Release" : "Natural Hand Grasp");
+    } else if (tendonSignal > 0) {
+      const rate = Math.min(9.5, 4.8 + tendonSignal * 6.5);
       squeezeProgress = Math.min(1.0, squeezeProgress + rate * dt);
       if (squeezeProgress >= 1.0) {
         squeezeProgress = 0;
         triggerWatchGraspToggle(pose.g ? "Natural Hand Release" : "Natural Hand Grasp");
       }
     } else {
-      squeezeProgress = Math.max(0, squeezeProgress - 3.0 * dt);
+      squeezeProgress = Math.max(0, squeezeProgress - 1.8 * dt);
     }
-  } else if (gMag >= 0.55) {
-    // Actively tilting the wrist to steer -> zero out squeezeProgress so steering never closes jaws early
-    squeezeProgress = 0;
   } else {
-    squeezeProgress = Math.max(0, squeezeProgress - 3.5 * dt);
+    squeezeProgress = Math.max(0, squeezeProgress - 2.2 * dt);
   }
   pose.squeeze = +squeezeProgress.toFixed(2);
 
