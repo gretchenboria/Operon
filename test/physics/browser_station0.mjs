@@ -10,7 +10,7 @@ import fs from "node:fs";
 
 const PORT = process.env.APP_PORT || "8841";
 const CDP = 9347;
-const URL = `http://127.0.0.1:${PORT}/teleop-studio.html`;
+const URL = (process.env.OPERON_URL || `http://127.0.0.1:${PORT}`) + "/teleop-studio.html";
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 const PROF = "/tmp/cr-prof-" + process.pid;
