@@ -46,7 +46,8 @@ export function evalQuintic(q0, qf, T, t) {
 //   URDF_rad = (servo_deg - 90) * pi / 180
 //   servo_deg = 90 + URDF_rad * 180 / pi
 export const servoDegToUrdfRad = (servoDeg) => (servoDeg - 90.0) * D2R;
-export const urdfRadToServoDeg = (urdfRad) => 90.0 + urdfRad * R2D;
+// Keep full-circle URDF radians for J1..J6 while still quantizing to 1.0 deg servo resolution (matches abel_arm_hardware.cpp deadband)
+export const urdfRadToServoDeg = (urdfRad) => Math.round(90.0 + urdfRad * R2D);
 
 // Loaded from /api/trajectories (config/trajectories/*.yaml on disk)
 const TRAJECTORY_CACHE = {
@@ -329,6 +330,10 @@ function freshArm() {
   st.q4 = ik4(p, R).q;
   st.q6 = ik6(p, R).q;
   st.q6Real = st.q6.slice();
+  const initDeg = st.q6.map(r => urdfRadToServoDeg(r));
+  st.hwStreamer.lastSentServoDeg = initDeg.slice();
+  st.hwStreamer.segQ0Deg = initDeg.slice();
+  st.hwStreamer.segQfDeg = initDeg.slice();
 }
 
 // Compute Yoshikawa manipulability proxy w = sqrt(det(J*J^T))
@@ -2320,14 +2325,14 @@ function tick(now) {
             }
           }
         }
-        const kp = Math.min(1, dt * 32);
-        st.cmd.x += (targetX - st.cmd.x) * kp;
-        st.cmd.y += (targetY - st.cmd.y) * kp;
-        st.cmd.z += (targetZ - st.cmd.z) * kp;
+        const kp = Math.min(1, dt * 18);
+        if (Math.abs(targetX - st.cmd.x) > 0.0008) st.cmd.x += (targetX - st.cmd.x) * kp;
+        if (Math.abs(targetY - st.cmd.y) > 0.0008) st.cmd.y += (targetY - st.cmd.y) * kp;
+        if (Math.abs(targetZ - st.cmd.z) > 0.0008) st.cmd.z += (targetZ - st.cmd.z) * kp;
         for (const [i, key] of ["yaw", "pitch", "roll"].entries()) {
           let d = wantYPR[i] - st.cmd[key];
           if (key === "yaw") { while (d > 180) d -= 360; while (d < -180) d += 360; }
-          st.cmd[key] += d * kp;
+          if (Math.abs(d) > 0.8) st.cmd[key] += d * kp;
         }
       } else {
         st.cmd.x = cl(st.cmd.x + c.vx * SPEED * gainScale * dt, 0.05, 0.22);

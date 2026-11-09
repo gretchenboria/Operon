@@ -320,9 +320,15 @@ if ($("gain-bar")) {
 // - Sweeping forearm Left/Right rotates around Z_device (alpha)
 function mapDeviceAnglesToRobot(rawYaw, rawPitch, rawRoll) {
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  // Soft 1.2-deg jitter deadzone so holding your wrist steady keeps the robot rock-solid
-  const dz = (v, d = 1.2) => Math.abs(v) < d ? 0 : (v > 0 ? v - d : v + d);
-  const y = dz(rawYaw, 1.0), p = dz(rawPitch, 1.0), r = dz(rawRoll, 1.0);
+  const wrap90 = (v) => {
+    let w = ((v + 180) % 360 + 360) % 360 - 180;
+    if (w > 90) w = 180 - w;
+    if (w < -90) w = -180 - w;
+    return w;
+  };
+  // Soft 1.8-deg jitter deadzone so holding your wrist steady keeps the robot 100% locked
+  const dz = (v, d = 1.8) => Math.abs(v) < d ? 0 : (v > 0 ? v - d : v + d);
+  const y = dz(wrap90(rawYaw), 1.8), p = dz(wrap90(rawPitch), 1.8), r = dz(wrap90(rawRoll), 1.8);
   let lrDeg, udDeg, twistDeg;
   if (wearMode === "left") {
     // Left Wrist Watch held in front of chest facing screen:
@@ -344,9 +350,13 @@ function mapDeviceAnglesToRobot(rawYaw, rawPitch, rawRoll) {
     udDeg = (p * 1.15) * flipUD;
     twistDeg = r * 1.10;
   }
-  pose.yaw = Math.round(clamp(lrDeg * deskGain, -180, 180));
-  pose.pitch = Math.round(clamp(udDeg * deskGain, -90, 90));
-  pose.roll = Math.round(clamp(twistDeg * deskGain, -90, 90));
+  const targetYaw = clamp(lrDeg * deskGain, -85, 85);
+  const targetPitch = clamp(udDeg * deskGain, -75, 75);
+  const targetRoll = clamp(twistDeg * deskGain, -85, 85);
+  // Low-pass filter output so a still wrist has zero 1-deg oscillation
+  pose.yaw = Math.round(pose.yaw * 0.35 + targetYaw * 0.65);
+  pose.pitch = Math.round(pose.pitch * 0.35 + targetPitch * 0.65);
+  pose.roll = Math.round(pose.roll * 0.35 + targetRoll * 0.65);
 }
 
 function onMotion(e) {
@@ -370,41 +380,55 @@ function onMotion(e) {
     pose.gz = +((r.alpha || 0) * d2r).toFixed(3);
   }
 
-  // High-rate 6-Axis Complementary Filter (fuses 60Hz Gyro rate with gravity vector so attitude is rock-solid even when DeviceOrientation is noisy or absent)
+  // High-rate 6-Axis Complementary Filter (fuses 60Hz Gyro rate with gravity vector so attitude is rock-solid)
   const r2d = 180 / Math.PI;
-  // On wrist watch (+X along forearm toward hand, +Y across wrist, +Z out of screen):
-  // Forearm elevation (raising/lowering hand) tilts +X relative to gravity: atan2(ax, hypot(ay, az))
-  // Forearm pronation/supination (rolling wrist) tilts +Y relative to gravity: atan2(ay, az)
+  const gMag = Math.hypot(pose.gx, pose.gy, pose.gz);
+  const aDelta = Math.abs(Math.hypot(pose.ax, pose.ay, pose.az) - 9.80665);
+  const isWristStill = gMag < 0.09 && aDelta < 0.45;
+
+  // Use hypot(ax, az) in denominator so watch face verticality (az crossing 0) NEVER flips +/-180 deg!
   const accElev = wearMode === "phone"
-    ? Math.atan2(-pose.ay, Math.hypot(pose.ax, pose.az)) * r2d
-    : Math.atan2(pose.ax, Math.hypot(pose.ay, pose.az)) * r2d;
+    ? Math.atan2(-pose.ay, Math.max(1.5, Math.hypot(pose.ax, pose.az))) * r2d
+    : Math.atan2(pose.ax, Math.max(1.5, Math.hypot(pose.ay, pose.az))) * r2d;
   const accTwist = wearMode === "phone"
-    ? Math.atan2(pose.ax, pose.az) * r2d
-    : Math.atan2(pose.ay, pose.az) * r2d;
+    ? Math.atan2(pose.ax, Math.max(1.5, Math.hypot(pose.ay, pose.az))) * r2d
+    : Math.atan2(pose.ay, Math.max(1.5, Math.hypot(pose.ax, pose.az))) * r2d;
 
-  fusedAtt.pitch = 0.90 * (fusedAtt.pitch + (wearMode === "phone" ? pose.gx : pose.gy) * r2d * dt) + 0.10 * accElev;
-  fusedAtt.roll = 0.90 * (fusedAtt.roll + (wearMode === "phone" ? pose.gy : pose.gx) * r2d * dt) + 0.10 * accTwist;
-  // Apply small deadzone (2 deg/s) and gentle centering leak (0.996) on gyro Z yaw when compass alpha is unavailable
-  const gzDegS = Math.abs(pose.gz * r2d) > 2.0 ? pose.gz * r2d : 0;
-  fusedAtt.yaw = Math.max(-85, Math.min(85, fusedAtt.yaw * 0.997 + gzDegS * dt));
-
-  if (!lastO || (now - (lastO.t || 0) > 180)) {
-    if (!zero) zero = { a: fusedAtt.yaw, b: fusedAtt.pitch, g: fusedAtt.roll };
-    mapDeviceAnglesToRobot(fusedAtt.yaw - zero.a, fusedAtt.pitch - zero.b, fusedAtt.roll - zero.g);
-    tiltOn = true;
-    readout();
+  if (!isWristStill) {
+    const pRate = (wearMode === "phone" ? pose.gx : pose.gy) * r2d;
+    const rRate = (wearMode === "phone" ? pose.gy : pose.gx) * r2d;
+    fusedAtt.pitch = 0.90 * (fusedAtt.pitch + (Math.abs(pRate) > 2.0 ? pRate * dt : 0)) + 0.10 * accElev;
+    fusedAtt.roll = 0.90 * (fusedAtt.roll + (Math.abs(rRate) > 2.0 ? rRate * dt : 0)) + 0.10 * accTwist;
+    const gzDegS = Math.abs(pose.gz * r2d) > 2.5 ? pose.gz * r2d : 0;
+    fusedAtt.yaw = Math.max(-75, Math.min(75, fusedAtt.yaw * 0.995 + gzDegS * dt));
   } else {
-    // Even when DeviceOrientation (onOrient) is firing, fuse its compass yaw with our gravity-referenced 60Hz gyro+accel pitch/roll
-    // so forearm elevation and wrist twist never suffer from Euler gimbal lock!
-    let yaw = (lastO.a || 0) - (zero ? zero.a : 0);
-    while (yaw > 180) yaw -= 360;
-    while (yaw < -180) yaw += 360;
-    const fPitch = fusedAtt.pitch - (zero && zero.fPitch !== undefined ? zero.fPitch : accElev);
-    const fRoll = fusedAtt.roll - (zero && zero.fRoll !== undefined ? zero.fRoll : accTwist);
-    if (zero && zero.fPitch === undefined) { zero.fPitch = fusedAtt.pitch; zero.fRoll = fusedAtt.roll; }
-    mapDeviceAnglesToRobot(yaw, fPitch, fRoll);
-    readout();
+    // Stationary wrist lock: gently damp towards gravity reference without integrating gyro drift
+    fusedAtt.pitch = 0.96 * fusedAtt.pitch + 0.04 * accElev;
+    fusedAtt.roll = 0.96 * fusedAtt.roll + 0.04 * accTwist;
   }
+
+  if (!zero) {
+    fusedAtt.pitch = accElev;
+    fusedAtt.roll = accTwist;
+    zero = { a: lastO ? lastO.a : fusedAtt.yaw, b: accElev, g: accTwist, fPitch: accElev, fRoll: accTwist };
+  }
+  if (zero.fPitch === undefined) { zero.fPitch = accElev; zero.fRoll = accTwist; }
+
+  let yaw = lastO && (now - (lastO.t || 0) <= 250) ? (lastO.a - zero.a) : (fusedAtt.yaw - zero.a);
+  while (yaw > 180) yaw -= 360;
+  while (yaw < -180) yaw += 360;
+  // Ignore uncalibrated compass jumps if gyro shows the wrist is stationary
+  if (isWristStill && Math.abs(pose.gz * r2d) < 2.5 && fusedAtt.lastYaw !== undefined) {
+    yaw = fusedAtt.lastYaw;
+  } else {
+    fusedAtt.lastYaw = yaw;
+  }
+
+  const fPitch = fusedAtt.pitch - zero.fPitch;
+  const fRoll = fusedAtt.roll - zero.fRoll;
+  mapDeviceAnglesToRobot(yaw, fPitch, fRoll);
+  tiltOn = true;
+  readout();
 
   // Stream at 30 Hz directly on motion callback for crisp low-latency response
   if (now - (onMotion.lastSent || 0) >= 32) {
@@ -415,8 +439,6 @@ function onMotion(e) {
   }
 
   // Hands-free Apple Watch Pinch / Wrist Tendon Clench Impulse or Pronation Roll Flick -> Toggle Grip/Release
-  const aDelta = Math.abs(Math.hypot(pose.ax, pose.ay, pose.az) - 9.80665);
-  const gMag = Math.hypot(pose.gx, pose.gy, pose.gz);
   if (now - lastGestureAt > 700 && ((aDelta > 2.35 && gMag < 2.2) || Math.abs(pose.gx) > 2.1)) {
     lastGestureAt = now;
     touched = true;
@@ -432,10 +454,12 @@ function onMotion(e) {
 
 function onOrient(e) {
   if (e.alpha == null && e.beta == null) return;
-  lastO = { a: e.alpha || 0, b: e.beta || 0, g: e.gamma || 0, t: performance.now() };
-  if (!zero) zero = { ...lastO };
+  const now = performance.now();
+  lastO = { a: e.alpha || 0, b: e.beta || 0, g: e.gamma || 0, t: now };
+  if (!zero) zero = { ...lastO, fPitch: fusedAtt.pitch, fRoll: fusedAtt.roll };
+  // If 60Hz DeviceMotion (onMotion) is active, let onMotion exclusively compute pose so onOrient never fights it with Euler gimbal jumps!
+  if (fusedAtt.lastT && (now - fusedAtt.lastT) < 250) return;
   let yaw = lastO.a - zero.a; while (yaw > 180) yaw -= 360; while (yaw < -180) yaw += 360;
-  // On wrist watch, beta is rotation around X (twist) and gamma is rotation around Y (elevation tilt)
   const rawPitch = wearMode === "phone" ? (lastO.b - zero.b) : -(lastO.g - zero.g);
   const rawRoll = wearMode === "phone" ? (lastO.g - zero.g) : (lastO.b - zero.b);
   mapDeviceAnglesToRobot(yaw, rawPitch, rawRoll);
