@@ -61,8 +61,8 @@
       display: grid;
       grid-template-rows: auto 1fr;
       height: 100vh;
-      gap: 8px;
-      padding: 8px;
+      gap: 6px;
+      padding: 6px;
     }
 
     /* HEADER BAR */
@@ -74,9 +74,9 @@
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      min-height: 48px;
-      padding: 6px 12px;
-      gap: 6px 10px;
+      min-height: 42px;
+      padding: 4px 10px;
+      gap: 5px 8px;
       overflow: hidden;
       box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
     }
@@ -102,12 +102,26 @@
       letter-spacing: 0.5px;
     }
 
-    /* 3-COLUMN WORKSPACE */
+    /* 3-COLUMN WORKSPACE — Maximized center 3D robot canvas */
     .workspace {
       display: grid;
-      grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(320px, 368px);
-      gap: 8px;
+      grid-template-columns: minmax(252px, 276px) minmax(0, 1fr) minmax(260px, 286px);
+      gap: 6px;
       min-height: 0;
+      transition: grid-template-columns 0.18s ease;
+    }
+    .workspace.canvas-expanded {
+      grid-template-columns: minmax(244px, 264px) minmax(0, 1fr);
+    }
+    .workspace.canvas-expanded > section.panel:last-child {
+      display: none;
+    }
+    .workspace.canvas-fullscreen {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .workspace.canvas-fullscreen > section.panel:first-child,
+    .workspace.canvas-fullscreen > section.panel:last-child {
+      display: none;
     }
 
     .panel {
@@ -369,24 +383,24 @@
     .vp-dock-top {
       background: #141826;
       border-bottom: 1px solid var(--border);
-      padding: 6px 8px;
+      padding: 4px 8px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: 5px;
       z-index: 3;
       flex-shrink: 0;
     }
     .glass-bar {
       background: #0d1018;
       border: 1px solid var(--border-hi);
-      padding: 3px 6px;
+      padding: 2px 5px;
       border-radius: 7px;
       display: flex;
       align-items: center;
       flex-wrap: wrap;
-      gap: 5px;
+      gap: 4px;
       max-width: 100%;
     }
 
@@ -395,12 +409,12 @@
       background: rgba(16, 19, 30, 0.96);
       border-bottom: 1px solid var(--border);
       border-left: 3px solid var(--purple);
-      padding: 6px 10px;
+      padding: 4px 9px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 6px 10px;
+      gap: 4px 8px;
       z-index: 3;
       flex-shrink: 0;
     }
@@ -917,7 +931,8 @@
             </div>
             <div class="glass-bar">
               <button class="btn sm on" id="btn-gizmo-toggle" title="Toggle 3D Yaw, Pitch, Roll, and Approach Axis Gizmo on the grippers">3D Axes: ON</button>
-              <button class="btn sm" id="btn-cam-reset" title="Reset camera orbit to front isometric view">Reset Camera</button>
+              <button class="btn sm" id="btn-cam-reset" title="Reset camera orbit to close-up front isometric view">Reset Camera</button>
+              <button class="btn sm nv" id="btn-expand-canvas" title="Cycle 3D Canvas Size: Standard -> Wide (hide telemetry sidebar) -> Fullscreen 3D Canvas">Expand 3D</button>
               <button class="btn sm" id="btn-snap-png" title="Save current viewport buffer as PNG image">Save PNG</button>
             </div>
           </div>

@@ -366,13 +366,13 @@ scene.background = new THREE.Color(0x0f121c);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
 
-const camera = new THREE.PerspectiveCamera(40, cv.width / cv.height, 0.04, 3.5);
-camera.position.set(0.84, 0.52, 0.0);
+const camera = new THREE.PerspectiveCamera(38, cv.width / cv.height, 0.04, 3.5);
+camera.position.set(0.60, 0.37, 0.0);
 const controls = new OrbitControls(camera, cv);
-controls.target.set(0.08, 0.11, 0);
+controls.target.set(0.11, 0.11, 0);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.48;
-controls.minDistance = 0.25;
+controls.minDistance = 0.22;
 controls.maxDistance = 2.2;
 controls.update();
 
@@ -1892,10 +1892,24 @@ document.querySelectorAll("[title]").forEach(el => {
   el.addEventListener("mouseleave", () => uiHoverCard?.classList.add("hide"));
 });
 $("btn-cam-reset").onclick = () => {
-  camera.position.set(0.88, 0.56, 0.0);
-  controls.target.set(0.08, 0.11, 0);
+  camera.position.set(0.60, 0.37, 0.0);
+  controls.target.set(0.11, 0.11, 0);
   controls.update();
 };
+if ($("btn-expand-canvas")) {
+  let expandStage = 0; // 0 = 3-col wide center, 1 = hide right col, 2 = full-bleed 3D canvas
+  $("btn-expand-canvas").onclick = () => {
+    const wsEl = document.querySelector(".workspace");
+    if (!wsEl) return;
+    expandStage = (expandStage + 1) % 3;
+    wsEl.classList.toggle("canvas-expanded", expandStage === 1);
+    wsEl.classList.toggle("canvas-fullscreen", expandStage === 2);
+    $("btn-expand-canvas").textContent = expandStage === 0 ? "Expand 3D" : expandStage === 1 ? "Full 3D" : "Restore Panels";
+    $("btn-expand-canvas").classList.toggle("on", expandStage > 0);
+    setTimeout(syncViewportSize, 20);
+    setTimeout(syncViewportSize, 200);
+  };
+}
 $("btn-snap-png").onclick = () => {
   const a = document.createElement("a");
   a.href = cv.toDataURL("image/png");
