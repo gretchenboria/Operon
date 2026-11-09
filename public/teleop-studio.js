@@ -1318,15 +1318,16 @@ function crowdPose() {
   if (st.drive === "pilot") fresh = fresh.filter(([id]) => id === st.pilot);
   if (!fresh.length) return null;
   const n = fresh.length, acc = { vx: 0, vy: 0, vz: 0, pitch: 0, roll: 0 };
-  let sx = 0, sy = 0, g = 0, tilt = 0, liveImu = null;
+  let sx = 0, sy = 0, g = 0, tilt = 0, gainSum = 0, liveImu = null;
   fresh.forEach(([, p]) => {
     for (const k in acc) acc[k] += p.pose[k];
     sx += Math.cos(p.pose.yaw * D2R); sy += Math.sin(p.pose.yaw * D2R);
     g += p.g || 0; tilt += p.pose.aim === "tilt" ? 1 : 0;
+    gainSum += p.pose.gain || st.studioGain || 3.2;
     if (p.imu) liveImu = p.imu;
   });
   for (const k in acc) acc[k] /= n;
-  return { ...acc, yaw: Math.atan2(sy, sx) / D2R, n, g: g / n >= 0.5, aim: tilt / n >= 0.5 ? "tilt" : "auto", liveImu };
+  return { ...acc, yaw: Math.atan2(sy, sx) / D2R, n, g: g / n >= 0.5, aim: tilt / n >= 0.5 ? "tilt" : "auto", gain: gainSum / n, liveImu };
 }
 
 // ── 9. UI Controls, Rig Comparison Mode & Trajectories ──
@@ -2304,6 +2305,11 @@ function tick(now) {
         // smoothly pull (x, y, z) AND tool orientation into alignment so grasping/releasing feels effortless
         if (activeT) {
           const distToTgt = Math.hypot(targetX - baseP[0], targetY - baseP[1], targetZ - baseP[2]);
+          if ($("auto-assist-pill")) {
+            const engaged = distToTgt < 0.085;
+            $("auto-assist-pill").className = engaged ? "pill ok" : "pill warn";
+            $("auto-assist-pill").textContent = engaged ? `Magnet Locked (${Math.round(distToTgt * 1000)} mm)` : "Auto-Magnet: ON";
+          }
           if (distToTgt < 0.085) {
             const pull = Math.pow(1 - distToTgt / 0.085, 1.35) * 0.68;
             targetX += (baseP[0] - targetX) * pull;

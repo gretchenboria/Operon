@@ -408,7 +408,23 @@ const server = http.createServer((req, res) => {
           }
         }
         room.touchHttpPhone(wid);
-        room.toDecks({ t: "pose", from: wid, v: { vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, roll: 0, g: room.watchGrip, grabToggle, gesture, ax, ay, az, gx, gy, gz, tap } });
+        const dtS = room.lastImuMs ? Math.min(0.08, Math.max(0.004, (nowMs - room.lastImuMs) / 1000)) : 0.02;
+        room.lastImuMs = nowMs;
+        const r2d = 180 / Math.PI;
+        const accElev = Math.atan2(ax, Math.hypot(ay, az)) * r2d;
+        const accTwist = Math.atan2(ay, az) * r2d;
+        room.fusedPitch = 0.88 * ((room.fusedPitch ?? accElev) + gy * r2d * dtS) + 0.12 * accElev;
+        room.fusedRoll = 0.88 * ((room.fusedRoll ?? accTwist) + gx * r2d * dtS) + 0.12 * accTwist;
+        const gzDegS = Math.abs(gz * r2d) > 2.0 ? gz * r2d : 0;
+        room.fusedYaw = Math.max(-75, Math.min(75, (room.fusedYaw || 0) * 0.996 + gzDegS * dtS));
+        if (room.zeroPitch === undefined) { room.zeroPitch = room.fusedPitch; room.zeroRoll = room.fusedRoll; }
+        const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        const dPitch = room.fusedPitch - room.zeroPitch;
+        const dRoll = room.fusedRoll - room.zeroRoll;
+        const yawDeg = Math.round(clamp((-room.fusedYaw * 1.15 + dRoll * 0.65) * 3.2, -180, 180));
+        const pitchDeg = Math.round(clamp(dPitch * 1.20 * 3.2, -90, 90));
+        const rollDeg = Math.round(clamp(dRoll * 1.10 * 3.2, -90, 90));
+        room.toDecks({ t: "pose", from: wid, v: { vx: 0, vy: 0, vz: 0, aim: "tilt", gain: 3.2, yaw: yawDeg, pitch: pitchDeg, roll: rollDeg, g: room.watchGrip, grabToggle, gesture, ax, ay, az, gx, gy, gz, tap } });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true, grip: room.watchGrip, gesture }));
       } catch {
