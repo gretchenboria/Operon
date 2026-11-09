@@ -367,9 +367,9 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
 
 const camera = new THREE.PerspectiveCamera(38, cv.width / cv.height, 0.04, 3.5);
-camera.position.set(0.68, 0.40, 0.0);
+camera.position.set(0.65, 0.36, 0.0);
 const controls = new OrbitControls(camera, cv);
-controls.target.set(0.11, 0.11, 0);
+controls.target.set(0.08, 0.06, 0);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.48;
 controls.minDistance = 0.22;
@@ -1922,8 +1922,8 @@ document.querySelectorAll("[title]").forEach(el => {
   el.addEventListener("mouseleave", () => uiHoverCard?.classList.add("hide"));
 });
 $("btn-cam-reset").onclick = () => {
-  camera.position.set(0.68, 0.40, 0.0);
-  controls.target.set(0.11, 0.11, 0);
+  camera.position.set(0.65, 0.36, 0.0);
+  controls.target.set(0.08, 0.06, 0);
   controls.update();
 };
 if ($("btn-expand-canvas")) {

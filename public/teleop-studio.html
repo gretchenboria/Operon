@@ -61,8 +61,8 @@
       display: grid;
       grid-template-rows: auto 1fr;
       height: 100vh;
-      gap: 6px;
-      padding: 6px;
+      gap: 10px;
+      padding: 12px 14px;
     }
 
     /* HEADER BAR */
@@ -74,9 +74,9 @@
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      min-height: 42px;
-      padding: 4px 10px;
-      gap: 5px 8px;
+      min-height: 48px;
+      padding: 7px 14px;
+      gap: 6px 10px;
       overflow: hidden;
       box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
     }
@@ -105,13 +105,13 @@
     /* 3-COLUMN WORKSPACE — Maximized center 3D robot canvas */
     .workspace {
       display: grid;
-      grid-template-columns: minmax(252px, 276px) minmax(0, 1fr) minmax(260px, 286px);
-      gap: 6px;
+      grid-template-columns: minmax(256px, 280px) minmax(0, 1fr) minmax(264px, 290px);
+      gap: 10px;
       min-height: 0;
       transition: grid-template-columns 0.18s ease;
     }
     .workspace.canvas-expanded {
-      grid-template-columns: minmax(244px, 264px) minmax(0, 1fr);
+      grid-template-columns: minmax(248px, 268px) minmax(0, 1fr);
     }
     .workspace.canvas-expanded > section.panel:last-child {
       display: none;
@@ -138,7 +138,7 @@
     .ph {
       background: linear-gradient(90deg, #1d2233 0%, #23293e 100%);
       border-bottom: 1px solid var(--border);
-      padding: 8px 12px;
+      padding: 10px 13px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -159,14 +159,15 @@
       color: var(--surface-grey);
     }
     .pb {
-      padding: 8px 10px;
+      padding: 11px 12px;
       overflow-y: auto;
       overflow-x: hidden;
       flex: 1;
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      justify-content: space-between;
+      gap: 10px;
     }
 
     .row { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -178,12 +179,13 @@
     .step-card {
       background: #121520;
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 10px;
+      border-radius: 9px;
+      padding: 11px 12px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      flex-shrink: 0;
+      justify-content: space-between;
+      gap: 8px;
+      flex: 1 0 auto;
       min-width: 0;
       max-width: 100%;
     }
@@ -216,13 +218,18 @@
     details.drawer {
       background: #121520;
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 9px;
       flex-shrink: 0;
       min-width: 0;
       max-width: 100%;
     }
+    details.drawer[open] {
+      flex: 1 0 auto;
+      display: flex;
+      flex-direction: column;
+    }
     details.drawer > summary {
-      padding: 7px 10px;
+      padding: 9px 12px;
       cursor: pointer;
       list-style: none;
       display: flex;
@@ -249,16 +256,18 @@
     }
     details.drawer[open] > summary::after { content: "^"; }
     .drawer-body {
-      padding: 8px 10px;
+      padding: 10px 12px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      justify-content: space-between;
+      flex: 1;
+      gap: 8px;
       min-width: 0;
     }
     .pose-grid {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 5px 8px;
+      gap: 8px 10px;
       min-width: 0;
     }
 
@@ -383,24 +392,24 @@
     .vp-dock-top {
       background: #141826;
       border-bottom: 1px solid var(--border);
-      padding: 4px 8px;
+      padding: 7px 11px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 5px;
+      gap: 6px;
       z-index: 3;
       flex-shrink: 0;
     }
     .glass-bar {
       background: #0d1018;
       border: 1px solid var(--border-hi);
-      padding: 2px 5px;
+      padding: 3px 6px;
       border-radius: 7px;
       display: flex;
       align-items: center;
       flex-wrap: wrap;
-      gap: 4px;
+      gap: 5px;
       max-width: 100%;
     }
 
@@ -409,12 +418,12 @@
       background: rgba(16, 19, 30, 0.96);
       border-bottom: 1px solid var(--border);
       border-left: 3px solid var(--purple);
-      padding: 4px 9px;
+      padding: 6px 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 4px 8px;
+      gap: 6px 10px;
       z-index: 3;
       flex-shrink: 0;
     }
@@ -537,12 +546,12 @@
     /* Arm Status Overlay Pills at Bottom of Viewport */
     .vp-dock-bottom {
       position: absolute;
-      bottom: 10px;
-      left: 10px;
-      right: 10px;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 12px;
       pointer-events: none;
       z-index: 3;
     }
@@ -554,11 +563,11 @@
       background: var(--panel-glass);
       border: 1px solid var(--border-hi);
       backdrop-filter: blur(12px);
-      border-radius: 8px;
-      padding: 7px 11px;
+      border-radius: 9px;
+      padding: 9px 13px;
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: 4px;
       min-width: 0;
       overflow: hidden;
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.38);
@@ -585,16 +594,16 @@
     /* QR CARD */
     .qr-card {
       display: flex;
-      gap: 8px;
+      gap: 10px;
       align-items: center;
       background: #0d1018;
       border: 1px solid var(--border);
-      border-radius: 7px;
-      padding: 6px 8px;
+      border-radius: 8px;
+      padding: 8px 10px;
     }
     .qr-box {
-      width: 58px;
-      height: 58px;
+      width: 68px;
+      height: 68px;
       background: #fff;
       padding: 3px;
       border-radius: 5px;
@@ -606,10 +615,10 @@
       display: grid;
       grid-template-columns: 38px minmax(0, 1fr) 36px;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
       min-width: 0;
       font-family: var(--mono);
-      font-size: 10px;
+      font-size: 10.5px;
       color: var(--ink-2);
     }
     .slider-row span:last-child {
@@ -619,7 +628,7 @@
       width: 100%;
       min-width: 0;
       accent-color: var(--purple);
-      height: 5px;
+      height: 6px;
       cursor: pointer;
     }
 
@@ -627,17 +636,17 @@
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 6px;
+      gap: 7px;
       min-width: 0;
     }
     .kpi-card {
       background: #10131d;
       border: 1px solid var(--border);
       border-radius: 7px;
-      padding: 6px 8px;
+      padding: 8px 9px;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 3px;
       min-width: 0;
       overflow: hidden;
     }
@@ -670,13 +679,19 @@
 
     .chart-cv {
       width: 100%;
-      height: 108px;
+      height: 128px;
+      min-height: 112px;
+      flex: 1;
       background: #0b0d14;
       border: 1px solid var(--border);
       border-radius: 7px;
       display: block;
     }
-    .chart-cv.sm { height: 74px; }
+    .chart-cv.sm {
+      height: 92px;
+      min-height: 82px;
+      flex: 1;
+    }
 
     .sub-label {
       font-family: var(--mono);
@@ -1126,6 +1141,6 @@
     </div>
   </div>
 
-  <script type="module" src="./teleop-studio.js?v=13"></script>
+  <script type="module" src="./teleop-studio.js?v=14"></script>
 </body>
 </html>
