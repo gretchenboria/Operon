@@ -2043,6 +2043,10 @@ function downloadText(filename, text, mime = "application/json") {
 
 function buildOpenUSD(stepObj, epList) {
   const samples = epList.length ? epList : [stepObj];
+  const roughVal = +(parseFloat($("dr-rough")?.value ?? "0.22")).toFixed(3);
+  const lightMult = +(parseFloat($("dr-light")?.value ?? "2.8")).toFixed(2);
+  const aziDeg = +(parseFloat($("dr-azi")?.value ?? "35")).toFixed(1);
+  const benchRough = Math.min(0.95, +(roughVal * 0.85 + 0.06).toFixed(3));
   const q6SimSamples = samples.map((s, i) => {
     const arr = s.observation.q6_sim_rad || s.observation.q6_rad || [0, 0, 0, 0, 0, 0];
     return `        ${i}: (${arr.map(v => (v * R2D).toFixed(2)).join(", ")})`;
@@ -2061,6 +2065,19 @@ function buildOpenUSD(stepObj, epList) {
     timeCodesPerSecond = 30
     upAxis = "Z"
     doc = "Exported from Operon 6-DOF Sim-to-Real Kinematic & Inertial Calibration Workbench"
+    customLayerData = {
+        dictionary renderSettings = {
+             token "rtx:rendermode" = "RayTracedLighting"
+             int "rtx:post:dlss:execMode" = 1
+             bool "rtx:reflections:enabled" = 1
+             double "rtx:reflections:maxRoughness" = 0.65
+             bool "rtx:translucency:enabled" = 1
+             bool "rtx:indirectDiffuse:enabled" = 1
+             bool "rtx:ambientOcclusion:enabled" = 1
+             bool "rtx:directLighting:sampledLighting:enabled" = 1
+             int "rtx:post:tonemap:op" = 6
+        }
+    }
 )
 
 def Xform "World"
@@ -2071,10 +2088,176 @@ def Xform "World"
         float physics:gravityMagnitude = 9.80665
     }
 
-    def ArticulationRoot "ur5e_sim_6dof" (
-        prepend apiSchemas = ["PhysicsArticulationRootAPI"]
+    def Scope "Looks"
+    {
+        def Material "Mat_ESD_OpticalBench"
+        {
+            token outputs:surface.connect = </World/Looks/Mat_ESD_OpticalBench/PBRShader.outputs:surface>
+            def Shader "PBRShader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.06, 0.075, 0.11)
+                float inputs:metallic = 0.25
+                float inputs:roughness = ${benchRough}
+                float inputs:clearcoat = 0.45
+                float inputs:clearcoatRoughness = 0.18
+                float inputs:ior = 1.5
+                token outputs:surface
+            }
+        }
+
+        def Material "Mat_IdealArm_AnodizedViolet"
+        {
+            token outputs:surface.connect = </World/Looks/Mat_IdealArm_AnodizedViolet/PBRShader.outputs:surface>
+            def Shader "PBRShader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.55, 0.36, 0.96)
+                float inputs:metallic = 0.78
+                float inputs:roughness = ${roughVal}
+                float inputs:clearcoat = 0.35
+                float inputs:clearcoatRoughness = 0.12
+                float inputs:ior = 1.5
+                token outputs:surface
+            }
+        }
+
+        def Material "Mat_RealArm_AnodizedCobalt"
+        {
+            token outputs:surface.connect = </World/Looks/Mat_RealArm_AnodizedCobalt/PBRShader.outputs:surface>
+            def Shader "PBRShader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.23, 0.51, 0.96)
+                float inputs:metallic = 0.82
+                float inputs:roughness = ${roughVal}
+                float inputs:clearcoat = 0.40
+                float inputs:clearcoatRoughness = 0.10
+                float inputs:ior = 1.5
+                token outputs:surface
+            }
+        }
+
+        def Material "Mat_BrushedSteel_Joints"
+        {
+            token outputs:surface.connect = </World/Looks/Mat_BrushedSteel_Joints/PBRShader.outputs:surface>
+            def Shader "PBRShader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.72, 0.76, 0.82)
+                float inputs:metallic = 0.92
+                float inputs:roughness = 0.18
+                float inputs:clearcoat = 0.50
+                token outputs:surface
+            }
+        }
+
+        def Material "Mat_CarbonGripper"
+        {
+            token outputs:surface.connect = </World/Looks/Mat_CarbonGripper/PBRShader.outputs:surface>
+            def Shader "PBRShader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.10, 0.12, 0.16)
+                float inputs:metallic = 0.35
+                float inputs:roughness = 0.38
+                float inputs:clearcoat = 0.25
+                token outputs:surface
+            }
+        }
+
+        def Material "Mat_BatteryCell_21700"
+        {
+            token outputs:surface.connect = </World/Looks/Mat_BatteryCell_21700/PBRShader.outputs:surface>
+            def Shader "PBRShader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.14, 0.48, 0.96)
+                float inputs:metallic = 0.68
+                float inputs:roughness = 0.16
+                float inputs:clearcoat = 0.85
+                token outputs:surface
+            }
+        }
+
+        def Material "Mat_ChargerDock"
+        {
+            token outputs:surface.connect = </World/Looks/Mat_ChargerDock/PBRShader.outputs:surface>
+            def Shader "PBRShader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.16, 0.20, 0.28)
+                color3f inputs:emissiveColor = (0.04, 0.14, 0.32)
+                float inputs:metallic = 0.62
+                float inputs:roughness = 0.26
+                float inputs:clearcoat = 0.55
+                token outputs:surface
+            }
+        }
+
+        def Material "Mat_ValveWheel"
+        {
+            token outputs:surface.connect = </World/Looks/Mat_ValveWheel/PBRShader.outputs:surface>
+            def Shader "PBRShader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.62, 0.42, 0.98)
+                color3f inputs:emissiveColor = (0.10, 0.05, 0.22)
+                float inputs:metallic = 0.74
+                float inputs:roughness = 0.20
+                float inputs:clearcoat = 0.65
+                token outputs:surface
+            }
+        }
+    }
+
+    def DomeLight "DomeLight"
+    {
+        color3f inputs:color = (0.78, 0.84, 0.96)
+        float inputs:intensity = ${(350 + lightMult * 220).toFixed(1)}
+    }
+
+    def DistantLight "KeyLight"
+    {
+        float inputs:angle = 1.2
+        color3f inputs:color = (0.98, 0.98, 1.0)
+        float inputs:intensity = ${(lightMult * 1000).toFixed(1)}
+        float3 xformOp:rotateXYZ = (-45, ${aziDeg}, 0)
+        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+    }
+
+    def RectLight "FillRectLight"
+    {
+        color3f inputs:color = (0.52, 0.74, 1.0)
+        float inputs:height = 0.45
+        float inputs:intensity = ${(240 + lightMult * 160).toFixed(1)}
+        float inputs:width = 0.55
+    }
+
+    def RectLight "RimRectLight"
+    {
+        color3f inputs:color = (0.68, 0.48, 1.0)
+        float inputs:height = 0.40
+        float inputs:intensity = ${(300 + lightMult * 190).toFixed(1)}
+        float inputs:width = 0.50
+    }
+
+    def Cube "Bench" (
+        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
     )
     {
+        rel material:binding = </World/Looks/Mat_ESD_OpticalBench>
+        double size = 1.0
+        double3 xformOp:translate = (0.08, 0, -0.02)
+        float3 xformOp:scale = (0.62, 0.72, 0.04)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+
+    def ArticulationRoot "ur5e_sim_6dof" (
+        prepend apiSchemas = ["PhysicsArticulationRootAPI", "MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </World/Looks/Mat_IdealArm_AnodizedViolet>
         token[] dofNames = ["yaw", "shoulder", "elbow", "wrist_roll", "wrist_pitch", "tool_roll"]
         double[] drive:jointPositions.timeSamples = {
 ${q6SimSamples}
@@ -2082,9 +2265,10 @@ ${q6SimSamples}
     }
 
     def ArticulationRoot "ur5e_real_twin_6dof" (
-        prepend apiSchemas = ["PhysicsArticulationRootAPI"]
+        prepend apiSchemas = ["PhysicsArticulationRootAPI", "MaterialBindingAPI"]
     )
     {
+        rel material:binding = </World/Looks/Mat_RealArm_AnodizedCobalt>
         token[] dofNames = ["yaw", "shoulder", "elbow", "wrist_roll", "wrist_pitch", "tool_roll"]
         double[] drive:jointPositions.timeSamples = {
 ${q6RealSamples}
@@ -2629,9 +2813,9 @@ function tick(now) {
       q6: st.q6Real.map(v => +v.toFixed(4)),
       closed: st.closed,
       aov: st.aov,
-      light: +$("dr-light").value,
-      angle: +$("dr-angle").value,
-      rough: +$("dr-rough").value
+      light: parseFloat($("dr-light")?.value ?? "2.8"),
+      angle: parseFloat($("dr-azi")?.value ?? "35"),
+      rough: parseFloat($("dr-rough")?.value ?? "0.22")
     });
   }
 
