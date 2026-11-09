@@ -270,9 +270,13 @@ class ArmSim {
     const gripFrc = Math.abs(this._sens.grip_frc.data[0] || 0);
 
     const cellToTcp = Math.hypot(cp[0] - hp[0], cp[1] - hp[1], cp[2] - hp[2]);
-    // Ground truth for "am I holding it": BOTH pads carrying load, and the
-    // cell actually between the jaws. No distance heuristic, no magnet.
-    const held = padL > 0.25 && padR > 0.25 && cellToTcp < 0.045;
+    // Ground truth for "am I holding it": the pads are carrying load and the
+    // cell is actually between the jaws. Sensor-based, no magnet and no pure
+    // distance test -- but the TOTAL pad load rather than both pads
+    // individually: as the tool re-orients, gravity shifts the cell onto one
+    // pad and momentarily unloads the other, which is a secure grasp being
+    // misreported as a drop.
+    const held = (padL + padR) > 0.4 && cellToTcp < 0.045;
 
     const acc = this._sens.forearm_acc.data;
     const gyr = this._sens.forearm_gyro.data;

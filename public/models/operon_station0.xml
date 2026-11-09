@@ -292,7 +292,10 @@
       forcerange is the real clamp limit: the jaws stop on the cell at its own
       width and squeeze with a bounded force, instead of closing through it.
     -->
-    <position name="grip_act" joint="finger_r" kp="900" kv="22" forcerange="-85 85" ctrlrange="0 0.022"/>
+    <!-- kp sized for a realistic clamp. A Robotiq 2F-85 grips at 20-235 N;
+         kp=900 produced only ~9 N, weak enough that a carried cell slid
+         between the pads when the tool re-oriented. -->
+    <position name="grip_act" joint="finger_r" kp="1800" kv="30" forcerange="-85 85" ctrlrange="0 0.022"/>
 
     <!--
       Valve stem drive. The handwheel is a genuine friction joint (0.14 N*m
