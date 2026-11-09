@@ -2649,13 +2649,14 @@ function tick(now) {
       const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
       const gainScale = (st.studioGain || 2.4) / 2.4;
       if (c.aim === "tilt" && Math.hypot(c.vx, c.vy, c.vz) < 0.04) {
-        const baseP = activeT ? activeT.p : [0.15, 0.0, 0.08];
-        let targetX = cl(0.150 + (c.pitch / 48) * 0.044 * gainScale, 0.075, 0.205);
-        let targetY = cl((c.yaw / 45) * 0.115 * gainScale, -0.130, 0.130);
-        let targetZ = cl(0.076 + (c.pitch / 44) * 0.075 * gainScale, 0.024, 0.205);
+        const baseX = st.station === 0 ? 0.150 : (activeT ? activeT.p[0] : 0.150);
+        // Keep X centered on the workbench pad line (0.150 m) so tilting down in pitch lowers Z straight onto the cell without drifting off in X
+        let targetX = cl(baseX + (c.pitch / 65) * 0.008, 0.085, 0.200);
+        let targetY = cl((c.yaw / 36) * 0.115 * gainScale, -0.130, 0.130);
+        let targetZ = cl(0.082 + (c.pitch / 32) * 0.078 * gainScale, 0.022, 0.200);
 
         let wantYPR = [c.yaw * 0.85, c.pitch * 0.40, c.roll * 0.85];
-        const kp = Math.min(1, dt * 10.5);
+        const kp = Math.min(1, dt * 11.5);
         if (Math.abs(targetX - st.cmd.x) > 0.001) st.cmd.x += (targetX - st.cmd.x) * kp;
         if (Math.abs(targetY - st.cmd.y) > 0.001) st.cmd.y += (targetY - st.cmd.y) * kp;
         if (Math.abs(targetZ - st.cmd.z) > 0.001) st.cmd.z += (targetZ - st.cmd.z) * kp;
@@ -2663,6 +2664,38 @@ function tick(now) {
           let d = wantYPR[i] - st.cmd[key];
           if (key === "yaw") { while (d > 180) d -= 360; while (d < -180) d += 360; }
           if (Math.abs(d) > 1.0) st.cmd[key] += d * kp;
+        }
+
+        // Tilt-Driven Grasp & Release:
+        // 1) Tilt down onto cell (or roll-tilt wrist near cell) -> grasps cell into jaws
+        // 2) Tilt up & tilt across to Target Pad, then tilt down onto pad (or roll-tilt) -> releases cell onto pad
+        const isHolding = st.arm[6].held || st.arm[4].held;
+        if (st.station === 0) {
+          if (!isHolding) {
+            const bp = st.arm[6].battP;
+            const dxyCell = Math.hypot(st.cmd.x - bp[0], st.cmd.y - bp[1]);
+            const tiltDownAtCell = dxyCell < 0.068 && (st.cmd.z < 0.052 || c.pitch < -11);
+            const rollGraspNearCell = dxyCell < 0.085 && Math.abs(c.roll) > 16;
+            if ((tiltDownAtCell || rollGraspNearCell) && (now - (st.lastReleaseMs || 0)) > 750) {
+              setClosed(true, false, "grasp_cell");
+              if ($("watch-status")) $("watch-status").textContent = "Grasped Cell with Tilt -> Tilt Up & Right to Place Pad";
+            }
+          } else {
+            const destP = st.arm[6].dest === "pick" ? PICK_P : PLACE_P;
+            const dxyDest = Math.hypot(st.cmd.x - destP[0], st.cmd.y - destP[1]);
+            const tiltDownAtDest = dxyDest < 0.072 && (st.cmd.z < 0.056 || c.pitch < -10);
+            const rollReleaseAtDest = dxyDest < 0.085 && Math.abs(c.roll) > 18;
+            if ((tiltDownAtDest || rollReleaseAtDest) && (now - (st.lastGraspMs || 0)) > 750) {
+              setClosed(false, false, "release_cell");
+              if ($("watch-status")) $("watch-status").textContent = "Released Cell onto Target Pad with Tilt!";
+            }
+          }
+        } else if (st.station === 1 && isHolding) {
+          const dSlot = Math.hypot(st.cmd.x - ST[1].p[0], st.cmd.y - ST[1].p[1]);
+          if (dSlot < 0.072 && (st.cmd.z < 0.095 || Math.abs(c.roll) > 18) && (now - (st.lastGraspMs || 0)) > 750) {
+            setClosed(false, false, "slot_charger");
+            if ($("watch-status")) $("watch-status").textContent = "Slotted Cell into Charger with Tilt!";
+          }
         }
       } else {
         st.cmd.x = cl(st.cmd.x + c.vx * SPEED * gainScale * dt, 0.05, 0.22);

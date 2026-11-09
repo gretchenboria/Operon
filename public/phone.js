@@ -379,20 +379,20 @@ function mapDeviceAnglesToRobot(rawYaw, rawPitch, rawRoll) {
   const y = dz(wrap90(rawYaw), 2.2), p = dz(wrap90(rawPitch), 2.2), r = dz(wrap90(rawRoll), 2.2);
   let lrDeg, udDeg, twistDeg;
   if (wearMode === "left") {
-    // Left Wrist Watch held comfortably facing screen
-    lrDeg = (-y * 0.85 + r * 0.45) * flipLR;
-    udDeg = (p * 0.88) * flipUD;
-    twistDeg = r * 0.85;
+    // Left Wrist Watch held comfortably facing screen: sideways tilt (r) + yaw sweep (y) both steer L/R across both pads
+    lrDeg = (-y * 0.85 + r * 0.95) * flipLR;
+    udDeg = (p * 0.95) * flipUD;
+    twistDeg = r * 0.95;
   } else if (wearMode === "right") {
     // Right Wrist Watch (+X_device points left toward fingers)
-    lrDeg = (-y * 0.85 - r * 0.45) * flipLR;
-    udDeg = (-p * 0.88) * flipUD;
-    twistDeg = -r * 0.85;
+    lrDeg = (-y * 0.85 - r * 0.95) * flipLR;
+    udDeg = (-p * 0.95) * flipUD;
+    twistDeg = -r * 0.95;
   } else {
     // Phone held in hand pointing at screen
-    lrDeg = (-y * 0.78 - r * 0.65) * flipLR;
-    udDeg = (p * 0.88) * flipUD;
-    twistDeg = r * 0.85;
+    lrDeg = (-y * 0.85 - r * 0.95) * flipLR;
+    udDeg = (p * 0.95) * flipUD;
+    twistDeg = r * 0.95;
   }
   const targetYaw = clamp(lrDeg * deskGain, -80, 80);
   const targetPitch = clamp(udDeg * deskGain, -70, 70);
@@ -432,22 +432,7 @@ function onMotion(e) {
   const r2d = 180 / Math.PI;
   const gMag = Math.hypot(pose.gx, pose.gy, pose.gz);
   const aDelta = Math.abs(Math.hypot(pose.ax, pose.ay, pose.az) - 9.80665);
-  const da3D = hasPrevAcc ? Math.hypot(pose.ax - prevAx, pose.ay - prevAy, pose.az - prevAz) : 0;
-  prevAx = pose.ax; prevAy = pose.ay; prevAz = pose.az; hasPrevAcc = true;
-  const ua = e.acceleration;
-  const uaMag = (ua && (ua.x != null || ua.y != null || ua.z != null))
-    ? Math.hypot(ua.x || 0, ua.y || 0, ua.z || 0)
-    : 0;
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
-
-  // Physical Hand Grasp / Clench / Pinch / Wrist Twist detector:
-  // Uses true 3D vector jerk (da3D) + CoreMotion userAcceleration (uaMag) + forearm pronation/supination (gx)
-  // while not sweeping the whole arm rapidly in yaw (|gz| < 1.5 rad/s).
-  if (now - lastGrabActionMs > 950 && Math.abs(pose.gz) < 1.5) {
-    if (da3D > 1.35 || uaMag > 1.20 || Math.abs(pose.gx) > 1.65) {
-      triggerWatchGraspToggle(pose.g ? "Hand Release" : "Hand Grasp");
-    }
-  }
 
   // Use hypot(ax, az) in denominator so watch face verticality (az crossing 0) NEVER flips +/-180 deg!
   const accElev = wearMode === "phone"

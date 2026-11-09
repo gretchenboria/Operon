@@ -413,14 +413,11 @@ const server = http.createServer((req, res) => {
         const tap = aMag > 16.5 ? 1 : 0;
         const nowMs = Date.now();
         let grabToggle = 0, gesture = "";
-        const da3D = room.hasPrevAcc ? Math.hypot(ax - room.prevAx, ay - room.prevAy, az - room.prevAz) : 0;
-        room.prevAx = ax; room.prevAy = ay; room.prevAz = az; room.hasPrevAcc = true;
-        if (body.grabToggle || (nowMs - room.lastGestureMs > 950 && Math.abs(gz) < 1.5 && (da3D > 1.35 || Math.abs(gx) > 1.65))) {
-          room.lastGestureMs = nowMs;
+        if (body.grabToggle) {
           room.watchGrip = room.watchGrip ? 0 : 1;
           room.grabSeq = (room.grabSeq || 0) + 1;
           grabToggle = 1;
-          gesture = room.watchGrip ? "Hand Grasp" : "Hand Release";
+          gesture = room.watchGrip ? "GRASP" : "RELEASE";
         }
         room.touchHttpPhone(wid);
         const dtS = room.lastImuMs ? Math.min(0.08, Math.max(0.004, (nowMs - room.lastImuMs) / 1000)) : 0.02;
