@@ -413,19 +413,10 @@ const server = http.createServer((req, res) => {
         const tap = aMag > 16.5 ? 1 : 0;
         const nowMs = Date.now();
         let grabToggle = 0, gesture = "";
-        // Detect Wrist Clench / Double-Tap Tendon Impulse (MMG |a - g| > 3.2 m/s² with low translation) or Pronation Flick (|gx| > 2.3 rad/s)
-        if (nowMs - room.lastGestureMs > 850) {
-          if (Math.abs(aMag - 9.80665) > 3.2 && gMag < 1.8) {
-            room.lastGestureMs = nowMs;
-            room.watchGrip = room.watchGrip ? 0 : 1;
-            grabToggle = 1;
-            gesture = room.watchGrip ? "Clench Impulse -> GRASP" : "Tendon Impulse -> RELEASE";
-          } else if (Math.abs(gx) > 2.3) {
-            room.lastGestureMs = nowMs;
-            room.watchGrip = room.watchGrip ? 0 : 1;
-            grabToggle = 1;
-            gesture = room.watchGrip ? "Pronation Flick -> GRASP" : "Supination Flick -> RELEASE";
-          }
+        if (body.grabToggle) {
+          room.watchGrip = room.watchGrip ? 0 : 1;
+          grabToggle = 1;
+          gesture = room.watchGrip ? "GRASP" : "RELEASE";
         }
         room.touchHttpPhone(wid);
         const dtS = room.lastImuMs ? Math.min(0.08, Math.max(0.004, (nowMs - room.lastImuMs) / 1000)) : 0.02;

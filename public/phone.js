@@ -402,15 +402,6 @@ function onMotion(e) {
   const aDelta = Math.abs(Math.hypot(pose.ax, pose.ay, pose.az) - 9.80665);
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
 
-  // Deliberate Wrist Flick / Clench Gesture (with strict 1.4s cooldown so it never double-toggles or fights button taps)
-  if (now - lastGrabActionMs > 1400 && (Math.abs(pose.gx) > 3.1 || (aDelta > 4.2 && gMag < 2.2))) {
-    lastGrabActionMs = now;
-    pose.g = pose.g ? 0 : 1;
-    paintGrab();
-    send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, gesture: pose.g ? "Wrist Grasp" : "Wrist Release", aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll } });
-    if (navigator.vibrate) navigator.vibrate(35);
-  }
-
   // Use hypot(ax, az) in denominator so watch face verticality (az crossing 0) NEVER flips +/-180 deg!
   const accElev = wearMode === "phone"
     ? Math.atan2(-pose.ay, Math.max(1.5, Math.hypot(pose.ax, pose.az))) * r2d
@@ -546,7 +537,18 @@ $("grab").addEventListener("click", () => {
   lastGrabActionMs = performance.now();
   pose.g = pose.g ? 0 : 1;
   paintGrab();
-  send({ t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll } });
+  const msg = { t: "pose", v: { vx: -jy, vy: -jx, vz, g: pose.g, grabToggle: 1, aim, gain: deskGain, yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll } };
+  send(msg);
+  // Guaranteed delivery fallback if WebSocket is mid-reconnect when tapping GRASP/RELEASE
+  if (!useHttp && (!ws || ws.readyState !== 1)) {
+    fetch(`/api/room/${ROOM}/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: myId, msgs: [msg] }),
+      cache: "no-store",
+      keepalive: true
+    }).catch(() => {});
+  }
   if (navigator.vibrate) navigator.vibrate(30);
 });
 if ($("snap")) {

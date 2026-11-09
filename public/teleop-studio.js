@@ -1171,6 +1171,7 @@ function setClosed(v, lift = true, forceAction = null) {
   }
   if (grabbedAny && st.station === 0 && lift && !st.tween) st.cmd.z = Math.max(st.cmd.z, 0.075);
   if (releasedAny && lift && !st.tween) st.cmd.z = 0.130;
+  try { pushState(); } catch {}
 }
 
 const angleBetween = (a, b) => Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))) / D2R;
@@ -1180,7 +1181,6 @@ function evaluateArm(dof, f, dt) {
   const tgt = armTarget(dof);
   const pos = Math.hypot(f.tip[0] - tgt.p[0], f.tip[1] - tgt.p[1], f.tip[2] - tgt.p[2]);
   const posMm = Math.round(pos * 1000);
-  const nowMs = performance.now();
   if (s.id === "battery") {
     const oriDeg = Math.round(oriError(f.R, tgt.R));
     const aligned = pos < 0.052;
@@ -1192,34 +1192,8 @@ function evaluateArm(dof, f, dt) {
         st.arm[6].dest = st.arm[4].dest;
         return { msg: "Cell Grasped · Move to Target Pad -> Release", cls: "warn", aligned: false, posMm, oriDeg };
       }
-      // Auto-Grasp when dwelling near cell for > 260 ms with Auto-Magnet ON (and > 900 ms since last release)
-      if (dof === 6 && st.autoAssist !== false && pos < 0.048 && (nowMs - (st.lastReleaseMs || 0)) > 900) {
-        st.graspDwellMs = (st.graspDwellMs || 0) + dt * 1000;
-        if (st.graspDwellMs >= 260) {
-          st.graspDwellMs = 0;
-          st.lastSmartGrabMs = nowMs;
-          setClosed(true, true, "grasp_cell");
-          if ($("watch-status")) $("watch-status").textContent = "Auto-Grasped Cell -> Move to Right Pad to Place";
-          return { msg: "Cell Grasped · Move to Target Pad -> Release", cls: "warn", aligned: false, posMm, oriDeg };
-        }
-      } else if (dof === 6) {
-        st.graspDwellMs = 0;
-      }
       if (a.done[0]) return { msg: "Pick & Place Complete", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 };
       return { msg: aligned ? "Aligned Over Cell -> Click Grasp" : `To Cell · ${posMm} mm · ${oriDeg}°`, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
-    }
-    // Auto-Release when carrying cell and dwelling over Target Pad for > 320 ms (and > 900 ms since grasp)
-    if (dof === 6 && st.autoAssist !== false && pos < 0.048 && (nowMs - (st.lastGraspMs || 0)) > 900) {
-      st.releaseDwellMs = (st.releaseDwellMs || 0) + dt * 1000;
-      if (st.releaseDwellMs >= 320) {
-        st.releaseDwellMs = 0;
-        st.lastSmartGrabMs = nowMs;
-        setClosed(false, true, "release_cell");
-        if ($("watch-status")) $("watch-status").textContent = "Cell Placed on Target Pad!";
-        return { msg: "Pick & Place Complete", cls: "ok", aligned: true, posMm: 0, oriDeg: 0 };
-      }
-    } else if (dof === 6) {
-      st.releaseDwellMs = 0;
     }
     return { msg: aligned ? "Over Target Pad -> Click Release" : `Carrying Cell · ${posMm} mm to Pad`, cls: aligned ? "warn" : "no", aligned, posMm, oriDeg };
   }
@@ -1357,8 +1331,11 @@ onLive((m) => {
   } else if (m.t === "pose" && phones.has(m.from)) {
     const p = phones.get(m.from), v = m.v || {};
     const num = (x, lo, hi, d) => Number.isFinite(+x) ? Math.max(lo, Math.min(hi, +x)) : d;
-    p.g = v.g ? 1 : 0;
-    if (v.grabToggle && (!st.pilot || st.pilot === m.from)) {
+    const nextG = v.g ? 1 : 0;
+    const gChanged = p.lastG !== undefined && nextG !== p.lastG;
+    p.g = nextG;
+    p.lastG = nextG;
+    if ((v.grabToggle || gChanged) && (!st.pilot || st.pilot === m.from)) {
       if (v.gesture) st.lastGestureBanner = v.gesture;
       triggerSmartGraspOrRelease(v.gesture || "Watch GRASP/RELEASE");
     }
@@ -2672,25 +2649,6 @@ function tick(now) {
         let targetZ = cl(0.076 + (c.pitch / 44) * 0.075 * gainScale, 0.024, 0.205);
 
         let wantYPR = [c.yaw * 0.85, c.pitch * 0.40, c.roll * 0.85];
-        // Magnetic Target Funnel (115 mm radius): smoothly pull (x, y, z) AND tool orientation into alignment
-        if (activeT && st.autoAssist !== false) {
-          const distXY = Math.hypot(targetX - baseP[0], targetY - baseP[1]);
-          const distToTgt = Math.hypot(targetX - baseP[0], targetY - baseP[1], targetZ - baseP[2]);
-          if ($("auto-assist-pill")) {
-            const engaged = distXY < 0.095 || distToTgt < 0.115;
-            $("auto-assist-pill").className = engaged ? "pill ok" : "pill warn";
-            $("auto-assist-pill").textContent = engaged ? `Magnet Locked (${Math.round(distXY * 1000)} mm)` : "Auto-Magnet: ON";
-          }
-          if (distXY < 0.095 || distToTgt < 0.115) {
-            const pull = Math.pow(1 - Math.min(1, distXY / 0.095), 0.9) * 0.85;
-            targetX += (baseP[0] - targetX) * pull;
-            targetY += (baseP[1] - targetY) * pull;
-            targetZ += (baseP[2] - targetZ) * Math.min(0.92, pull * 1.15);
-            if (activeT.ypr && st.station !== 2) {
-              wantYPR = wantYPR.map((ang, idx) => ang + (activeT.ypr[idx] - ang) * pull);
-            }
-          }
-        }
         const kp = Math.min(1, dt * 10.5);
         if (Math.abs(targetX - st.cmd.x) > 0.001) st.cmd.x += (targetX - st.cmd.x) * kp;
         if (Math.abs(targetY - st.cmd.y) > 0.001) st.cmd.y += (targetY - st.cmd.y) * kp;
