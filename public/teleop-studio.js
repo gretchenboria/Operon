@@ -97,6 +97,8 @@ function expandTrajectorySegments(trajObj) {
       .join(", ") || "hold";
     const seg = {
       index: idx + 1,
+      q0: qPrev.slice(),
+      qf: qTarget.slice(),
       q0ServoDeg: qPrev.slice(),
       qfServoDeg: qTarget.slice(),
       commandedS,
