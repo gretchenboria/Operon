@@ -254,7 +254,7 @@ $("team").querySelectorAll("button").forEach(b => b.addEventListener("click", ()
 const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, squeeze: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
 let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false;
 let lastGrabActionMs = 0, grabSeq = 0, prevAx = 0, prevAy = 0, prevAz = 9.81, hasPrevAcc = false, squeezeProgress = 0;
-let jerkBaseline = 0.08, poisedMs = 0;
+let baseDa3D = 0.10, baseUa = 0.08;
 
 function triggerWatchGraspToggle(gestureName = "Watch GRASP/RELEASE") {
   const now = performance.now();
@@ -441,34 +441,33 @@ function onMotion(e) {
     : 0;
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
 
-  // Natural Hand Grasp / Release Impulse Detector (Zero-Magnet + Single-Squeeze Responsive):
-  // 1) Subtracts gravity-rotation change (9.81 * gMag * dt) from da3D so tilting the wrist has ~0 netJerk
-  // 2) Requires the wrist pitch/yaw aim to be parked/poised (steerRate < 0.55 rad/s for >= 90 ms) so moving toward the cell NEVER auto-grabs like a magnet
-  // 3) Once parked over the cell/pad, a single natural hand grasp (1-frame tendon impulse above baseline) triggers immediately without requiring multi-frame shaking!
+  // Forearm Tendon Grasp & Release Detector (MMG + Tenodesis Envelope):
+  // - Tracks adaptive moving-average baseline (baseDa3D, baseUa) so smooth wrist tilting never auto-fires in the background
+  // - Integrates true tendon contraction above baseline (excessDa, excessUa, tendon roll gx, or clench impulse aDelta > 1.8) smoothly to 1.0 (~110 ms) with NO poisedMs or speed lockouts!
   const steerRate = Math.hypot(pose.gy, pose.gz);
-  const netJerk = Math.max(0, da3D - 9.81 * gMag * dt);
-  if (steerRate < 0.55) {
-    poisedMs = Math.min(1000, poisedMs + dt * 1000);
-  } else {
-    poisedMs = 0;
-    squeezeProgress = 0;
-  }
-  const impulseAboveBase = netJerk - jerkBaseline;
-  // Update slow baseline when not spiking
-  if (impulseAboveBase < 0.25) {
-    jerkBaseline = 0.92 * jerkBaseline + 0.08 * netJerk;
-  }
-  if (now - lastGrabActionMs > 700 && poisedMs >= 90) {
-    if (impulseAboveBase > 0.36 || netJerk > 0.48) {
-      squeezeProgress = 1.0;
-      triggerWatchGraspToggle(pose.g ? "Natural Hand Release" : "Natural Hand Grasp");
-    } else if (impulseAboveBase > 0.14) {
-      squeezeProgress = Math.min(0.85, squeezeProgress + impulseAboveBase * 2.2);
+  const excessDa = Math.max(0, da3D - baseDa3D);
+  const excessUa = Math.max(0, uaMag - baseUa);
+  if (excessDa < 0.35) baseDa3D = 0.92 * baseDa3D + 0.08 * da3D;
+  if (excessUa < 0.30) baseUa = 0.92 * baseUa + 0.08 * uaMag;
+
+  if (now - lastGrabActionMs > 620 && steerRate < 1.35) {
+    const crispTendon = excessDa > 0.62 || excessUa > 0.52 || aDelta > 1.80 || Math.abs(pose.gx) > 1.45;
+    const tendonSignal = Math.max(excessDa - 0.24, excessUa - 0.20, Math.abs(pose.gx) - 0.68);
+    if (crispTendon) {
+      squeezeProgress = 0;
+      triggerWatchGraspToggle(pose.g ? "Tendon Release" : "Tendon Grasp");
+    } else if (tendonSignal > 0) {
+      const rate = Math.min(10.5, 5.2 + tendonSignal * 8.0);
+      squeezeProgress = Math.min(1.0, squeezeProgress + rate * dt);
+      if (squeezeProgress >= 1.0) {
+        squeezeProgress = 0;
+        triggerWatchGraspToggle(pose.g ? "Tendon Release" : "Tendon Grasp");
+      }
     } else {
-      squeezeProgress = Math.max(0, squeezeProgress - 3.5 * dt);
+      squeezeProgress = Math.max(0, squeezeProgress - 2.4 * dt);
     }
   } else {
-    squeezeProgress = Math.max(0, squeezeProgress - 4.0 * dt);
+    squeezeProgress = Math.max(0, squeezeProgress - 3.2 * dt);
   }
   pose.squeeze = +squeezeProgress.toFixed(2);
 

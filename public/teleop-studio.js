@@ -1141,7 +1141,7 @@ function setClosed(v, lift = true, forceAction = null) {
     if (next) {
       const dxy = Math.hypot(f.tip[0] - a.battP[0], f.tip[1] - a.battP[1]);
       const dz = Math.abs(f.tip[2] - 0.032);
-      const nearCell = dxy < 0.075 && dz < 0.115;
+      const nearCell = dxy < 0.058 && dz < 0.105;
       if (forceAction === "grasp_cell" || (!a.held && !a.inserted && (forceAction === "grasp_near" || !wasClosed) && nearCell)) {
         a.held = true;
         a.inserted = null;
@@ -1446,10 +1446,7 @@ function snapToStation() {
 $("btn-snap").onclick = snapToStation;
 function triggerSmartGraspOrRelease(gestureLabel) {
   const nowMs = performance.now();
-  if (nowMs - (st.lastSmartGrabMs || 0) < 420) return;
-  const isNaturalImu = typeof gestureLabel === "string" && gestureLabel.startsWith("Natural Hand");
-  // Never allow an IMU grasp/release to fire while the robot arm is actively moving across the table (> 65 mm/s)!
-  if (isNaturalImu && (st.cmdSpeed || 0) > 0.065) return;
+  if (nowMs - (st.lastSmartGrabMs || 0) < 380) return;
   st.lastSmartGrabMs = nowMs;
   const s = ST[st.station];
   const isHolding = st.arm[6].held || st.arm[4].held;
@@ -1460,12 +1457,12 @@ function triggerSmartGraspOrRelease(gestureLabel) {
       if (!isHolding) {
         const bp = st.arm[6].battP;
         const dxy = Math.hypot(st.cmd.x - bp[0], st.cmd.y - bp[1]);
-        if (dxy < 0.062) {
+        if (dxy < 0.058) {
           setClosed(true, false, "grasp_near");
           if ($("watch-status")) $("watch-status").textContent = "Grasped Cell -> Tilt to Target Pad & Release";
         } else {
           setClosed(!st.closed, false);
-          if ($("watch-status")) $("watch-status").textContent = st.closed ? "Jaws Closed (Park over cell & grasp)" : "Jaws Opened";
+          if ($("watch-status")) $("watch-status").textContent = st.closed ? "Jaws Closed (Tilt over cell & grasp)" : "Jaws Opened";
         }
       } else {
         setClosed(false, false);
