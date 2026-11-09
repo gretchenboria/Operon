@@ -124,6 +124,50 @@ class Room {
   }
 
   toDecks(msg) {
+    // Server-side authoritative sanitizer for Watch/Phone pose packets:
+    // Ensures that even if an Apple Watch WebKit tab is still running an older cached phone.js in RAM
+    // (because watchOS has no browser reload button), false grabSeq/grabToggle spam and over-amplified roll twists
+    // are 100% stripped at the relay before reaching any Studio deck!
+    if (msg && msg.t === "pose" && msg.v) {
+      const v = msg.v;
+      const now = Date.now();
+      const pid = msg.from || "watch";
+      if (!this.phoneFilter) this.phoneFilter = new Map();
+      if (!this.phoneFilter.has(pid)) this.phoneFilter.set(pid, { seq: 0, lastTrigMs: 0 });
+      const pf = this.phoneFilter.get(pid);
+
+      // 1) Normalize old 2.4x/3.2x Watch gain down to 1:1 calm 1.5x and zero out roll twist
+      const inGain = +v.gain || 2.4;
+      const scale = inGain > 1.8 ? (1.5 / inGain) : 1.0;
+      if (v.yaw !== undefined) v.yaw = Math.round((+v.yaw || 0) * scale);
+      if (v.pitch !== undefined) v.pitch = Math.round((+v.pitch || 0) * scale);
+      v.roll = 0;
+      v.gain = 1.5;
+      v.squeeze = 0;
+
+      // 2) Rotation-invariant 3D acceleration norm check: |hypot(ax,ay,az) - 9.80665|
+      // Pure wrist tilting rotates the gravity vector without changing its norm (aDelta < 0.35 m/s^2).
+      // Only a deliberate physical hand/tendon clench or release produces aDelta > 1.75 m/s^2 while gMag < 1.90 rad/s.
+      const hasImu = v.ax !== undefined || v.ay !== undefined || v.az !== undefined;
+      const aMag = hasImu ? Math.hypot(+v.ax || 0, +v.ay || 0, +v.az || 9.80665) : 9.80665;
+      const gMag = Math.hypot(+v.gx || 0, +v.gy || 0, +v.gz || 0);
+      const aDelta = Math.abs(aMag - 9.80665);
+
+      const isExplicitButton = Boolean(v.grabToggle) && typeof v.gesture === "string" && v.gesture.startsWith("Button");
+      const isTrueTendonImpulse = hasImu && aDelta > 1.75 && gMag < 1.90;
+
+      if ((isExplicitButton || isTrueTendonImpulse) && (now - pf.lastTrigMs) > 950) {
+        pf.lastTrigMs = now;
+        pf.seq += 1;
+        v.grabToggle = 1;
+        v.grabSeq = pf.seq;
+        v.gesture = isExplicitButton ? v.gesture : "Tendon Grasp/Release";
+      } else {
+        v.grabToggle = 0;
+        v.grabSeq = pf.seq;
+        delete v.gesture;
+      }
+    }
     const s = JSON.stringify(msg);
     for (const ws of this.getWebSockets("deck")) {
       try { ws.send(s); } catch {}

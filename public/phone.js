@@ -439,14 +439,12 @@ function onMotion(e) {
     : 0;
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
 
-  // Pure Forearm Tendon Impulse Detector (NO gyro roll/twist trigger, NO low-threshold background accumulator):
-  // - Only fires when the wrist is held steady (gMag < 0.78 rad/s, so tilting/moving the arm NEVER auto-grasps)
-  // - Requires a deliberate forearm tendon contraction impulse (da3D > 0.95 m/s² or uaMag > 0.78 m/s²) with 950 ms debounce
-  if (now - lastGrabActionMs > 950 && gMag < 0.78) {
-    if (da3D > 0.95 || uaMag > 0.78) {
-      squeezeProgress = 0;
-      triggerWatchGraspToggle(pose.g ? "Tendon Release" : "Tendon Grasp");
-    }
+  // Rotation-Invariant Forearm Tendon Impulse Detector (|hypot(ax,ay,az) - 9.80665| > 1.75 m/s^2):
+  // - Pure wrist tilting only rotates the gravity vector without changing its 3D norm (aDelta < 0.35 m/s^2).
+  // - Only a deliberate physical hand/tendon clench or release produces aDelta > 1.75 m/s^2 while gMag < 1.90 rad/s.
+  if (now - lastGrabActionMs > 950 && aDelta > 1.75 && gMag < 1.90) {
+    squeezeProgress = 0;
+    triggerWatchGraspToggle(pose.g ? "Tendon Release" : "Tendon Grasp");
   }
   pose.squeeze = 0;
 

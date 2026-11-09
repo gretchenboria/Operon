@@ -1322,11 +1322,26 @@ onLive((m) => {
     const p = phones.get(m.from), v = m.v || {};
     const num = (x, lo, hi, d) => Number.isFinite(+x) ? Math.max(lo, Math.min(hi, +x)) : d;
     p.g = v.g ? 1 : 0;
-    const seqTriggered = Number.isFinite(+v.grabSeq) && +v.grabSeq > 0 && +v.grabSeq !== (p.lastGrabSeq || 0);
-    if (Number.isFinite(+v.grabSeq) && +v.grabSeq > 0) p.lastGrabSeq = +v.grabSeq;
-    if ((seqTriggered || v.grabToggle) && (!st.pilot || st.pilot === m.from)) {
+    // Initialize lastGrabSeq on first packet from a device so connecting never fires a false grab
+    if (p.lastGrabSeq === undefined) {
+      p.lastGrabSeq = Number.isFinite(+v.grabSeq) ? +v.grabSeq : 0;
+    }
+    const seqTriggered = Number.isFinite(+v.grabSeq) && +v.grabSeq > 0 && +v.grabSeq !== p.lastGrabSeq;
+    if (Number.isFinite(+v.grabSeq)) p.lastGrabSeq = +v.grabSeq;
+
+    // Rotation-invariant studio-side verification: only allow IMU grasp if aDelta > 1.65 m/s^2 or explicit Button tap
+    const hasImu = v.ax !== undefined || v.ay !== undefined || v.az !== undefined;
+    const aMag = hasImu ? Math.hypot(+v.ax || 0, +v.ay || 0, +v.az || G0) : G0;
+    const gMag = Math.hypot(+v.gx || 0, +v.gy || 0, +v.gz || 0);
+    const aDelta = Math.abs(aMag - G0);
+    const nowP = performance.now();
+    if (hasImu && aDelta > 1.65 && gMag < 1.95) p.lastClenchMs = nowP;
+    const isExplicitBtn = typeof v.gesture === "string" && (v.gesture.startsWith("Button") || v.gesture.startsWith("Tendon"));
+    const verifiedGesture = isExplicitBtn || !hasImu || ((nowP - (p.lastClenchMs || 0)) < 400);
+
+    if ((seqTriggered || v.grabToggle) && verifiedGesture && (!st.pilot || st.pilot === m.from)) {
       if (v.gesture) st.lastGestureBanner = v.gesture;
-      triggerSmartGraspOrRelease(v.gesture || "Watch GRASP/RELEASE");
+      triggerSmartGraspOrRelease(v.gesture || "Tendon Grasp/Release");
     }
     if (v.snap && (!st.pilot || st.pilot === m.from)) snapToStation();
     if (v.recenter && (!st.pilot || st.pilot === m.from)) {
@@ -1336,12 +1351,16 @@ onLive((m) => {
       st.cmd.yaw = 0; st.cmd.pitch = 0; st.cmd.roll = 0;
       $("watch-status").textContent = "Wrist Recentered: Desk anchor set to current hand pose";
     }
+    const rawGain = num(v.gain, 0.5, 6.0, st.studioGain);
+    const angleScale = rawGain > 1.8 ? (1.5 / rawGain) : 1.0;
     p.pose = {
       vx: num(v.vx, -1, 1, 0), vy: num(v.vy, -1, 1, 0), vz: num(v.vz, -1, 1, 0),
       aim: v.aim === "tilt" ? "tilt" : "auto",
-      gain: num(v.gain, 0.5, 6.0, st.studioGain),
-      squeeze: num(v.squeeze, 0, 1, 0),
-      yaw: num(v.yaw, -180, 180, 0), pitch: num(v.pitch, -90, 90, 0), roll: num(v.roll, -90, 90, 0)
+      gain: 1.5,
+      squeeze: 0,
+      yaw: num((+v.yaw || 0) * angleScale, -180, 180, 0),
+      pitch: num((+v.pitch || 0) * angleScale, -90, 90, 0),
+      roll: 0
     };
     if (v.ax !== undefined || v.gx !== undefined) {
       p.imu = { ax: +v.ax || 0, ay: +v.ay || 0, az: +v.az || G0, gx: +v.gx || 0, gy: +v.gy || 0, gz: +v.gz || 0, tap: !!v.tap };
@@ -1451,12 +1470,13 @@ function triggerSmartGraspOrRelease(gestureLabel) {
       if (!isHolding) {
         const bp = st.arm[6].battP;
         const dxy = Math.hypot(st.cmd.x - bp[0], st.cmd.y - bp[1]);
-        if (dxy < 0.058) {
+        if (dxy < 0.068) {
           setClosed(true, false, "grasp_near");
           if ($("watch-status")) $("watch-status").textContent = "Grasped Cell -> Tilt to Target Pad & Release";
         } else {
-          setClosed(!st.closed, false);
-          if ($("watch-status")) $("watch-status").textContent = st.closed ? "Jaws Closed (Tilt over cell & grasp)" : "Jaws Opened";
+          // Do not close jaws in empty air away from the cell; keep jaws open so they are ready when reaching the cell
+          setClosed(false, false);
+          if ($("watch-status")) $("watch-status").textContent = "Move gripper over cell first, then grasp";
         }
       } else {
         setClosed(false, false);
