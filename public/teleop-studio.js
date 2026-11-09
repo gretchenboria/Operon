@@ -302,7 +302,7 @@ const st = {
   watchLagMs: 0.0,
   estimatedR: [1, 0, 0, 0, 1, 0, 0, 0, 1],
   selectedTraj: "imu_calibration",
-  studioGain: 1.5,
+  studioGain: 2.4,
   deskBasePos: [0.15, 0.0, 0.11],
   hwStreamer: {
     lastSentMs: 0,
@@ -1351,15 +1351,13 @@ onLive((m) => {
       st.cmd.yaw = 0; st.cmd.pitch = 0; st.cmd.roll = 0;
       $("watch-status").textContent = "Wrist Recentered: Desk anchor set to current hand pose";
     }
-    const rawGain = num(v.gain, 0.5, 6.0, st.studioGain);
-    const angleScale = rawGain > 1.8 ? (1.5 / rawGain) : 1.0;
     p.pose = {
       vx: num(v.vx, -1, 1, 0), vy: num(v.vy, -1, 1, 0), vz: num(v.vz, -1, 1, 0),
       aim: v.aim === "tilt" ? "tilt" : "auto",
-      gain: 1.5,
+      gain: 2.4,
       squeeze: 0,
-      yaw: num((+v.yaw || 0) * angleScale, -180, 180, 0),
-      pitch: num((+v.pitch || 0) * angleScale, -90, 90, 0),
+      yaw: num(+v.yaw || 0, -180, 180, 0),
+      pitch: num(+v.pitch || 0, -90, 90, 0),
       roll: 0
     };
     if (v.ax !== undefined || v.gx !== undefined) {
@@ -2679,17 +2677,17 @@ function tick(now) {
       $("cmd-src").textContent = "Command: Auto Trajectory";
     } else if (c) {
       const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-      const gainScale = (st.studioGain || 1.5) / 2.4;
+      const gainScale = (st.studioGain || 2.4) / 2.4;
       if (c.aim === "tilt" && Math.hypot(c.vx, c.vy, c.vz) < 0.04) {
         const baseX = st.station === 0 ? 0.150 : (activeT ? activeT.p[0] : 0.150);
-        // Calm 1:1 proportional mapping without any wrist-twist or exaggerated motion
+        // Fast, responsive 1:1 tilt tracking across both pads while keeping gripper level (pitch=0, roll=0)
         let targetX = cl(baseX + (c.pitch / 65) * 0.008, 0.085, 0.200);
-        let targetY = cl((c.yaw / 45) * 0.105 * gainScale, -0.125, 0.125);
-        let targetZ = cl(0.078 + (c.pitch / 42) * 0.068 * gainScale, 0.022, 0.185);
+        let targetY = cl((c.yaw / 30) * 0.122 * gainScale, -0.130, 0.130);
+        let targetZ = cl(0.080 + (c.pitch / 28) * 0.084 * gainScale, 0.022, 0.195);
 
         // Keep gripper level (pitch=0, roll=0) so the 6-DOF wrist NEVER twists on its own!
-        let wantYPR = [c.yaw * 0.35, 0, 0];
-        const kp = Math.min(1, dt * 8.5);
+        let wantYPR = [c.yaw * 0.40, 0, 0];
+        const kp = Math.min(1, dt * 14.5);
         const prevX = st.cmd.x, prevY = st.cmd.y, prevZ = st.cmd.z;
         if (Math.abs(targetX - st.cmd.x) > 0.001) st.cmd.x += (targetX - st.cmd.x) * kp;
         if (Math.abs(targetY - st.cmd.y) > 0.001) st.cmd.y += (targetY - st.cmd.y) * kp;

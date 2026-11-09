@@ -287,7 +287,7 @@ function triggerWatchGraspToggle(gestureName = "Watch GRASP/RELEASE") {
   }
   if (navigator.vibrate) navigator.vibrate(35);
 }
-let deskGain = 1.5; // 1:1 natural proportion so the robot never moves more than your hand
+let deskGain = 2.4; // Fast, responsive wrist movement across both pads
 let wearMode = "left"; // "left" (Left Wrist Watch) | "right" (Right Wrist Watch) | "phone" (Phone in Hand)
 let flipLR = 1, flipUD = 1;
 let fusedAtt = { yaw: 0, pitch: 0, roll: 0, lastT: 0 };
@@ -380,17 +380,17 @@ function mapDeviceAnglesToRobot(rawYaw, rawPitch, rawRoll) {
   const y = dz(wrap90(rawYaw), 2.2), p = dz(wrap90(rawPitch), 2.2), r = dz(wrap90(rawRoll), 2.2);
   let lrDeg, udDeg, twistDeg;
   if (wearMode === "left") {
-    // Pure 1:1 natural tilt without roll-twist cross-coupling
-    lrDeg = (-y * 0.80 + r * 0.22) * flipLR;
-    udDeg = (p * 0.82) * flipUD;
+    // Responsive L/R + U/D tilt with zero roll-twist output
+    lrDeg = (-y * 0.85 + r * 0.45) * flipLR;
+    udDeg = (p * 0.88) * flipUD;
     twistDeg = 0;
   } else if (wearMode === "right") {
-    lrDeg = (-y * 0.80 - r * 0.22) * flipLR;
-    udDeg = (-p * 0.82) * flipUD;
+    lrDeg = (-y * 0.85 - r * 0.45) * flipLR;
+    udDeg = (-p * 0.88) * flipUD;
     twistDeg = 0;
   } else {
-    lrDeg = (-y * 0.75 - r * 0.35) * flipLR;
-    udDeg = (p * 0.82) * flipUD;
+    lrDeg = (-y * 0.80 - r * 0.55) * flipLR;
+    udDeg = (p * 0.88) * flipUD;
     twistDeg = 0;
   }
   const targetYaw = clamp(lrDeg * deskGain, -80, 80);

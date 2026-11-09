@@ -136,13 +136,8 @@ class Room {
       if (!this.phoneFilter.has(pid)) this.phoneFilter.set(pid, { seq: 0, lastTrigMs: 0 });
       const pf = this.phoneFilter.get(pid);
 
-      // 1) Normalize old 2.4x/3.2x Watch gain down to 1:1 calm 1.5x and zero out roll twist
-      const inGain = +v.gain || 2.4;
-      const scale = inGain > 1.8 ? (1.5 / inGain) : 1.0;
-      if (v.yaw !== undefined) v.yaw = Math.round((+v.yaw || 0) * scale);
-      if (v.pitch !== undefined) v.pitch = Math.round((+v.pitch || 0) * scale);
+      // 1) Keep full 100% yaw/pitch responsiveness while zeroing out roll twist
       v.roll = 0;
-      v.gain = 1.5;
       v.squeeze = 0;
 
       // 2) Rotation-invariant 3D acceleration norm check: |hypot(ax,ay,az) - 9.80665|
