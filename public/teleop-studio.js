@@ -1361,12 +1361,12 @@ function setRigMode(mode) {
         : `<span style="color:var(--blue)">6-DOF Real/Watch Twin</span> + Forearm IMU`;
   }
   if ($("kpi-err-lbl")) {
-    $("kpi-err-lbl").textContent = is4v6 ? "Pos Error (4D / 6D)" : "Pos Error (Sim / Real)";
+    $("kpi-err-lbl").textContent = is4v6 ? "4D vs 6D Lag" : "Sim vs Real Lag";
   }
   if ($("chart2-title")) {
-    $("chart2-title").textContent = is4v6
-      ? "4-DOF vs 6-DOF Orientation Error (deg) + Peak |dq| (deg/s)"
-      : "Sim vs Real 6-DOF Tracking Residual (deg) + Peak |dq| (deg/s)";
+    $("chart2-title").innerHTML = is4v6
+      ? `3. <b style="color:var(--purple-hi)">4D vs. 6D Error</b> &amp; <b style="color:#cbd5e1">Speed</b>`
+      : `3. <b style="color:var(--purple-hi)">Sim vs. Real Lag</b> &amp; <b style="color:#cbd5e1">Speed</b>`;
   }
 }
 if ($("rig-mode-bar")) {
@@ -2084,15 +2084,29 @@ ${segRows}
 ================================================================`;
 }
 
+function prepareHiDPICanvas(cvEl) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const cssW = Math.max(180, cvEl.clientWidth || 260);
+  const cssH = Math.max(50, cvEl.clientHeight || 90);
+  const physW = Math.round(cssW * dpr);
+  const physH = Math.round(cssH * dpr);
+  if (cvEl.width !== physW || cvEl.height !== physH) {
+    cvEl.width = physW;
+    cvEl.height = physH;
+  }
+  const ctx = cvEl.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  return { ctx, W: cssW, H: cssH };
+}
+
 function drawCharts() {
   const hist = st.imuHistory;
   if (hist.length < 2) return;
   const hasWatch = hist.some(h => h.watchAcc !== null && h.watchGyro !== null);
 
   // Chart 1: Forearm 6-Axis IMU Overlay (Analytic Sim IMU + Real Watch IMU when connected/loaded)
-  const cv1 = $("chart-imu"), ctx1 = cv1.getContext("2d");
-  const W1 = cv1.width, H1 = cv1.height;
-  ctx1.clearRect(0, 0, W1, H1);
+  const { ctx: ctx1, W: W1, H: H1 } = prepareHiDPICanvas($("chart-imu"));
 
   if (st.imuChartMode === "psd") {
     const N = Math.min(128, hist.length);
@@ -2125,9 +2139,12 @@ function drawCharts() {
     };
     plotLine(sPsd, "#60a5fa");
     if (wPsd.length) plotLine(wPsd, "#e879f9");
-    ctx1.fillStyle = "#647187"; ctx1.font = "10px 'Roboto Mono', monospace";
-    ctx1.fillText("0 Hz", 10, H1 - 3);
-    ctx1.fillText(hasWatch ? "30 Hz (Sim vs Watch Log-PSD)" : "30 Hz (Sim Analytic Log-PSD)", W1 - 185, H1 - 3);
+    ctx1.fillStyle = "#8492ad"; ctx1.font = "500 10px 'Inter', system-ui, sans-serif";
+    ctx1.textAlign = "left";
+    ctx1.fillText("0 Hz", 8, H1 - 4);
+    ctx1.textAlign = "right";
+    ctx1.fillText(hasWatch ? "30 Hz (Sim vs Watch Spectrum)" : "30 Hz (Sim Vibration Spectrum)", W1 - 8, H1 - 4);
+    ctx1.textAlign = "left";
   } else if (st.imuChartMode === "fused") {
     const sAcc = hist.map(h => Math.hypot(...h.simAcc));
     const sGyr = hist.map(h => Math.hypot(...h.simGyro));
@@ -2138,8 +2155,8 @@ function drawCharts() {
     const validWGyr = wGyr.filter(v => v !== null);
     const minA = 6.5, maxA = Math.max(14.0, ...sAcc, ...validWAcc);
     const minG = 0.0, maxG = Math.max(3.0, ...sGyr, ...validWGyr);
-    const mapA = (v) => H1 - 14 - ((v - minA) / Math.max(0.1, maxA - minA)) * (H1 - 26);
-    const mapG = (v) => H1 - 14 - ((v - minG) / Math.max(0.1, maxG - minG)) * (H1 - 26);
+    const mapA = (v) => H1 - 12 - ((v - minA) / Math.max(0.1, maxA - minA)) * (H1 - 28);
+    const mapG = (v) => H1 - 12 - ((v - minG) / Math.max(0.1, maxG - minG)) * (H1 - 28);
 
     const strokeTrace = (arr, mapper, col, lw, dash = []) => {
       ctx1.strokeStyle = col; ctx1.lineWidth = lw; ctx1.setLineDash(dash); ctx1.beginPath();
@@ -2160,10 +2177,14 @@ function drawCharts() {
       strokeTrace(wGyr, mapG, "#38bdf8", 1.4, [3, 2]);
     }
 
-    ctx1.fillStyle = "#93c5fd"; ctx1.font = "10px 'Roboto Mono', monospace";
-    ctx1.fillText("Sim |a| m/s² & |ω| rad/s", 8, 11);
-    ctx1.fillStyle = hasWatch ? "#f0abfc" : "#64748b";
-    ctx1.fillText(hasWatch ? "Watch: Active (Wahba SVD)" : "Watch: None (Load CSV / Pair)", W1 - 184, 11);
+    ctx1.font = "500 10px 'Inter', system-ui, sans-serif";
+    ctx1.fillStyle = "#93c5fd";
+    ctx1.textAlign = "left";
+    ctx1.fillText("Sim Accel (m/s²) & Gyro (rad/s)", 8, 13);
+    ctx1.fillStyle = hasWatch ? "#f0abfc" : "#8492ad";
+    ctx1.textAlign = "right";
+    ctx1.fillText(hasWatch ? "Watch: Active" : "Watch: Not Paired", W1 - 8, 13);
+    ctx1.textAlign = "left";
   } else {
     const isAcc = st.imuChartMode === "acc";
     const sVals = hist.map(h => isAcc ? Math.hypot(...h.simAcc) : Math.hypot(...h.simGyro));
@@ -2174,7 +2195,7 @@ function drawCharts() {
     const validW = wVals.filter(v => v !== null);
     const minV = isAcc ? 6.5 : 0.0;
     const maxV = isAcc ? Math.max(13.5, ...sVals, ...validW) : Math.max(2.5, ...sVals, ...validW);
-    const mapY = (v) => H1 - 10 - ((v - minV) / Math.max(0.1, maxV - minV)) * (H1 - 20);
+    const mapY = (v) => H1 - 10 - ((v - minV) / Math.max(0.1, maxV - minV)) * (H1 - 24);
 
     const strokeArr = (arr, col, lw) => {
       ctx1.strokeStyle = col; ctx1.lineWidth = lw; ctx1.beginPath();
@@ -2189,12 +2210,18 @@ function drawCharts() {
     };
     strokeArr(sVals, "#60a5fa", 2.0);
     if (hasWatch) strokeArr(wVals, "#e879f9", 1.5);
+    ctx1.font = "500 10px 'Inter', system-ui, sans-serif";
+    ctx1.fillStyle = "#93c5fd";
+    ctx1.textAlign = "left";
+    ctx1.fillText(isAcc ? "Acceleration (m/s²)" : "Gyroscope Rate (rad/s)", 8, 13);
+    ctx1.textAlign = "right";
+    ctx1.fillStyle = hasWatch ? "#f0abfc" : "#8492ad";
+    ctx1.fillText(hasWatch ? "Watch: Active" : "Watch: Not Paired", W1 - 8, 13);
+    ctx1.textAlign = "left";
   }
 
   // Chart 2: Sim vs Hardware Streamer Tracking Residual + Peak Joint Velocity
-  const cv2 = $("chart-err"), ctx2 = cv2.getContext("2d");
-  const W2 = cv2.width, H2 = cv2.height;
-  ctx2.clearRect(0, 0, W2, H2);
+  const { ctx: ctx2, W: W2, H: H2 } = prepareHiDPICanvas($("chart-err"));
 
   const plotMetric = (getter, maxScale, col) => {
     ctx2.strokeStyle = col; ctx2.lineWidth = 1.8; ctx2.beginPath();
