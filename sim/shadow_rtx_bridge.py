@@ -695,6 +695,104 @@ def colorize_aov_buffer(aov: str, data, np):
     return None
 
 
+def render_local_sim_aov(state: dict, width: int, height: int, np, Image, ImageDraw):
+    """Software 3D perspective renderer on macOS/CPU when Isaac Sim (`isaacsim`) is not installed locally."""
+    aov = state.get("aov", "rtx")
+    light_mult = float(state.get("light", 2.8))
+    rough = float(state.get("rough", 0.22))
+    q4 = np.array(state.get("q4", [0.0, 0.35, 0.65, 0.0]), dtype=float)
+    q6 = np.array(state.get("q6", [0.0, 0.35, 0.65, 0.0, 0.4, 0.0]), dtype=float)
+    fk_left = fk6_chain(q4, np)
+    fk_right = fk6_chain(q6, np)
+
+    # Background gradient
+    y_grad = np.linspace(0.0, 1.0, height, dtype=np.float32)[:, None]
+    if aov == "depth":
+        bg = np.zeros((height, width, 3), dtype=np.uint8) + np.uint8(28)
+    elif aov == "normal":
+        bg = np.full((height, width, 3), (128, 128, 255), dtype=np.uint8)
+    elif aov in ("semantic", "instance"):
+        bg = np.full((height, width, 3), (16, 20, 30), dtype=np.uint8)
+    else:
+        r_ch = np.clip((14 + (1.0 - y_grad) * 10 * (light_mult / 2.8)), 8, 48).astype(np.uint8)
+        g_ch = np.clip((18 + (1.0 - y_grad) * 14 * (light_mult / 2.8)), 10, 56).astype(np.uint8)
+        b_ch = np.clip((30 + (1.0 - y_grad) * 22 * (light_mult / 2.8)), 16, 78).astype(np.uint8)
+        bg = np.broadcast_to(np.stack([r_ch, g_ch, b_ch], axis=-1), (height, width, 3)).copy()
+
+    im = Image.fromarray(bg)
+    draw = ImageDraw.Draw(im)
+
+    # Simple 3D camera projection: cam at (0.46, 0.0, 0.28) looking at (0.08, 0.0, 0.08)
+    cam_pos = np.array([0.46, 0.0, 0.27], dtype=float)
+    target = np.array([0.08, 0.0, 0.08], dtype=float)
+    fwd = target - cam_pos
+    fwd /= np.linalg.norm(fwd)
+    right = np.cross(fwd, np.array([0.0, 0.0, 1.0]))
+    right /= np.linalg.norm(right)
+    up = np.cross(right, fwd)
+    focal = width * 1.05
+
+    def proj(pt3):
+        v = np.asarray(pt3, dtype=float) - cam_pos
+        z = float(np.dot(v, fwd))
+        if z <= 0.05:
+            z = 0.05
+        x = float(np.dot(v, right)) / z * focal + width * 0.5
+        y = -float(np.dot(v, up)) / z * focal + height * 0.54
+        return (x, y, z)
+
+    # Draw workbench optical grid
+    grid_col = (44, 56, 84) if aov == "rtx" else (70, 80, 100)
+    for gx in np.linspace(-0.10, 0.26, 9):
+        p0 = proj((gx, -0.26, 0.0))
+        p1 = proj((gx, 0.26, 0.0))
+        draw.line([(p0[0], p0[1]), (p1[0], p1[1])], fill=grid_col, width=1)
+    for gy in np.linspace(-0.26, 0.26, 11):
+        p0 = proj((-0.10, gy, 0.0))
+        p1 = proj((0.26, gy, 0.0))
+        draw.line([(p0[0], p0[1]), (p1[0], p1[1])], fill=grid_col, width=1)
+
+    # Draw both arms
+    arms = [
+        (fk_left, -0.14, (157, 114, 255), (185, 154, 255)),
+        (fk_right, 0.14, (59, 130, 246), (96, 165, 250)),
+    ]
+    for fk, y_off, c_main, c_hi in arms:
+        pts = [p + np.array([0.0, y_off, 0.0]) for p in fk["pts"]]
+        for j in range(4):
+            pa = proj(pts[j])
+            pb = proj(pts[j + 1])
+            if aov == "depth":
+                d_u8 = int(np.clip((1.0 - pa[2]) * 240, 60, 245))
+                col = (d_u8, int(d_u8 * 0.9), min(255, int(d_u8 * 1.1)))
+            elif aov == "normal":
+                col = (140, 210, 245) if y_off > 0 else (220, 130, 240)
+            else:
+                spec_boost = int((1.0 - rough) * 35)
+                col = tuple(min(255, c + spec_boost) for c in c_main)
+            w_px = max(6, int((22 - j * 3) / max(0.25, pa[2] * 1.8)))
+            draw.line([(pa[0], pa[1]), (pb[0], pb[1])], fill=col, width=w_px)
+            r_j = w_px * 0.65
+            draw.ellipse([pa[0] - r_j, pa[1] - r_j, pa[0] + r_j, pa[1] + r_j], fill=c_hi)
+
+        tip_p = proj(fk["tip"] + np.array([0.0, y_off, 0.0]))
+        jaw_r = 9 if state.get("closed") else 14
+        draw.ellipse(
+            [tip_p[0] - jaw_r, tip_p[1] - jaw_r, tip_p[0] + jaw_r, tip_p[1] + jaw_r],
+            outline=c_hi,
+            width=3,
+        )
+
+    # HUD watermark badge so user sees live Python Bridge status
+    draw.rectangle([14, 14, 415, 42], fill=(12, 16, 26))
+    draw.text(
+        (24, 21),
+        f"LIVE PYTHON BRIDGE ({aov.upper()}) | Light {light_mult:.1f}x | Rough {rough:.2f}",
+        fill=(96, 165, 250),
+    )
+    return np.asarray(im, dtype=np.uint8)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Shadow PC Live Omniverse RTX + PhysX Bridge for Operon Studio")
     parser.add_argument("--server", type=str, default="wss://operon-421717890494.us-central1.run.app",
@@ -706,27 +804,136 @@ def main() -> None:
     parser.add_argument("--fps", type=float, default=20.0, help="Target JPEG stream frame rate (default: 20)")
     parser.add_argument("--jpeg-quality", type=int, default=78, help="JPEG quality 40..95 (default: 78)")
     parser.add_argument("--headless", action="store_true", help="Run Isaac Sim headless without desktop GUI window")
+    parser.add_argument("--local-sim", action="store_true",
+                        help="Run lightweight local Mac/CPU bridge without requiring NVIDIA Isaac Sim")
     args = parser.parse_args()
 
     ensure_websocket_client()
 
-    # Boot Omniverse Kit with RayTracedLighting
-    from isaacsim import SimulationApp  # type: ignore
+    has_isaac = False
+    sim_app = None
+    if not args.local_sim:
+        try:
+            from isaacsim import SimulationApp  # type: ignore
 
-    sim_app = SimulationApp({
-        "headless": args.headless,
-        "renderer": "RayTracedLighting",
-        "width": args.width,
-        "height": args.height,
-        "anti_aliasing": 3,
-    })
+            sim_app = SimulationApp({
+                "headless": args.headless,
+                "renderer": "RayTracedLighting",
+                "width": args.width,
+                "height": args.height,
+                "anti_aliasing": 3,
+            })
+            has_isaac = True
+        except ImportError:
+            print("[shadow-rtx] 'isaacsim' not found on this machine -> auto-activating --local-sim mode ($0 Mac preview)!")
+            args.local_sim = True
 
     import numpy as np
+    from PIL import Image, ImageDraw
+    import websockets
+
+    if args.local_sim or not has_isaac:
+        state = {
+            "q4": [0.0, 0.35, 0.65, 0.0],
+            "q6": [0.0, 0.35, 0.65, 0.0, 0.4, 0.0],
+            "closed": False,
+            "aov": "rtx",
+            "light": 2.8,
+            "angle": 35.0,
+            "rough": 0.22,
+        }
+        prev_p = None
+        prev_v = np.zeros(3)
+        prev_R = None
+        ws_base = args.server.rstrip("/").replace("https://", "wss://").replace("http://", "ws://")
+        ws_url = f"{ws_base}/api/room/{args.room.upper()}/ws?role=isaac&id=local-mac-bridge"
+
+        async def local_bridge_loop() -> None:
+            nonlocal prev_p, prev_v, prev_R
+            min_interval = 1.0 / max(5.0, min(30.0, args.fps))
+            while True:
+                try:
+                    print(f"[local-sim] Connecting to Operon Relay: {ws_url}")
+                    async with websockets.connect(ws_url, max_size=512 * 1024, ping_interval=20) as ws:
+                        print("[local-sim] Connected! Streaming live frames + kinematic IMU to Operon Studio...")
+
+                        async def recv_loop() -> None:
+                            async for raw in ws:
+                                try:
+                                    msg = json.loads(raw)
+                                    if msg.get("t") == "isaac_cmd":
+                                        if isinstance(msg.get("q4"), list) and len(msg["q4"]) >= 4:
+                                            state["q4"] = [float(x) for x in msg["q4"][:4]]
+                                        if isinstance(msg.get("q6"), list) and len(msg["q6"]) >= 6:
+                                            state["q6"] = [float(x) for x in msg["q6"][:6]]
+                                        if "closed" in msg:
+                                            state["closed"] = bool(msg["closed"])
+                                        if msg.get("aov") in ("rtx", "depth", "normal", "semantic", "instance"):
+                                            state["aov"] = msg["aov"]
+                                        if "light" in msg and msg["light"] is not None:
+                                            state["light"] = float(msg["light"])
+                                        if "angle" in msg and msg["angle"] is not None:
+                                            state["angle"] = float(msg["angle"])
+                                        if "rough" in msg and msg["rough"] is not None:
+                                            state["rough"] = float(msg["rough"])
+                                except Exception:
+                                    pass
+
+                        recv_task = asyncio.create_task(recv_loop())
+                        last_send = 0.0
+                        dt = min_interval
+                        try:
+                            while True:
+                                now = time.perf_counter()
+                                if now - last_send >= min_interval:
+                                    dt = now - last_send if last_send > 0 else min_interval
+                                    last_send = now
+                                    q6_arr = np.array(state["q6"], dtype=float)
+                                    p_site, R_site = forearm_fk_rad(q6_arr, np)
+                                    if prev_p is None:
+                                        prev_p = p_site.copy()
+                                        prev_R = R_site.copy()
+                                    vel = (p_site - prev_p) / max(1e-3, dt)
+                                    acc_world = (vel - prev_v) / max(1e-3, dt)
+                                    a_proper = R_site.T @ (acc_world + np.array([0.0, 0.0, G0]))
+                                    Rdot = (R_site - prev_R) / max(1e-3, dt)
+                                    S = 0.5 * (R_site.T @ Rdot - (R_site.T @ Rdot).T)
+                                    gyro_body = np.array([S[2, 1], S[0, 2], S[1, 0]])
+                                    prev_p, prev_v, prev_R = p_site.copy(), vel, R_site.copy()
+
+                                    rgb = render_local_sim_aov(state, args.width, args.height, np, Image, ImageDraw)
+                                    im = Image.fromarray(rgb)
+                                    bio = io.BytesIO()
+                                    im.save(bio, format="JPEG", quality=args.jpeg_quality)
+                                    jpg_b64 = base64.b64encode(bio.getvalue()).decode("ascii")
+                                    payload = {
+                                        "t": "isaac_frame",
+                                        "aov": state["aov"],
+                                        "jpg": jpg_b64,
+                                        "fps": round(1.0 / max(1e-3, dt), 1),
+                                        "imu": {
+                                            "ax": round(float(a_proper[0]), 4),
+                                            "ay": round(float(a_proper[1]), 4),
+                                            "az": round(float(a_proper[2]), 4),
+                                            "gx": round(float(gyro_body[0]), 4),
+                                            "gy": round(float(gyro_body[1]), 4),
+                                            "gz": round(float(gyro_body[2]), 4),
+                                        },
+                                    }
+                                    await ws.send(json.dumps(payload))
+                                await asyncio.sleep(0.01)
+                        finally:
+                            recv_task.cancel()
+                except Exception as exc:
+                    print(f"[local-sim] Reconnecting in 2s ({exc})...")
+                    await asyncio.sleep(2.0)
+
+        asyncio.run(local_bridge_loop())
+        return
+
     import omni.replicator.core as rep  # type: ignore
     import omni.usd  # type: ignore
-    from PIL import Image
     from pxr import Gf, UsdGeom
-    import websockets
 
     try:
         from isaacsim.core.api import World  # type: ignore
