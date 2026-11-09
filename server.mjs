@@ -417,13 +417,15 @@ const server = http.createServer((req, res) => {
         const da3D = room.prevImuAcc ? Math.hypot(ax - room.prevImuAcc[0], ay - room.prevImuAcc[1], az - room.prevImuAcc[2]) : 0;
         room.prevImuAcc = [ax, ay, az];
         const steerRate = Math.hypot(gy, gz);
-        const aDelta = Math.abs(aMag - 9.80665);
-        const tendonSignal = Math.max(da3D - 0.20, aDelta - 0.26);
-        if (steerRate < 0.92 && (da3D > 0.72 || tendonSignal > 0)) {
-          const fillRate = da3D > 0.72 ? 60.0 : Math.min(9.5, 4.8 + tendonSignal * 6.5);
-          room.squeezeProgress = Math.min(1.0, (room.squeezeProgress || 0) + fillRate * dtS);
+        const netJerk = Math.max(0, da3D - 9.81 * gMag * dtS);
+        room.poisedMs = steerRate < 0.55 ? Math.min(1000, (room.poisedMs || 0) + dtS * 1000) : 0;
+        const base = room.jerkBaseline ?? 0.08;
+        const imp = netJerk - base;
+        if (imp < 0.25) room.jerkBaseline = 0.92 * base + 0.08 * netJerk;
+        if (room.poisedMs >= 90 && (imp > 0.36 || netJerk > 0.48)) {
+          room.squeezeProgress = 1.0;
         } else {
-          room.squeezeProgress = Math.max(0.0, (room.squeezeProgress || 0) - 2.0 * dtS);
+          room.squeezeProgress = Math.max(0.0, (room.squeezeProgress || 0) - 3.5 * dtS);
         }
         let grabToggle = 0, gesture = "";
         const naturalGraspDone = (room.squeezeProgress >= 1.0) && (nowMs - (room.lastImuGrabMs || 0) > 650);

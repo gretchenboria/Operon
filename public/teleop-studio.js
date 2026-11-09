@@ -1446,7 +1446,10 @@ function snapToStation() {
 $("btn-snap").onclick = snapToStation;
 function triggerSmartGraspOrRelease(gestureLabel) {
   const nowMs = performance.now();
-  if (nowMs - (st.lastSmartGrabMs || 0) < 380) return;
+  if (nowMs - (st.lastSmartGrabMs || 0) < 420) return;
+  const isNaturalImu = typeof gestureLabel === "string" && gestureLabel.startsWith("Natural Hand");
+  // Never allow an IMU grasp/release to fire while the robot arm is actively moving across the table (> 65 mm/s)!
+  if (isNaturalImu && (st.cmdSpeed || 0) > 0.065) return;
   st.lastSmartGrabMs = nowMs;
   const s = ST[st.station];
   const isHolding = st.arm[6].held || st.arm[4].held;
@@ -1455,18 +1458,16 @@ function triggerSmartGraspOrRelease(gestureLabel) {
   if (s.id === "battery") {
     if (liveTilt) {
       if (!isHolding) {
-        // Check if gripper is hovering over the cell (within 75mm XY); if so, always grasp it even if jaws were already closed!
         const bp = st.arm[6].battP;
         const dxy = Math.hypot(st.cmd.x - bp[0], st.cmd.y - bp[1]);
-        if (dxy < 0.075) {
+        if (dxy < 0.062) {
           setClosed(true, false, "grasp_near");
           if ($("watch-status")) $("watch-status").textContent = "Grasped Cell -> Tilt to Target Pad & Release";
         } else {
           setClosed(!st.closed, false);
-          if ($("watch-status")) $("watch-status").textContent = st.closed ? "Jaws Closed (Tilt over cell & grasp)" : "Jaws Opened";
+          if ($("watch-status")) $("watch-status").textContent = st.closed ? "Jaws Closed (Park over cell & grasp)" : "Jaws Opened";
         }
       } else {
-        // Holding the cell -> release it right at current tilt pose!
         setClosed(false, false);
         if ($("watch-status")) $("watch-status").textContent = "Released Cell!";
       }
@@ -2677,9 +2678,12 @@ function tick(now) {
 
         let wantYPR = [c.yaw * 0.85, c.pitch * 0.40, c.roll * 0.85];
         const kp = Math.min(1, dt * 11.5);
+        const prevX = st.cmd.x, prevY = st.cmd.y, prevZ = st.cmd.z;
         if (Math.abs(targetX - st.cmd.x) > 0.001) st.cmd.x += (targetX - st.cmd.x) * kp;
         if (Math.abs(targetY - st.cmd.y) > 0.001) st.cmd.y += (targetY - st.cmd.y) * kp;
         if (Math.abs(targetZ - st.cmd.z) > 0.001) st.cmd.z += (targetZ - st.cmd.z) * kp;
+        const instSpeed = Math.hypot(st.cmd.x - prevX, st.cmd.y - prevY, st.cmd.z - prevZ) / dt;
+        st.cmdSpeed = 0.70 * (st.cmdSpeed || 0) + 0.30 * instSpeed;
         for (const [i, key] of ["yaw", "pitch", "roll"].entries()) {
           let d = wantYPR[i] - st.cmd[key];
           if (key === "yaw") { while (d > 180) d -= 360; while (d < -180) d += 360; }

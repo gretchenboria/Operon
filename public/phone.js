@@ -254,6 +254,7 @@ $("team").querySelectorAll("button").forEach(b => b.addEventListener("click", ()
 const pose = { yaw: 0, pitch: 0, roll: 0, g: 0, squeeze: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0, tap: 0 };
 let zero = null, tiltOn = false, manualOn = false, lastO = null, touched = false;
 let lastGrabActionMs = 0, grabSeq = 0, prevAx = 0, prevAy = 0, prevAz = 9.81, hasPrevAcc = false, squeezeProgress = 0;
+let jerkBaseline = 0.08, poisedMs = 0;
 
 function triggerWatchGraspToggle(gestureName = "Watch GRASP/RELEASE") {
   const now = performance.now();
@@ -440,28 +441,34 @@ function onMotion(e) {
     : 0;
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
 
-  // Natural Hand Grasp / Release Envelope (Biomechanical MMG + Tenodesis integration):
-  // - Uses pitch/yaw steering rate (steerRate = hypot(gy, gz)) rather than roll (gx) because closing the hand naturally twists the forearm tendons around gx
-  // - Instant trigger on a crisp fist clench (da3D > 0.72 or uaMag > 0.56), OR smooth ~120ms accumulation for a gentle natural hand grasp
+  // Natural Hand Grasp / Release Impulse Detector (Zero-Magnet + Single-Squeeze Responsive):
+  // 1) Subtracts gravity-rotation change (9.81 * gMag * dt) from da3D so tilting the wrist has ~0 netJerk
+  // 2) Requires the wrist pitch/yaw aim to be parked/poised (steerRate < 0.55 rad/s for >= 90 ms) so moving toward the cell NEVER auto-grabs like a magnet
+  // 3) Once parked over the cell/pad, a single natural hand grasp (1-frame tendon impulse above baseline) triggers immediately without requiring multi-frame shaking!
   const steerRate = Math.hypot(pose.gy, pose.gz);
-  if (now - lastGrabActionMs > 550 && steerRate < 0.92) {
-    const crispClench = da3D > 0.72 || uaMag > 0.56;
-    const tendonSignal = Math.max(da3D - 0.20, uaMag - 0.16, aDelta - 0.26);
-    if (crispClench) {
-      squeezeProgress = 0;
+  const netJerk = Math.max(0, da3D - 9.81 * gMag * dt);
+  if (steerRate < 0.55) {
+    poisedMs = Math.min(1000, poisedMs + dt * 1000);
+  } else {
+    poisedMs = 0;
+    squeezeProgress = 0;
+  }
+  const impulseAboveBase = netJerk - jerkBaseline;
+  // Update slow baseline when not spiking
+  if (impulseAboveBase < 0.25) {
+    jerkBaseline = 0.92 * jerkBaseline + 0.08 * netJerk;
+  }
+  if (now - lastGrabActionMs > 700 && poisedMs >= 90) {
+    if (impulseAboveBase > 0.36 || netJerk > 0.48) {
+      squeezeProgress = 1.0;
       triggerWatchGraspToggle(pose.g ? "Natural Hand Release" : "Natural Hand Grasp");
-    } else if (tendonSignal > 0) {
-      const rate = Math.min(9.5, 4.8 + tendonSignal * 6.5);
-      squeezeProgress = Math.min(1.0, squeezeProgress + rate * dt);
-      if (squeezeProgress >= 1.0) {
-        squeezeProgress = 0;
-        triggerWatchGraspToggle(pose.g ? "Natural Hand Release" : "Natural Hand Grasp");
-      }
+    } else if (impulseAboveBase > 0.14) {
+      squeezeProgress = Math.min(0.85, squeezeProgress + impulseAboveBase * 2.2);
     } else {
-      squeezeProgress = Math.max(0, squeezeProgress - 1.8 * dt);
+      squeezeProgress = Math.max(0, squeezeProgress - 3.5 * dt);
     }
   } else {
-    squeezeProgress = Math.max(0, squeezeProgress - 2.2 * dt);
+    squeezeProgress = Math.max(0, squeezeProgress - 4.0 * dt);
   }
   pose.squeeze = +squeezeProgress.toFixed(2);
 
