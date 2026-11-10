@@ -1,0 +1,14 @@
+# Toolchain for the MJCF -> USD asset pipeline. Pure CPU: no GPU, no Isaac Sim.
+#
+#   uv venv --python 3.11 .venv-usd
+#   uv pip install --python .venv-usd/bin/python -r test/usd/requirements.txt
+#
+# NOTE: NVIDIA's own `mujoco-usd-converter` (the backend behind Isaac Sim 6.x's
+# isaacsim.asset.importer.mjcf) is deliberately NOT used here. It depends on
+# `usd-exchange`, which publishes no macOS wheels - only manylinux and
+# win_amd64 - so it cannot run on a dev laptop. sim/mjcf_to_usd.py authors the
+# same stage with stock pxr instead, and the Isaac importer stays available on
+# the GPU box as a cross-check.
+usd-core>=25.0
+mujoco>=3.1
+numpy>=1.26

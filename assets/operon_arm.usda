@@ -1,0 +1,1141 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def PhysicsScene "PhysicsScene"
+    {
+        vector3f physics:gravityDirection = (0, 0, -1)
+        float physics:gravityMagnitude = 9.80665
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Steel"
+        {
+            token outputs:surface.connect = </World/Looks/Steel/Shader.outputs:surface>
+
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.62, 0.64, 0.68)
+                float inputs:metallic = 0.85
+                float inputs:roughness = 0.35
+                token outputs:surface
+            }
+        }
+
+        def Material "Carbon"
+        {
+            token outputs:surface.connect = </World/Looks/Carbon/Shader.outputs:surface>
+
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.14, 0.15, 0.17)
+                float inputs:metallic = 0.3
+                float inputs:roughness = 0.55
+                token outputs:surface
+            }
+        }
+
+        def Material "Rubber"
+        {
+            token outputs:surface.connect = </World/Looks/Rubber/Shader.outputs:surface>
+
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.12, 0.12, 0.14)
+                float inputs:metallic = 0
+                float inputs:roughness = 0.9
+                token outputs:surface
+            }
+        }
+
+        def Material "Copper"
+        {
+            token outputs:surface.connect = </World/Looks/Copper/Shader.outputs:surface>
+
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.72, 0.45, 0.2)
+                float inputs:metallic = 0.95
+                float inputs:roughness = 0.28
+                token outputs:surface
+            }
+        }
+
+        def Material "CellGold"
+        {
+            token outputs:surface.connect = </World/Looks/CellGold/Shader.outputs:surface>
+
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.8, 0.72, 0.22)
+                float inputs:metallic = 0.8
+                float inputs:roughness = 0.3
+                token outputs:surface
+            }
+        }
+
+        def Material "PadBlue"
+        {
+            token outputs:surface.connect = </World/Looks/PadBlue/Shader.outputs:surface>
+
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.2, 0.42, 0.78)
+                float inputs:metallic = 0.1
+                float inputs:roughness = 0.45
+                token outputs:surface
+            }
+        }
+
+        def Material "PadGreen"
+        {
+            token outputs:surface.connect = </World/Looks/PadGreen/Shader.outputs:surface>
+
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.18, 0.62, 0.36)
+                float inputs:metallic = 0.1
+                float inputs:roughness = 0.45
+                token outputs:surface
+            }
+        }
+
+        def Material "Bench"
+        {
+            token outputs:surface.connect = </World/Looks/Bench/Shader.outputs:surface>
+
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.18, 0.19, 0.21)
+                float inputs:metallic = 0.25
+                float inputs:roughness = 0.65
+                token outputs:surface
+            }
+        }
+    }
+
+    def Xform "pedestal" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsArticulationRootAPI"]
+    )
+    {
+        float physics:mass = 0.64339817
+        quatf xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:translate = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+        def Xform "base" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            float physics:mass = 0.16748458
+            quatf xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:translate = (0, 0, 0.05)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Xform "upper_arm" (
+                prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+            )
+            {
+                float physics:mass = 0.2496567
+                quatf xformOp:orient = (1, 0, 0, 0)
+                double3 xformOp:translate = (0, 0, 0.04)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+                def Xform "forearm" (
+                    prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                )
+                {
+                    float physics:mass = 0.17636396
+                    quatf xformOp:orient = (1, 0, 0, 0)
+                    double3 xformOp:translate = (0, 0, 0.1)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+                    def Xform "wrist_roll_link" (
+                        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                    )
+                    {
+                        float physics:mass = 0.0256621
+                        quatf xformOp:orient = (1, 0, 0, 0)
+                        double3 xformOp:translate = (0, 0, 0.1)
+                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+                        def Xform "wrist_pitch_link" (
+                            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                        )
+                        {
+                            float physics:mass = 0.031988166
+                            quatf xformOp:orient = (1, 0, 0, 0)
+                            double3 xformOp:translate = (0, 0, 0)
+                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+                            def Xform "tool_roll_link" (
+                                prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                            )
+                            {
+                                float physics:mass = 0
+                                quatf xformOp:orient = (1, 0, 0, 0)
+                                double3 xformOp:translate = (0, 0, 0)
+                                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+                                def Xform "hand" (
+                                    prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                                )
+                                {
+                                    float physics:mass = 0.1209091
+                                    quatf xformOp:orient = (1, 0, 0, 0)
+                                    double3 xformOp:translate = (0, 0, 0.06)
+                                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+                                    def Xform "finger_l" (
+                                        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                                    )
+                                    {
+                                        float physics:mass = 0.0254574
+                                        quatf xformOp:orient = (1, 0, 0, 0)
+                                        double3 xformOp:translate = (-0.009, 0, 0)
+                                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+                                        def Cube "finger_l_base" (
+                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                        )
+                                        {
+                                            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                                            rel material:binding = </World/Looks/Steel>
+                                            color3f[] primvars:displayColor = [(0.7, 0.72, 0.76)]
+                                            custom string semantic:Semantics:params:semanticData = "gripper_finger"
+                                            custom string semantic:Semantics:params:semanticType = "class"
+                                            double size = 1
+                                            quatf xformOp:orient = (1, 0, 0, 0)
+                                            float3 xformOp:scale = (0.011, 0.021, 0.016)
+                                            double3 xformOp:translate = (0, 0, -0.014)
+                                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                        }
+
+                                        def Cube "finger_l_arm" (
+                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                        )
+                                        {
+                                            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                                            rel material:binding = </World/Looks/Steel>
+                                            color3f[] primvars:displayColor = [(0.7, 0.72, 0.76)]
+                                            custom string semantic:Semantics:params:semanticData = "gripper_finger"
+                                            custom string semantic:Semantics:params:semanticType = "class"
+                                            double size = 1
+                                            quatf xformOp:orient = (1, 0, 0, 0)
+                                            float3 xformOp:scale = (0.008, 0.019, 0.034)
+                                            double3 xformOp:translate = (0, 0, -0.003)
+                                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                        }
+
+                                        def Cube "pad_l" (
+                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                        )
+                                        {
+                                            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                                            rel material:binding = </World/Looks/Rubber>
+                                            color3f[] primvars:displayColor = [(0.12, 0.12, 0.14)]
+                                            custom string semantic:Semantics:params:semanticData = "gripper_pad"
+                                            custom string semantic:Semantics:params:semanticType = "class"
+                                            double size = 1
+                                            quatf xformOp:orient = (1, 0, 0, 0)
+                                            float3 xformOp:scale = (0.0035, 0.018, 0.022)
+                                            double3 xformOp:translate = (0.0055, 0, 0.003)
+                                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                        }
+                                    }
+
+                                    def Xform "finger_r" (
+                                        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                                    )
+                                    {
+                                        float physics:mass = 0.0254574
+                                        quatf xformOp:orient = (1, 0, 0, 0)
+                                        double3 xformOp:translate = (0.009, 0, 0)
+                                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+                                        def Cube "finger_r_base" (
+                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                        )
+                                        {
+                                            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                                            rel material:binding = </World/Looks/Steel>
+                                            color3f[] primvars:displayColor = [(0.7, 0.72, 0.76)]
+                                            custom string semantic:Semantics:params:semanticData = "gripper_finger"
+                                            custom string semantic:Semantics:params:semanticType = "class"
+                                            double size = 1
+                                            quatf xformOp:orient = (1, 0, 0, 0)
+                                            float3 xformOp:scale = (0.011, 0.021, 0.016)
+                                            double3 xformOp:translate = (0, 0, -0.014)
+                                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                        }
+
+                                        def Cube "finger_r_arm" (
+                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                        )
+                                        {
+                                            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                                            rel material:binding = </World/Looks/Steel>
+                                            color3f[] primvars:displayColor = [(0.7, 0.72, 0.76)]
+                                            custom string semantic:Semantics:params:semanticData = "gripper_finger"
+                                            custom string semantic:Semantics:params:semanticType = "class"
+                                            double size = 1
+                                            quatf xformOp:orient = (1, 0, 0, 0)
+                                            float3 xformOp:scale = (0.008, 0.019, 0.034)
+                                            double3 xformOp:translate = (0, 0, -0.003)
+                                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                        }
+
+                                        def Cube "pad_r" (
+                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                        )
+                                        {
+                                            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                                            rel material:binding = </World/Looks/Rubber>
+                                            color3f[] primvars:displayColor = [(0.12, 0.12, 0.14)]
+                                            custom string semantic:Semantics:params:semanticData = "gripper_pad"
+                                            custom string semantic:Semantics:params:semanticType = "class"
+                                            double size = 1
+                                            quatf xformOp:orient = (1, 0, 0, 0)
+                                            float3 xformOp:scale = (0.0035, 0.018, 0.022)
+                                            double3 xformOp:translate = (-0.0055, 0, 0.003)
+                                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                        }
+                                    }
+
+                                    def Cylinder "ft_ring_g" (
+                                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                    )
+                                    {
+                                        uniform token axis = "Z"
+                                        float3[] extent = [(-0.0175, -0.0175, -0.0045), (0.0175, 0.0175, 0.0045)]
+                                        double height = 0.009
+                                        rel material:binding = </World/Looks/Copper>
+                                        color3f[] primvars:displayColor = [(0.72, 0.45, 0.2)]
+                                        double radius = 0.0175
+                                        custom string semantic:Semantics:params:semanticData = "force_torque_sensor"
+                                        custom string semantic:Semantics:params:semanticType = "class"
+                                        quatf xformOp:orient = (1, 0, 0, 0)
+                                        double3 xformOp:translate = (0, 0, -0.058)
+                                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+                                    }
+
+                                    def Cylinder "flange_g" (
+                                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                    )
+                                    {
+                                        uniform token axis = "Z"
+                                        float3[] extent = [(-0.0165, -0.0165, -0.004), (0.0165, 0.0165, 0.004)]
+                                        double height = 0.008
+                                        rel material:binding = </World/Looks/Steel>
+                                        color3f[] primvars:displayColor = [(0.62, 0.64, 0.68)]
+                                        double radius = 0.0165
+                                        custom string semantic:Semantics:params:semanticData = "tool_flange"
+                                        custom string semantic:Semantics:params:semanticType = "class"
+                                        quatf xformOp:orient = (1, 0, 0, 0)
+                                        double3 xformOp:translate = (0, 0, -0.05)
+                                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+                                    }
+
+                                    def Cube "grip_body_g" (
+                                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                    )
+                                    {
+                                        float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                                        rel material:binding = </World/Looks/Carbon>
+                                        color3f[] primvars:displayColor = [(0.14, 0.15, 0.17)]
+                                        custom string semantic:Semantics:params:semanticData = "gripper_body"
+                                        custom string semantic:Semantics:params:semanticType = "class"
+                                        double size = 1
+                                        quatf xformOp:orient = (1, 0, 0, 0)
+                                        float3 xformOp:scale = (0.072, 0.028, 0.026)
+                                        double3 xformOp:translate = (0, 0, -0.037)
+                                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                    }
+
+                                    def Cube "grip_rail_g" (
+                                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                    )
+                                    {
+                                        float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                                        rel material:binding = </World/Looks/Steel>
+                                        color3f[] primvars:displayColor = [(0.62, 0.64, 0.68)]
+                                        custom string semantic:Semantics:params:semanticData = "gripper_body"
+                                        custom string semantic:Semantics:params:semanticType = "class"
+                                        double size = 1
+                                        quatf xformOp:orient = (1, 0, 0, 0)
+                                        float3 xformOp:scale = (0.076, 0.009, 0.007)
+                                        double3 xformOp:translate = (0, 0, -0.023)
+                                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                    }
+                                }
+                            }
+
+                            def Sphere "wrist_pitch_g" (
+                                prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                            )
+                            {
+                                float3[] extent = [(-0.0165, -0.0165, -0.0165), (0.0165, 0.0165, 0.0165)]
+                                rel material:binding = </World/Looks/Steel>
+                                color3f[] primvars:displayColor = [(0.62, 0.64, 0.68)]
+                                double radius = 0.0165
+                                custom string semantic:Semantics:params:semanticData = "robot_link"
+                                custom string semantic:Semantics:params:semanticType = "class"
+                                quatf xformOp:orient = (1, 0, 0, 0)
+                                double3 xformOp:translate = (0, 0, 0.018)
+                                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+                            }
+                        }
+
+                        def Cylinder "wrist_roll_g" (
+                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                        )
+                        {
+                            uniform token axis = "Z"
+                            float3[] extent = [(-0.0155, -0.0155, -0.01), (0.0155, 0.0155, 0.01)]
+                            double height = 0.02
+                            rel material:binding = </World/Looks/Steel>
+                            color3f[] primvars:displayColor = [(0.62, 0.64, 0.68)]
+                            double radius = 0.0155
+                            custom string semantic:Semantics:params:semanticData = "robot_link"
+                            custom string semantic:Semantics:params:semanticType = "class"
+                            quatf xformOp:orient = (1, 0, 0, 0)
+                            double3 xformOp:translate = (0, 0, 0.008)
+                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+                        }
+                    }
+
+                    def Sphere "elbow_g" (
+                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                    )
+                    {
+                        float3[] extent = [(-0.021, -0.021, -0.021), (0.021, 0.021, 0.021)]
+                        rel material:binding = </World/Looks/Steel>
+                        color3f[] primvars:displayColor = [(0.62, 0.64, 0.68)]
+                        double radius = 0.021
+                        custom string semantic:Semantics:params:semanticData = "robot_link"
+                        custom string semantic:Semantics:params:semanticType = "class"
+                        quatf xformOp:orient = (1, 0, 0, 0)
+                        double3 xformOp:translate = (0, 0, 0)
+                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+                    }
+
+                    def Capsule "forearm_g" (
+                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                    )
+                    {
+                        uniform token axis = "Z"
+                        float3[] extent = [(-0.0145, -0.0145, -0.054), (0.0145, 0.0145, 0.054)]
+                        double height = 0.079
+                        rel material:binding = </World/Looks/Steel>
+                        color3f[] primvars:displayColor = [(0.62, 0.64, 0.68)]
+                        double radius = 0.0145
+                        custom string semantic:Semantics:params:semanticData = "robot_link"
+                        custom string semantic:Semantics:params:semanticType = "class"
+                        quatf xformOp:orient = (6.123234e-17, 1, 0, 0)
+                        double3 xformOp:translate = (0, 0, 0.050499999999999996)
+                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+                    }
+                }
+
+                def Sphere "shoulder_g" (
+                    prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.024, -0.024, -0.024), (0.024, 0.024, 0.024)]
+                    rel material:binding = </World/Looks/Steel>
+                    color3f[] primvars:displayColor = [(0.62, 0.64, 0.68)]
+                    double radius = 0.024
+                    custom string semantic:Semantics:params:semanticData = "robot_link"
+                    custom string semantic:Semantics:params:semanticType = "class"
+                    quatf xformOp:orient = (1, 0, 0, 0)
+                    double3 xformOp:translate = (0, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+                }
+
+                def Capsule "upper_arm_g" (
+                    prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                )
+                {
+                    uniform token axis = "Z"
+                    float3[] extent = [(-0.0165, -0.0165, -0.0575), (0.0165, 0.0165, 0.0575)]
+                    double height = 0.082
+                    rel material:binding = </World/Looks/Steel>
+                    color3f[] primvars:displayColor = [(0.62, 0.64, 0.68)]
+                    double radius = 0.0165
+                    custom string semantic:Semantics:params:semanticData = "robot_link"
+                    custom string semantic:Semantics:params:semanticType = "class"
+                    quatf xformOp:orient = (6.123234e-17, 1, 0, 0)
+                    double3 xformOp:translate = (0, 0, 0.053)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+                }
+            }
+
+            def Cylinder "base_g" (
+                prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "Z"
+                float3[] extent = [(-0.028, -0.028, -0.02), (0.028, 0.028, 0.02)]
+                double height = 0.04
+                rel material:binding = </World/Looks/Steel>
+                color3f[] primvars:displayColor = [(0.3, 0.31, 0.34)]
+                double radius = 0.028
+                custom string semantic:Semantics:params:semanticData = "robot_base"
+                custom string semantic:Semantics:params:semanticType = "class"
+                quatf xformOp:orient = (1, 0, 0, 0)
+                double3 xformOp:translate = (0, 0, 0.02)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+
+        def Cylinder "pedestal_g" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.032, -0.032, -0.025), (0.032, 0.032, 0.025)]
+            double height = 0.05
+            rel material:binding = </World/Looks/Carbon>
+            color3f[] primvars:displayColor = [(0.26, 0.27, 0.3)]
+            double radius = 0.032
+            custom string semantic:Semantics:params:semanticData = "robot_base"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:translate = (0, 0, 0.025)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+    }
+
+    def Xform "cell" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:mass = 0.045
+        quatf xformOp:orient = (0.6903312, 0.6903312, -0.1531104, -0.1531104)
+        double3 xformOp:translate = (0.15, -0.075, 0.0135)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+        def Cylinder "cell_g" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.012, -0.012, -0.027), (0.012, 0.012, 0.027)]
+            double height = 0.054
+            rel material:binding = </World/Looks/CellGold>
+            color3f[] primvars:displayColor = [(0.8, 0.72, 0.22)]
+            double radius = 0.012
+            custom string semantic:Semantics:params:semanticData = "battery_cell"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+    }
+
+    def Xform "charger_mount" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:mass = 0.01604468
+        quatf xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:translate = (0.1, 0.1402, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+        def Capsule "charger_stand" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0065, -0.0065, -0.02735), (0.0065, 0.0065, 0.02735)]
+            double height = 0.0417
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0065
+            custom string semantic:Semantics:params:semanticData = "charger_dock"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (6.123234e-17, 1, 0, 0)
+            double3 xformOp:translate = (0, 0, 0.02085)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+    }
+
+    def Xform "charger" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:mass = 0.5037696
+        quatf xformOp:orient = (0.976264, -0.216584, 0, 0)
+        double3 xformOp:translate = (0.1, 0.100149, 0.061748)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+        def Cube "charger_panel" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            custom string semantic:Semantics:params:semanticData = "charger_dock"
+            custom string semantic:Semantics:params:semanticType = "class"
+            double size = 1
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (0.096, 0.104, 0.016)
+            double3 xformOp:translate = (0, 0, -0.012)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def Cube "charger_floor" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            custom string semantic:Semantics:params:semanticData = "charger_dock"
+            custom string semantic:Semantics:params:semanticType = "class"
+            double size = 1
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (0.06, 0.064, 0.006)
+            double3 xformOp:translate = (0, 0, -0.003)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def Cube "charger_end_n" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            custom string semantic:Semantics:params:semanticData = "charger_dock"
+            custom string semantic:Semantics:params:semanticType = "class"
+            double size = 1
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (0.06, 0.005, 0.026)
+            double3 xformOp:translate = (0, -0.0345, 0.013)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def Cube "charger_end_p" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            custom string semantic:Semantics:params:semanticData = "charger_dock"
+            custom string semantic:Semantics:params:semanticType = "class"
+            double size = 1
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (0.06, 0.005, 0.026)
+            double3 xformOp:translate = (0, 0.0345, 0.013)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def Cube "charger_rail_n" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            custom string semantic:Semantics:params:semanticData = "charger_dock"
+            custom string semantic:Semantics:params:semanticType = "class"
+            double size = 1
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (0.005, 0.064, 0.018)
+            double3 xformOp:translate = (-0.0325, 0, 0.009)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def Cube "charger_rail_p" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            custom string semantic:Semantics:params:semanticData = "charger_dock"
+            custom string semantic:Semantics:params:semanticType = "class"
+            double size = 1
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (0.005, 0.064, 0.018)
+            double3 xformOp:translate = (0.0325, 0, 0.009)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+    }
+
+    def Xform "valve_mount" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:mass = 0.072703995
+        quatf xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:translate = (0.2, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+        def Capsule "valve_post" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.008, -0.008, -0.078), (0.008, 0.008, 0.078)]
+            double height = 0.14
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.008
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (6.123234e-17, 1, 0, 0)
+            double3 xformOp:translate = (0, 0, 0.07)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+    }
+
+    def Xform "valve" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:mass = 0.08840498
+        quatf xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:translate = (0.184, 0, 0.14)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+        def Cylinder "valve_hub" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0095, -0.0095, -0.007), (0.0095, 0.0095, 0.007)]
+            double height = 0.014
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0095
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.70710677, 0, 0.70710677, 0)
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_0" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013522975), (0.0055, 0.0055, 0.013522975)]
+            double height = 0.016045949644692272
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.13043033, -0.99145746, 0, 0)
+            double3 xformOp:translate = (0, 0.028925, 0.00775)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_1" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013525662), (0.0055, 0.0055, 0.013525662)]
+            double height = 0.016051323932934628
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.38268343, -0.9238795, 0, 0)
+            double3 xformOp:translate = (0, 0.021175, 0.021175)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_2" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013522975), (0.0055, 0.0055, 0.013522975)]
+            double height = 0.01604594964469227
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.60883814, -0.7932945, 0, 0)
+            double3 xformOp:translate = (0, 0.00775, 0.028925)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_3" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013522975), (0.0055, 0.0055, 0.013522975)]
+            double height = 0.01604594964469227
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.7932945, -0.60883814, 0, 0)
+            double3 xformOp:translate = (0, -0.00775, 0.028925)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_4" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013525662), (0.0055, 0.0055, 0.013525662)]
+            double height = 0.016051323932934628
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.9238795, -0.38268343, 0, 0)
+            double3 xformOp:translate = (0, -0.021175, 0.021175)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_5" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013522975), (0.0055, 0.0055, 0.013522975)]
+            double height = 0.016045949644692272
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.99145746, -0.13043033, 0, 0)
+            double3 xformOp:translate = (0, -0.028925, 0.00775)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_6" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013522975), (0.0055, 0.0055, 0.013522975)]
+            double height = 0.016045949644692272
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.99145746, 0.13043033, 0, -0)
+            double3 xformOp:translate = (0, -0.028925, -0.00775)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_7" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013525662), (0.0055, 0.0055, 0.013525662)]
+            double height = 0.016051323932934628
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.9238795, 0.38268343, 0, -0)
+            double3 xformOp:translate = (0, -0.021175, -0.021175)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_8" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013522975), (0.0055, 0.0055, 0.013522975)]
+            double height = 0.01604594964469227
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.7932945, 0.60883814, 0, -0)
+            double3 xformOp:translate = (0, -0.00775, -0.028925)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_9" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013522975), (0.0055, 0.0055, 0.013522975)]
+            double height = 0.01604594964469227
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.60883814, 0.7932945, 0, -0)
+            double3 xformOp:translate = (0, 0.00775, -0.028925)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_10" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013525662), (0.0055, 0.0055, 0.013525662)]
+            double height = 0.016051323932934628
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.38268343, 0.9238795, 0, -0)
+            double3 xformOp:translate = (0, 0.021175, -0.021175)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_rim_11" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0055, -0.0055, -0.013522975), (0.0055, 0.0055, 0.013522975)]
+            double height = 0.016045949644692272
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0055
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.13043033, 0.99145746, 0, -0)
+            double3 xformOp:translate = (0, 0.028925, -0.00775)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_spoke_0" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0032, -0.0032, -0.0332), (0.0032, 0.0032, 0.0332)]
+            double height = 0.06
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0032
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.70710677, 0.70710677, 0, -0)
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_spoke_1" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0032, -0.0032, -0.03319934), (0.0032, 0.0032, 0.03319934)]
+            double height = 0.05999867998547968
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0032
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.25882518, 0.9659242, 0, -0)
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Capsule "valve_spoke_2" (
+            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            uniform token axis = "Z"
+            float3[] extent = [(-0.0032, -0.0032, -0.03319934), (0.0032, 0.0032, 0.03319934)]
+            double height = 0.05999867998547968
+            rel material:binding = </World/Looks/Steel>
+            color3f[] primvars:displayColor = [(0.38, 0.4, 0.45)]
+            double radius = 0.0032
+            custom string semantic:Semantics:params:semanticData = "valve_wheel"
+            custom string semantic:Semantics:params:semanticType = "class"
+            quatf xformOp:orient = (0.25882518, -0.9659242, 0, 0)
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+    }
+
+    def Mesh "table" (
+        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+    )
+    {
+        float3[] extent = [(-1, -1, 0), (1, 1, 0)]
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        rel material:binding = </World/Looks/Bench>
+        point3f[] points = [(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)]
+        color3f[] primvars:displayColor = [(0.18, 0.19, 0.21)]
+        custom string semantic:Semantics:params:semanticData = "optical_bench"
+        custom string semantic:Semantics:params:semanticType = "class"
+        quatf xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:translate = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+    }
+
+    def Cube "pick_pad" (
+        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+    )
+    {
+        float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+        rel material:binding = </World/Looks/PadBlue>
+        color3f[] primvars:displayColor = [(0.2, 0.42, 0.78)]
+        custom string semantic:Semantics:params:semanticData = "locating_pad"
+        custom string semantic:Semantics:params:semanticType = "class"
+        double size = 1
+        quatf xformOp:orient = (1, 0, 0, 0)
+        float3 xformOp:scale = (0.052, 0.052, 0.002)
+        double3 xformOp:translate = (0.15, -0.075, 0.001)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+    }
+
+    def Cube "drop_pad" (
+        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+    )
+    {
+        float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+        rel material:binding = </World/Looks/PadGreen>
+        color3f[] primvars:displayColor = [(0.18, 0.62, 0.36)]
+        custom string semantic:Semantics:params:semanticData = "locating_pad"
+        custom string semantic:Semantics:params:semanticType = "class"
+        double size = 1
+        quatf xformOp:orient = (1, 0, 0, 0)
+        float3 xformOp:scale = (0.052, 0.052, 0.002)
+        double3 xformOp:translate = (0.15, 0.075, 0.001)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+    }
+
+    def Scope "Joints"
+    {
+        def PhysicsRevoluteJoint "yaw"
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </World/pedestal>
+            rel physics:body1 = </World/pedestal/base>
+            point3f physics:localPos0 = (0, 0, 0.05)
+            point3f physics:localPos1 = (0, 0, 0)
+            float physics:lowerLimit = -180
+            float physics:upperLimit = 180
+        }
+
+        def PhysicsRevoluteJoint "shoulder"
+        {
+            uniform token physics:axis = "Y"
+            rel physics:body0 = </World/pedestal/base>
+            rel physics:body1 = </World/pedestal/base/upper_arm>
+            point3f physics:localPos0 = (0, 0, 0.04)
+            point3f physics:localPos1 = (0, 0, 0)
+            float physics:lowerLimit = -120
+            float physics:upperLimit = 120
+        }
+
+        def PhysicsRevoluteJoint "elbow"
+        {
+            uniform token physics:axis = "Y"
+            rel physics:body0 = </World/pedestal/base/upper_arm>
+            rel physics:body1 = </World/pedestal/base/upper_arm/forearm>
+            point3f physics:localPos0 = (0, 0, 0.1)
+            point3f physics:localPos1 = (0, 0, 0)
+            float physics:lowerLimit = -150
+            float physics:upperLimit = 150
+        }
+
+        def PhysicsRevoluteJoint "wrist_roll"
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </World/pedestal/base/upper_arm/forearm>
+            rel physics:body1 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link>
+            point3f physics:localPos0 = (0, 0, 0.1)
+            point3f physics:localPos1 = (0, 0, 0)
+            float physics:lowerLimit = -180
+            float physics:upperLimit = 180
+        }
+
+        def PhysicsRevoluteJoint "wrist_pitch"
+        {
+            uniform token physics:axis = "Y"
+            rel physics:body0 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link>
+            rel physics:body1 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link>
+            point3f physics:localPos0 = (0, 0, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            float physics:lowerLimit = -150
+            float physics:upperLimit = 150
+        }
+
+        def PhysicsRevoluteJoint "tool_roll"
+        {
+            uniform token physics:axis = "Z"
+            rel physics:body0 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link>
+            rel physics:body1 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link>
+            point3f physics:localPos0 = (0, 0, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            float physics:lowerLimit = -180
+            float physics:upperLimit = 180
+        }
+
+        def PhysicsPrismaticJoint "finger_l"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link/hand>
+            rel physics:body1 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link/hand/finger_l>
+            point3f physics:localPos0 = (-0.009, 0, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            float physics:lowerLimit = -0.022
+            float physics:upperLimit = 0
+        }
+
+        def PhysicsPrismaticJoint "finger_r"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link/hand>
+            rel physics:body1 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link/hand/finger_r>
+            point3f physics:localPos0 = (0.009, 0, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            float physics:lowerLimit = 0
+            float physics:upperLimit = 0.022
+        }
+
+        def PhysicsRevoluteJoint "valve_hinge"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </World>
+            rel physics:body1 = </World/valve>
+            point3f physics:localPos0 = (0.184, 0, 0.14)
+            point3f physics:localPos1 = (0, 0, 0)
+        }
+    }
+}
+
