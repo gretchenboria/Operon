@@ -147,13 +147,33 @@ def fk6_chain(q_rad, np):
     }
 
 
-def configure_rtx_render_settings() -> None:
-    """Configure Omniverse Kit carb.settings for high-contrast RTX RayTracedLighting on Shadow PC."""
+def configure_rtx_render_settings(mode: str = "RayTracedLighting", subframes: int = 32) -> None:
+    """
+    Configure Omniverse Kit carb.settings for the chosen RTX render mode.
+
+    Two genuinely different paths, not a cosmetic switch:
+
+      RayTracedLighting - real-time ray tracing. Interactive, ~20 fps, what
+          the live studio overlay uses.
+      PathTracing       - progressive path tracing with `subframes`
+          accumulation steps per frame. Converged GI, soft shadows and
+          reflections; far too slow to stream, used for the synthetic
+          dataset that gets kept.
+
+    The previous version of this file only ever requested RayTracedLighting
+    and never exposed path tracing at all.
+    """
     try:
         import carb.settings  # type: ignore
 
         settings = carb.settings.get_settings()
-        settings.set("/rtx/rendermode", "RayTracedLighting")
+        settings.set("/rtx/rendermode", mode)
+        if mode == "PathTracing":
+            settings.set("/rtx/pathtracing/spp", 1)
+            settings.set("/rtx/pathtracing/totalSpp", int(subframes))
+            settings.set("/rtx/pathtracing/maxBounces", 6)
+            settings.set("/rtx/pathtracing/maxSpecularAndTransmissionBounces", 8)
+            settings.set("/rtx/pathtracing/clampSpp", int(subframes))
         settings.set("/rtx/post/dlss/execMode", 1)  # 0=Performance, 1=Balanced, 2=Quality
         settings.set("/rtx/reflections/enabled", True)
         settings.set("/rtx/reflections/maxRoughness", 0.65)
@@ -164,9 +184,95 @@ def configure_rtx_render_settings() -> None:
         settings.set("/rtx/directLighting/sampledLighting/enabled", True)
         settings.set("/rtx/post/tonemap/op", 6)  # ACES Filmic tonemapping
         settings.set("/rtx/post/tonemap/cameraExposure", 0.15)
-        print("[shadow-rtx] Configured carb.settings for RTX RayTracedLighting + DLSS + Reflections + GI + AO.")
+        print(f"[shadow-rtx] carb.settings configured: /rtx/rendermode={mode}"
+              + (f" totalSpp={subframes}" if mode == "PathTracing" else ""))
     except Exception as exc:
         print(f"[shadow-rtx] Warning: carb.settings configuration skipped ({exc}).")
+
+
+
+def find_site(stage, site_name: str):
+    """
+    Locate a MuJoCo site in the generated stage by its original name.
+
+    sim/mjcf_to_usd.py tags each exported site with `operon:siteName`, so the
+    bridge can resolve e.g. "forearm_imu" without hardcoding a prim path that
+    silently breaks whenever the body hierarchy changes.
+    """
+    for prim in stage.Traverse():
+        attr = prim.GetAttribute("operon:siteName")
+        if attr.IsValid() and attr.Get() == site_name:
+            return str(prim.GetPath())
+    return None
+
+
+def promote_semantic_attributes(stage) -> int:
+    """
+    Turn the portable semantic attributes into a real Kit Semantics schema.
+
+    mjcf_to_usd.py runs on stock `usd-core`, which has no Kit `Semantics`
+    type, so it writes the same information as plain custom attributes. Inside
+    Kit we promote them, because the Replicator semantic/instance
+    segmentation annotators only see the real schema - without this the
+    segmentation AOVs come back empty and look like a renderer bug.
+    """
+    promoted = 0
+    for prim in stage.Traverse():
+        attr = prim.GetAttribute("semantic:Semantics:params:semanticData")
+        if not attr.IsValid():
+            continue
+        cls = attr.Get()
+        if not cls or cls == "unlabeled":
+            continue
+        apply_semantic_label(prim, cls)
+        promoted += 1
+    print(f"[shadow-rtx] Promoted {promoted} semantic labels to the Kit Semantics schema.")
+    return promoted
+
+
+def add_scene_lighting(stage) -> None:
+    """
+    Author the lighting rig.
+
+    The generated stage is geometry + physics only: mjcf_to_usd.py
+    deliberately does not invent lights, because MJCF has no lighting model
+    worth translating. Ray tracing needs real lights, so they are authored
+    here where the renderer actually is.
+    """
+    from pxr import Gf, Sdf, UsdGeom, UsdLux  # type: ignore
+
+    rig = "/World/Lighting"
+    UsdGeom.Scope.Define(stage, rig)
+
+    dome = UsdLux.DomeLight.Define(stage, f"{rig}/Dome")
+    dome.CreateIntensityAttr(320.0)
+    dome.CreateColorAttr(Gf.Vec3f(0.42, 0.47, 0.60))
+
+    key = UsdLux.DistantLight.Define(stage, f"{rig}/Key")
+    key.CreateIntensityAttr(2600.0)
+    key.CreateAngleAttr(1.2)
+    key.CreateColorAttr(Gf.Vec3f(1.0, 0.97, 0.92))
+    UsdGeom.Xformable(key.GetPrim()).AddRotateXYZOp().Set(Gf.Vec3f(-38.0, 0.0, 35.0))
+
+    fill = UsdLux.RectLight.Define(stage, f"{rig}/Fill")
+    fill.CreateIntensityAttr(5200.0)
+    fill.CreateWidthAttr(0.45)
+    fill.CreateHeightAttr(0.30)
+    fill.CreateColorAttr(Gf.Vec3f(0.65, 0.75, 1.0))
+    fx = UsdGeom.Xformable(fill.GetPrim())
+    fx.AddTranslateOp().Set(Gf.Vec3d(-0.25, 0.30, 0.42))
+    fx.AddRotateXYZOp().Set(Gf.Vec3f(-55.0, 0.0, -130.0))
+
+    rim = UsdLux.RectLight.Define(stage, f"{rig}/Rim")
+    rim.CreateIntensityAttr(3400.0)
+    rim.CreateWidthAttr(0.30)
+    rim.CreateHeightAttr(0.20)
+    rim.CreateColorAttr(Gf.Vec3f(1.0, 0.86, 0.72))
+    rx = UsdGeom.Xformable(rim.GetPrim())
+    rx.AddTranslateOp().Set(Gf.Vec3d(0.42, -0.26, 0.30))
+    rx.AddRotateXYZOp().Set(Gf.Vec3f(-62.0, 0.0, 52.0))
+
+    print("[shadow-rtx] Authored 3-point lighting rig + dome.")
 
 
 def apply_semantic_label(prim, class_name: str) -> None:
@@ -452,7 +558,7 @@ def build_default_operon_stage(stage, usd_path: str | None = None):
     UsdPhysics.CollisionAPI.Apply(bench.GetPrim())
 
     if usd_path and Path(usd_path).exists():
-        from omni.isaac.core.utils.stage import add_reference_to_stage
+        from isaacsim.core.utils.stage import add_reference_to_stage  # Isaac Sim 6.x
 
         add_reference_to_stage(usd_path=str(Path(usd_path).resolve()), prim_path="/World/AbelArm")
 
@@ -695,261 +801,104 @@ def colorize_aov_buffer(aov: str, data, np):
     return None
 
 
-def render_local_sim_aov(state: dict, width: int, height: int, np, Image, ImageDraw):
-    """Software 3D perspective renderer on macOS/CPU when Isaac Sim (`isaacsim`) is not installed locally."""
-    aov = state.get("aov", "rtx")
-    light_mult = float(state.get("light", 2.8))
-    rough = float(state.get("rough", 0.22))
-    q4 = np.array(state.get("q4", [0.0, 0.35, 0.65, 0.0]), dtype=float)
-    q6 = np.array(state.get("q6", [0.0, 0.35, 0.65, 0.0, 0.4, 0.0]), dtype=float)
-    fk_left = fk6_chain(q4, np)
-    fk_right = fk6_chain(q6, np)
-
-    # Background gradient
-    y_grad = np.linspace(0.0, 1.0, height, dtype=np.float32)[:, None]
-    if aov == "depth":
-        bg = np.zeros((height, width, 3), dtype=np.uint8) + np.uint8(28)
-    elif aov == "normal":
-        bg = np.full((height, width, 3), (128, 128, 255), dtype=np.uint8)
-    elif aov in ("semantic", "instance"):
-        bg = np.full((height, width, 3), (16, 20, 30), dtype=np.uint8)
-    else:
-        r_ch = np.clip((14 + (1.0 - y_grad) * 10 * (light_mult / 2.8)), 8, 48).astype(np.uint8)
-        g_ch = np.clip((18 + (1.0 - y_grad) * 14 * (light_mult / 2.8)), 10, 56).astype(np.uint8)
-        b_ch = np.clip((30 + (1.0 - y_grad) * 22 * (light_mult / 2.8)), 16, 78).astype(np.uint8)
-        bg = np.broadcast_to(np.stack([r_ch, g_ch, b_ch], axis=-1), (height, width, 3)).copy()
-
-    im = Image.fromarray(bg)
-    draw = ImageDraw.Draw(im)
-
-    # Simple 3D camera projection: cam at (0.46, 0.0, 0.28) looking at (0.08, 0.0, 0.08)
-    cam_pos = np.array([0.46, 0.0, 0.27], dtype=float)
-    target = np.array([0.08, 0.0, 0.08], dtype=float)
-    fwd = target - cam_pos
-    fwd /= np.linalg.norm(fwd)
-    right = np.cross(fwd, np.array([0.0, 0.0, 1.0]))
-    right /= np.linalg.norm(right)
-    up = np.cross(right, fwd)
-    focal = width * 1.05
-
-    def proj(pt3):
-        v = np.asarray(pt3, dtype=float) - cam_pos
-        z = float(np.dot(v, fwd))
-        if z <= 0.05:
-            z = 0.05
-        x = float(np.dot(v, right)) / z * focal + width * 0.5
-        y = -float(np.dot(v, up)) / z * focal + height * 0.54
-        return (x, y, z)
-
-    # Draw workbench optical grid
-    grid_col = (44, 56, 84) if aov == "rtx" else (70, 80, 100)
-    for gx in np.linspace(-0.10, 0.26, 9):
-        p0 = proj((gx, -0.26, 0.0))
-        p1 = proj((gx, 0.26, 0.0))
-        draw.line([(p0[0], p0[1]), (p1[0], p1[1])], fill=grid_col, width=1)
-    for gy in np.linspace(-0.26, 0.26, 11):
-        p0 = proj((-0.10, gy, 0.0))
-        p1 = proj((0.26, gy, 0.0))
-        draw.line([(p0[0], p0[1]), (p1[0], p1[1])], fill=grid_col, width=1)
-
-    # Draw both arms
-    arms = [
-        (fk_left, -0.14, (157, 114, 255), (185, 154, 255)),
-        (fk_right, 0.14, (59, 130, 246), (96, 165, 250)),
-    ]
-    for fk, y_off, c_main, c_hi in arms:
-        pts = [p + np.array([0.0, y_off, 0.0]) for p in fk["pts"]]
-        for j in range(4):
-            pa = proj(pts[j])
-            pb = proj(pts[j + 1])
-            if aov == "depth":
-                d_u8 = int(np.clip((1.0 - pa[2]) * 240, 60, 245))
-                col = (d_u8, int(d_u8 * 0.9), min(255, int(d_u8 * 1.1)))
-            elif aov == "normal":
-                col = (140, 210, 245) if y_off > 0 else (220, 130, 240)
-            else:
-                spec_boost = int((1.0 - rough) * 35)
-                col = tuple(min(255, c + spec_boost) for c in c_main)
-            w_px = max(6, int((22 - j * 3) / max(0.25, pa[2] * 1.8)))
-            draw.line([(pa[0], pa[1]), (pb[0], pb[1])], fill=col, width=w_px)
-            r_j = w_px * 0.65
-            draw.ellipse([pa[0] - r_j, pa[1] - r_j, pa[0] + r_j, pa[1] + r_j], fill=c_hi)
-
-        tip_p = proj(fk["tip"] + np.array([0.0, y_off, 0.0]))
-        jaw_r = 9 if state.get("closed") else 14
-        draw.ellipse(
-            [tip_p[0] - jaw_r, tip_p[1] - jaw_r, tip_p[0] + jaw_r, tip_p[1] + jaw_r],
-            outline=c_hi,
-            width=3,
-        )
-
-    # HUD watermark badge so user sees live Python Bridge status
-    draw.rectangle([14, 14, 415, 42], fill=(12, 16, 26))
-    draw.text(
-        (24, 21),
-        f"LIVE PYTHON BRIDGE ({aov.upper()}) | Light {light_mult:.1f}x | Rough {rough:.2f}",
-        fill=(96, 165, 250),
-    )
-    return np.asarray(im, dtype=np.uint8)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Shadow PC Live Omniverse RTX + PhysX Bridge for Operon Studio")
     parser.add_argument("--server", type=str, default="wss://operon-421717890494.us-central1.run.app",
                         help="Operon Cloud Run WebSocket base URL (wss://... or ws://localhost:8080)")
     parser.add_argument("--room", type=str, default="OPERON", help="Operon Studio room code (default: OPERON)")
-    parser.add_argument("--usd", type=str, default=None, help="Optional path to custom robot USD/URDF stage")
+    parser.add_argument("--usd", type=str, default=None,
+                        help="Path to the USD stage (default: assets/operon_arm.usda, "
+                             "generated and verified by sim/mjcf_to_usd.py)")
     parser.add_argument("--width", type=int, default=960, help="RTX render width (default: 960)")
     parser.add_argument("--height", type=int, default=600, help="RTX render height (default: 600)")
     parser.add_argument("--fps", type=float, default=20.0, help="Target JPEG stream frame rate (default: 20)")
     parser.add_argument("--jpeg-quality", type=int, default=78, help="JPEG quality 40..95 (default: 78)")
     parser.add_argument("--headless", action="store_true", help="Run Isaac Sim headless without desktop GUI window")
-    parser.add_argument("--local-sim", action="store_true",
-                        help="Run lightweight local Mac/CPU bridge without requiring NVIDIA Isaac Sim")
+    parser.add_argument("--render-mode", choices=["rt", "path"], default="rt",
+                        help="rt = RayTracedLighting for the live 20 fps overlay; "
+                             "path = PathTracing for offline synthetic-data capture")
+    parser.add_argument("--rt-subframes", type=int, default=32,
+                        help="Accumulation subframes per frame in --render-mode path")
+    parser.add_argument("--idle-exit-minutes", type=float, default=0.0,
+                        help="Exit when no studio deck has been in the room for this long. "
+                             "0 disables. REQUIRED on a cloud GPU: SkyPilot measures idleness "
+                             "as 'no running job', so a bridge that never exits means a "
+                             "cluster that is never torn down.")
     args = parser.parse_args()
 
     ensure_websocket_client()
 
-    has_isaac = False
-    sim_app = None
-    if not args.local_sim:
-        try:
-            from isaacsim import SimulationApp  # type: ignore
+    # No fallback renderer. The previous --local-sim path drew a Pillow
+    # stick figure and labelled it "LIVE PYTHON BRIDGE", which is exactly the
+    # failure you do not want to discover mid-demo: it looks like it worked.
+    # If Isaac is not here, say so and stop.
+    try:
+        from isaacsim import SimulationApp  # type: ignore
+    except ImportError as exc:
+        print("[shadow-rtx] FATAL: 'isaacsim' is not importable.", file=sys.stderr)
+        print("  This bridge requires Isaac Sim 6.x and an RTX GPU.", file=sys.stderr)
+        print("  Run it inside the Isaac container:", file=sys.stderr)
+        print("    ./python.sh /operon/sim/shadow_rtx_bridge.py ...", file=sys.stderr)
+        print(f"  ({exc})", file=sys.stderr)
+        raise SystemExit(2)
 
-            sim_app = SimulationApp({
-                "headless": args.headless,
-                "renderer": "RayTracedLighting",
-                "width": args.width,
-                "height": args.height,
-                "anti_aliasing": 3,
-            })
-            has_isaac = True
-        except ImportError:
-            print("[shadow-rtx] 'isaacsim' not found on this machine -> auto-activating --local-sim mode ($0 Mac preview)!")
-            args.local_sim = True
+    renderer = "PathTracing" if args.render_mode == "path" else "RayTracedLighting"
+    sim_app = SimulationApp({
+        "headless": args.headless,
+        "renderer": renderer,
+        "width": args.width,
+        "height": args.height,
+        "anti_aliasing": 3,
+    })
+    print(f"[shadow-rtx] Isaac Sim up, renderer={renderer}")
 
     import numpy as np
     from PIL import Image, ImageDraw
     import websockets
 
-    if args.local_sim or not has_isaac:
-        state = {
-            "q4": [0.0, 0.35, 0.65, 0.0],
-            "q6": [0.0, 0.35, 0.65, 0.0, 0.4, 0.0],
-            "closed": False,
-            "aov": "rtx",
-            "light": 2.8,
-            "angle": 35.0,
-            "rough": 0.22,
-        }
-        prev_p = None
-        prev_v = np.zeros(3)
-        prev_R = None
-        ws_base = args.server.rstrip("/").replace("https://", "wss://").replace("http://", "ws://")
-        ws_url = f"{ws_base}/api/room/{args.room.upper()}/ws?role=isaac&id=local-mac-bridge"
-
-        async def local_bridge_loop() -> None:
-            nonlocal prev_p, prev_v, prev_R
-            min_interval = 1.0 / max(5.0, min(30.0, args.fps))
-            while True:
-                try:
-                    print(f"[local-sim] Connecting to Operon Relay: {ws_url}")
-                    async with websockets.connect(ws_url, max_size=512 * 1024, ping_interval=20) as ws:
-                        print("[local-sim] Connected! Streaming live frames + kinematic IMU to Operon Studio...")
-
-                        async def recv_loop() -> None:
-                            async for raw in ws:
-                                try:
-                                    msg = json.loads(raw)
-                                    if msg.get("t") == "isaac_cmd":
-                                        if isinstance(msg.get("q4"), list) and len(msg["q4"]) >= 4:
-                                            state["q4"] = [float(x) for x in msg["q4"][:4]]
-                                        if isinstance(msg.get("q6"), list) and len(msg["q6"]) >= 6:
-                                            state["q6"] = [float(x) for x in msg["q6"][:6]]
-                                        if "closed" in msg:
-                                            state["closed"] = bool(msg["closed"])
-                                        if msg.get("aov") in ("rtx", "depth", "normal", "semantic", "instance"):
-                                            state["aov"] = msg["aov"]
-                                        if "light" in msg and msg["light"] is not None:
-                                            state["light"] = float(msg["light"])
-                                        if "angle" in msg and msg["angle"] is not None:
-                                            state["angle"] = float(msg["angle"])
-                                        if "rough" in msg and msg["rough"] is not None:
-                                            state["rough"] = float(msg["rough"])
-                                except Exception:
-                                    pass
-
-                        recv_task = asyncio.create_task(recv_loop())
-                        last_send = 0.0
-                        dt = min_interval
-                        try:
-                            while True:
-                                now = time.perf_counter()
-                                if now - last_send >= min_interval:
-                                    dt = now - last_send if last_send > 0 else min_interval
-                                    last_send = now
-                                    q6_arr = np.array(state["q6"], dtype=float)
-                                    p_site, R_site = forearm_fk_rad(q6_arr, np)
-                                    if prev_p is None:
-                                        prev_p = p_site.copy()
-                                        prev_R = R_site.copy()
-                                    vel = (p_site - prev_p) / max(1e-3, dt)
-                                    acc_world = (vel - prev_v) / max(1e-3, dt)
-                                    a_proper = R_site.T @ (acc_world + np.array([0.0, 0.0, G0]))
-                                    Rdot = (R_site - prev_R) / max(1e-3, dt)
-                                    S = 0.5 * (R_site.T @ Rdot - (R_site.T @ Rdot).T)
-                                    gyro_body = np.array([S[2, 1], S[0, 2], S[1, 0]])
-                                    prev_p, prev_v, prev_R = p_site.copy(), vel, R_site.copy()
-
-                                    rgb = render_local_sim_aov(state, args.width, args.height, np, Image, ImageDraw)
-                                    im = Image.fromarray(rgb)
-                                    bio = io.BytesIO()
-                                    im.save(bio, format="JPEG", quality=args.jpeg_quality)
-                                    jpg_b64 = base64.b64encode(bio.getvalue()).decode("ascii")
-                                    payload = {
-                                        "t": "isaac_frame",
-                                        "aov": state["aov"],
-                                        "jpg": jpg_b64,
-                                        "fps": round(1.0 / max(1e-3, dt), 1),
-                                        "imu": {
-                                            "ax": round(float(a_proper[0]), 4),
-                                            "ay": round(float(a_proper[1]), 4),
-                                            "az": round(float(a_proper[2]), 4),
-                                            "gx": round(float(gyro_body[0]), 4),
-                                            "gy": round(float(gyro_body[1]), 4),
-                                            "gz": round(float(gyro_body[2]), 4),
-                                        },
-                                    }
-                                    await ws.send(json.dumps(payload))
-                                await asyncio.sleep(0.01)
-                        finally:
-                            recv_task.cancel()
-                except Exception as exc:
-                    print(f"[local-sim] Reconnecting in 2s ({exc})...")
-                    await asyncio.sleep(2.0)
-
-        asyncio.run(local_bridge_loop())
-        return
 
     import omni.replicator.core as rep  # type: ignore
     import omni.usd  # type: ignore
     from pxr import Gf, UsdGeom
 
-    try:
-        from isaacsim.core.api import World  # type: ignore
-        from isaacsim.sensors.physics import IMUSensor  # type: ignore
-    except ImportError:
-        from omni.isaac.core import World  # type: ignore
-        from omni.isaac.sensor import IMUSensor  # type: ignore
+    # Isaac Sim 6.x namespaces. The legacy omni.isaac.* aliases are gone;
+    # importing them here would mask a genuinely wrong container image.
+    from isaacsim.core.api import World  # type: ignore
+    from isaacsim.sensors.physics import IMUSensor  # type: ignore
 
-    configure_rtx_render_settings()
+    configure_rtx_render_settings(
+        mode="PathTracing" if args.render_mode == "path" else "RayTracedLighting",
+        subframes=args.rt_subframes,
+    )
 
     world = World(stage_units_in_meters=1.0, physics_dt=1.0 / 120.0, rendering_dt=1.0 / 60.0)
-    stage = omni.usd.get_context().get_stage()
-    build_default_operon_stage(stage, args.usd)
 
+    # Load the verified stage rather than building geometry procedurally.
+    # assets/operon_arm.usda is generated from the same MJCF that drives the
+    # browser physics and is checked against MuJoCo's forward kinematics to
+    # 0.000 nm (test/usd/verify_against_mujoco.py), so what gets ray-traced
+    # is provably what gets simulated.
+    usd_path = args.usd or str(Path(__file__).resolve().parent.parent / "assets" / "operon_arm.usda")
+    if not Path(usd_path).exists():
+        print(f"[shadow-rtx] FATAL: stage not found: {usd_path}", file=sys.stderr)
+        print("  Generate it with:  python sim/mjcf_to_usd.py", file=sys.stderr)
+        raise SystemExit(2)
+    print(f"[shadow-rtx] Opening stage {usd_path}")
+    omni.usd.get_context().open_stage(usd_path)
+    stage = omni.usd.get_context().get_stage()
+
+    promote_semantic_attributes(stage)
+    add_scene_lighting(stage)
+
+    # The IMU mounts on the forearm site exported by mjcf_to_usd.py, which is
+    # the same site the analytic forearmSiteFK() uses in the studio.
+    imu_prim_path = find_site(stage, "forearm_imu")
+    if imu_prim_path is None:
+        print("[shadow-rtx] FATAL: no forearm_imu site in the stage", file=sys.stderr)
+        raise SystemExit(2)
+    print(f"[shadow-rtx] IMU site: {imu_prim_path}")
     imu_sensor = IMUSensor(
-        prim_path="/World/AbelArm/forearm_link/watch_site/imu_sensor",
+        prim_path=f"{imu_prim_path}/imu_sensor",
         name="watch_imu",
         frequency=120,
         translation=np.array([0.0, 0.0, 0.0]),
@@ -985,11 +934,19 @@ def main() -> None:
     ws_base = args.server.rstrip("/").replace("https://", "wss://").replace("http://", "ws://")
     ws_url = f"{ws_base}/api/room/{args.room.upper()}/ws?role=isaac&id=shadow-rtx"
 
+    # Idle tracking. This is a COST CONTROL, not a nicety: SkyPilot measures
+    # cluster idleness as "no running job", so a bridge that streams forever
+    # keeps an L4 billing indefinitely even with autostop configured. The
+    # bridge must end its own job when nobody is watching.
+    idle_limit = max(0.0, float(args.idle_exit_minutes)) * 60.0
+    last_cmd_at = time.time()
+    idle_exit = False
+
     async def bridge_loop() -> None:
-        nonlocal prev_p, prev_v, prev_R
+        nonlocal prev_p, prev_v, prev_R, idle_exit
         min_interval = 1.0 / max(5.0, min(30.0, args.fps))
 
-        while sim_app.is_running():
+        while sim_app.is_running() and not idle_exit:
             try:
                 print(f"[shadow-rtx] Connecting to Operon Relay: {ws_url}")
                 async with websockets.connect(ws_url, max_size=512 * 1024, ping_interval=20) as ws:
@@ -1000,6 +957,8 @@ def main() -> None:
                             try:
                                 msg = json.loads(raw)
                                 if msg.get("t") == "isaac_cmd":
+                                    nonlocal last_cmd_at
+                                    last_cmd_at = time.time()
                                     if isinstance(msg.get("q4"), list) and len(msg["q4"]) >= 4:
                                         state["q4"] = [float(x) for x in msg["q4"][:4]]
                                     if isinstance(msg.get("q6"), list) and len(msg["q6"]) >= 6:
@@ -1105,6 +1064,13 @@ def main() -> None:
                                 }
                                 await ws.send(json.dumps(payload))
 
+                            if idle_limit > 0 and (time.time() - last_cmd_at) > idle_limit:
+                                mins = idle_limit / 60.0
+                                print(f"[shadow-rtx] No studio deck for {mins:.0f} min "
+                                      f"-> exiting so the GPU cluster can auto-tear-down.")
+                                idle_exit = True
+                                break
+
                             await asyncio.sleep(0.005)
                     finally:
                         recv_task.cancel()
@@ -1116,6 +1082,8 @@ def main() -> None:
         asyncio.run(bridge_loop())
     finally:
         sim_app.close()
+    if idle_exit:
+        print("[shadow-rtx] Clean idle exit. Job over; cluster autostop --down may now fire.")
 
 
 if __name__ == "__main__":

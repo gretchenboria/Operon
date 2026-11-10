@@ -87,10 +87,24 @@ Spot L4, with **auto-teardown enforced in the tooling rather than left to the op
 
 **SkyPilot config was modified.** `~/.sky/config.yaml` pointed at a remote Nebius API server with no access to this GCP project; it is now a local API server. The original is saved at `~/.sky/config.yaml.bak-operon`. SkyPilot was also reinstalled as `skypilot[gcp]==0.14.0` (the GCP extra was missing).
 
-### Still TODO — Phases 2-5
+### DONE — Phases 2 & 3 (partial): bridge ported to Isaac Sim 6.x
 
-2. **Port the bridge to Isaac Sim 6.x.** Namespaces moved: `isaacsim.core.api.World`, `isaacsim.sensors.physics.IMUSensor`, `isaacsim.replicator.writers`. Load `assets/operon_arm.usda` instead of building the arm procedurally. **Delete `--local-sim`** — once Isaac is real, a silent stick-figure fallback is a demo liability. Add `--idle-exit-minutes`.
-3. **Two render paths:** real-time RT for the live overlay; `rendermode = "PathTracing"` with `rt_subframes` and the `PtDirectIllumination` / `PtGlobalIllumination` annotators for the kept dataset. Relabel the WebGL viewport "PBR (local)" so "RTX" only lights up on a real Isaac frame.
+`sim/shadow_rtx_bridge.py` now targets 6.x only. **Not yet run against real Isaac** — it is static-checked (pyflakes clean, zero `omni.isaac.*` references) and its stage-side helpers are tested against the real asset, but the Kit-side path is unexercised until the GPU is up.
+
+- **`--local-sim` is deleted** (196 lines). It drew a Pillow stick figure and labelled it `"LIVE PYTHON BRIDGE"` — a fallback that *looks* like it worked is the worst possible failure mode mid-demo. Missing `isaacsim` is now a hard exit(2) with instructions.
+- Imports are 6.x only: `isaacsim.core.api.World`, `isaacsim.sensors.physics.IMUSensor`. The legacy fallback ladder is gone, because silently importing `omni.isaac.*` would mask a wrong container image.
+- Opens `assets/operon_arm.usda` via `omni.usd.get_context().open_stage()` instead of building geometry procedurally.
+- **`--render-mode {rt,path}`** — `rt` = `RayTracedLighting` for the live overlay, `path` = `PathTracing` with `--rt-subframes` (spp/totalSpp/maxBounces) for the kept dataset. Previously the file *only* ever requested `RayTracedLighting` and had no path-traced mode at all.
+- **`--idle-exit-minutes`** — see the cost note below.
+- New helpers, all with a reason:
+  - `find_site(stage, name)` — resolves `forearm_imu` / `tcp` via the `operon:siteName` tag rather than a hardcoded prim path that breaks when the hierarchy changes. **Verified locally against the real stage** for all four sites plus the miss case.
+  - `promote_semantic_attributes(stage)` — `mjcf_to_usd.py` runs on stock `usd-core`, which has no Kit `Semantics` type, so it writes portable custom attributes. Kit promotes them here. **Without this the Replicator segmentation AOVs come back empty and look like a renderer bug.**
+  - `add_scene_lighting(stage)` — dome + 3-point rig. The generated stage is geometry and physics only; MJCF has no lighting model worth translating, so lights are authored where the renderer actually is.
+- `mjcf_to_usd.py` now exports MuJoCo **sites** as Xforms (6 of them). Without this there is no prim for the IMU sensor to mount on.
+
+### Still TODO — Phases 3 (rest), 4, 5
+
+3. Relabel the WebGL viewport "PBR (local)" in the studio so "RTX" only lights up on a real Isaac frame, and surface the rt/path toggle next to the AOV buttons.
 4. **Replicator SDG to GCS**, not VM disk — a spot VM can vanish. Drive randomisation from the `light`/`angle`/`rough` values the studio already sends in `isaac_cmd`.
 5. **Real USD export** from `stage.Export()`, replacing `buildOpenUSD()`. Promote the semantic custom attributes authored by `mjcf_to_usd.py` to a real Kit `SemanticsAPI` on import.
 

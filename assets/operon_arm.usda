@@ -256,6 +256,14 @@ def Xform "World"
                                             double3 xformOp:translate = (0.0055, 0, 0.003)
                                             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                         }
+
+                                        def Xform "pad_l_site"
+                                        {
+                                            custom string operon:siteName = "pad_l_site"
+                                            quatd xformOp:orient = (1, 0, 0, 0)
+                                            double3 xformOp:translate = (0.0055, 0, 0.003)
+                                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+                                        }
                                     }
 
                                     def Xform "finger_r" (
@@ -313,6 +321,14 @@ def Xform "World"
                                             double3 xformOp:scale = (0.0035, 0.018, 0.022)
                                             double3 xformOp:translate = (-0.0055, 0, 0.003)
                                             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                                        }
+
+                                        def Xform "pad_r_site"
+                                        {
+                                            custom string operon:siteName = "pad_r_site"
+                                            quatd xformOp:orient = (1, 0, 0, 0)
+                                            double3 xformOp:translate = (-0.0055, 0, 0.003)
+                                            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
                                         }
                                     }
 
@@ -381,6 +397,14 @@ def Xform "World"
                                         double3 xformOp:translate = (0, 0, -0.023)
                                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                     }
+
+                                    def Xform "tcp"
+                                    {
+                                        custom string operon:siteName = "tcp"
+                                        quatd xformOp:orient = (1, 0, 0, 0)
+                                        double3 xformOp:translate = (0, 0, 0)
+                                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+                                    }
                                 }
                             }
 
@@ -447,6 +471,14 @@ def Xform "World"
                         custom string semantic:Semantics:params:semanticType = "class"
                         quatd xformOp:orient = (6.123233995736766e-17, 1, 0, 0)
                         double3 xformOp:translate = (0, 0, 0.050499999999999996)
+                        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+                    }
+
+                    def Xform "forearm_imu"
+                    {
+                        custom string operon:siteName = "forearm_imu"
+                        quatd xformOp:orient = (1, 0, 0, 0)
+                        double3 xformOp:translate = (0, 0, 0.05)
                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
                     }
                 }
@@ -677,6 +709,14 @@ def Xform "World"
             double3 xformOp:scale = (0.005, 0.064, 0.018)
             double3 xformOp:translate = (0.0325, 0, 0.009)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def Xform "charger_slot"
+        {
+            custom string operon:siteName = "charger_slot"
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:translate = (0, 0, 0.012)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
     }
 
@@ -985,6 +1025,14 @@ def Xform "World"
             custom string semantic:Semantics:params:semanticType = "class"
             quatd xformOp:orient = (0.25882517977513403, -0.9659241824876161, 0, 0)
             double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+        }
+
+        def Xform "valve_ref"
+        {
+            custom string operon:siteName = "valve_ref"
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:translate = (0, 0.031, 0)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
     }

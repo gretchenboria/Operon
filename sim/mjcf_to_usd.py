@@ -334,6 +334,19 @@ def convert(mjcf_path: Path, out_path: Path, up_axis: str = "Z") -> Usd.Stage:
         bi = int(model.geom_bodyid[gi])
         add_geom(stage, body_paths.get(bi, root), model, gi, mats)
 
+    # Sites. MuJoCo sites are massless frames, and the bridge needs them:
+    # `forearm_imu` is where the IMUSensor is mounted and `tcp` is the tool
+    # centre point. Exported as empty Xforms so Isaac can attach sensors to a
+    # real prim path rather than a hardcoded offset.
+    for si in range(model.nsite):
+        bi = int(model.site_bodyid[si])
+        nm = sanitize(mj_name(model, mujoco.mjtObj.mjOBJ_SITE, si, "site"))
+        parent = body_paths.get(bi, root)
+        sp = UsdGeom.Xform.Define(stage, f"{parent}/{nm}")
+        set_xform(sp.GetPrim(), model.site_pos[si], model.site_quat[si])
+        sp.GetPrim().CreateAttribute("operon:siteName", Sdf.ValueTypeNames.String).Set(
+            mj_name(model, mujoco.mjtObj.mjOBJ_SITE, si, "site"))
+
     # Joints
     UsdGeom.Scope.Define(stage, f"{root}/Joints")
     njoint = 0
