@@ -1,0 +1,114 @@
+# Operon live ray-traced demo: Isaac Sim 6.x on a spot NVIDIA L4.
+#
+# Launch with infra/launch.sh — do NOT `sky launch` this directly. The launch
+# script is what enforces idle auto-teardown, which is the whole point.
+#
+#   infra/launch.sh
+#   infra/status.sh
+#   infra/down.sh            # immediate teardown
+#
+# WHY L4: Isaac Sim requires RT cores, so A100/H100 are explicitly unsupported.
+# L4's 24 GB clears the 16 GB minimum, and NVIDIA's own GCP guide lists
+# nvidia-l4 + g2-standard-4. Quota on this project: NVIDIA_L4_GPUS = 1.0,
+# PREEMPTIBLE_NVIDIA_L4_GPUS = 1.0.
+
+name: operon-rtx
+
+resources:
+  infra: gcp/us-central1
+  accelerators: L4:1
+  instance_type: g2-standard-4
+  use_spot: true
+  # The Isaac Sim container is multi-GB; 200 GB leaves room for the image,
+  # the Kit shader cache and a local SDG spill directory.
+  disk_size: 200
+
+file_mounts:
+  # The verified stage. Generated and checked on CPU before any GPU spend:
+  #   sim/mjcf_to_usd.py  ->  assets/operon_arm.usda
+  #   test/usd/verify_against_mujoco.py  (0.000 nm vs MuJoCo FK)
+  /opt/operon/assets: ./assets
+  /opt/operon/sim: ./sim
+
+envs:
+  # Public relay the bridge dials OUT to. No inbound ports are opened on this
+  # VM at all, which also sidesteps Isaac's WebRTC livestream entirely —
+  # including the StreamSdkException 800b0000 headless failure reported
+  # against 6.0. Frames go as base64 JPEG over the existing role=isaac socket.
+  OPERON_SERVER: wss://operon-421717890494.us-central1.run.app
+  OPERON_ROOM: OPERON
+  ISAAC_IMAGE: nvcr.io/nvidia/isaac-sim:6.0.1
+  # Hard wall-clock cap. Belt-and-braces: even if idle detection and the
+  # bridge's own idle-exit both fail, the job ends and autostop --down fires.
+  MAX_SESSION_HOURS: "4"
+
+secrets:
+  # Required to pull from nvcr.io. Get a free key at ngc.nvidia.com, then:
+  #   export NGC_API_KEY=...
+  NGC_API_KEY: null
+
+setup: |
+  set -euo pipefail
+  echo "=== GPU visible to the host? ==="
+  nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
+
+  # SkyPilot GPU images ship the driver; we still need the container runtime.
+  if ! command -v docker >/dev/null; then
+    sudo apt-get update -qq && sudo apt-get install -y -qq docker.io
+  fi
+  if ! dpkg -l | grep -q nvidia-container-toolkit; then
+    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+      | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+    curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+      | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+      | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq nvidia-container-toolkit
+    sudo nvidia-ctk runtime configure --runtime=docker
+    sudo systemctl restart docker
+  fi
+  sudo usermod -aG docker "$USER" || true
+
+  echo "=== GPU visible INSIDE a container? (the check that actually matters) ==="
+  sudo docker run --rm --gpus all nvcr.io/nvidia/cuda:12.8.0-base-ubuntu24.04 \
+    nvidia-smi --query-gpu=name --format=csv,noheader
+
+  if [ -z "${NGC_API_KEY:-}" ]; then
+    echo "FATAL: NGC_API_KEY unset — cannot pull ${ISAAC_IMAGE} from nvcr.io." >&2
+    echo "Get a free key at ngc.nvidia.com and: export NGC_API_KEY=..." >&2
+    exit 1
+  fi
+  echo "$NGC_API_KEY" | sudo docker login nvcr.io --username '$oauthtoken' --password-stdin
+  sudo docker pull "$ISAAC_IMAGE"
+
+  # Persist the Kit shader cache across runs so a re-launch is not a cold
+  # shader compile every time.
+  sudo mkdir -p /opt/operon/cache/{kit,ov,pip,glcache,computecache,logs,data,documents}
+
+run: |
+  set -euo pipefail
+  echo "Starting Isaac Sim bridge -> ${OPERON_SERVER} room ${OPERON_ROOM}"
+  echo "Hard session cap: ${MAX_SESSION_HOURS}h"
+
+  sudo timeout "${MAX_SESSION_HOURS}h" docker run --rm --gpus all \
+    --network=host \
+    -e "ACCEPT_EULA=Y" -e "PRIVACY_CONSENT=Y" \
+    -e "OPERON_SERVER=${OPERON_SERVER}" -e "OPERON_ROOM=${OPERON_ROOM}" \
+    -v /opt/operon/assets:/operon/assets:ro \
+    -v /opt/operon/sim:/operon/sim:ro \
+    -v /opt/operon/cache/kit:/isaac-sim/kit/cache:rw \
+    -v /opt/operon/cache/ov:/root/.cache/ov:rw \
+    -v /opt/operon/cache/pip:/root/.cache/pip:rw \
+    -v /opt/operon/cache/glcache:/root/.cache/nvidia/GLCache:rw \
+    -v /opt/operon/cache/computecache:/root/.nv/ComputeCache:rw \
+    -v /opt/operon/cache/logs:/root/.nvidia-omniverse/logs:rw \
+    "$ISAAC_IMAGE" \
+    ./python.sh /operon/sim/shadow_rtx_bridge.py \
+      --server "${OPERON_SERVER}" \
+      --room "${OPERON_ROOM}" \
+      --usd /operon/assets/operon_arm.usda \
+      --idle-exit-minutes 20
+
+  # Reaching here means the bridge exited. The job ends, the cluster goes
+  # idle, and `sky launch -i N --down` tears it down to $0.
+  echo "Bridge exited; cluster will auto-teardown when idle timer elapses."

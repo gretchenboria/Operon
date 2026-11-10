@@ -86,16 +86,23 @@ def sanitize(name: str) -> str:
     return ("_" + out) if (not out or out[0].isdigit()) else out
 
 
-def quat_to_gf(q) -> Gf.Quatf:
-    """MuJoCo stores quaternions w,x,y,z; Gf wants (real, imaginary)."""
-    return Gf.Quatf(float(q[0]), Gf.Vec3f(float(q[1]), float(q[2]), float(q[3])))
+def quat_to_gf(q) -> Gf.Quatd:
+    """
+    MuJoCo stores quaternions w,x,y,z; Gf wants (real, imaginary).
+
+    Double precision on purpose: a float32 orient op costs ~4 nm of placement
+    error at this scale, which is enough to fail an exact comparison against
+    MuJoCo's own float64 forward kinematics.
+    """
+    return Gf.Quatd(float(q[0]), Gf.Vec3d(float(q[1]), float(q[2]), float(q[3])))
 
 
 def set_xform(prim, pos, quat) -> None:
     x = UsdGeom.Xformable(prim)
     x.ClearXformOpOrder()
-    x.AddTranslateOp().Set(Gf.Vec3d(float(pos[0]), float(pos[1]), float(pos[2])))
-    x.AddOrientOp().Set(quat_to_gf(quat))
+    x.AddTranslateOp(UsdGeom.XformOp.PrecisionDouble).Set(
+        Gf.Vec3d(float(pos[0]), float(pos[1]), float(pos[2])))
+    x.AddOrientOp(UsdGeom.XformOp.PrecisionDouble).Set(quat_to_gf(quat))
 
 
 def author_materials(stage, root: str) -> dict:
@@ -209,11 +216,11 @@ def add_geom(stage, parent_path: str, model, gi: int, mats: dict):
     set_xform(prim.GetPrim(), model.geom_pos[gi], model.geom_quat[gi])
 
     if gtype == G_BOX:
-        UsdGeom.Xformable(prim.GetPrim()).AddScaleOp().Set(
-            Gf.Vec3f(float(size[0]) * 2, float(size[1]) * 2, float(size[2]) * 2))
+        UsdGeom.Xformable(prim.GetPrim()).AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(
+            Gf.Vec3d(float(size[0]) * 2, float(size[1]) * 2, float(size[2]) * 2))
     elif gtype == G_ELLIPSOID:
-        UsdGeom.Xformable(prim.GetPrim()).AddScaleOp().Set(
-            Gf.Vec3f(float(size[0]), float(size[1]), float(size[2])))
+        UsdGeom.Xformable(prim.GetPrim()).AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(
+            Gf.Vec3d(float(size[0]), float(size[1]), float(size[2])))
 
     prim.CreateDisplayColorAttr(Vt.Vec3fArray(
         [Gf.Vec3f(float(rgba[0]), float(rgba[1]), float(rgba[2]))]))

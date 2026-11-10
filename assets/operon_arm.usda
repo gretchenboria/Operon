@@ -133,7 +133,7 @@ def Xform "World"
     )
     {
         float physics:mass = 0.64339817
-        quatf xformOp:orient = (1, 0, 0, 0)
+        quatd xformOp:orient = (1, 0, 0, 0)
         double3 xformOp:translate = (0, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -142,7 +142,7 @@ def Xform "World"
         )
         {
             float physics:mass = 0.16748458
-            quatf xformOp:orient = (1, 0, 0, 0)
+            quatd xformOp:orient = (1, 0, 0, 0)
             double3 xformOp:translate = (0, 0, 0.05)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -151,7 +151,7 @@ def Xform "World"
             )
             {
                 float physics:mass = 0.2496567
-                quatf xformOp:orient = (1, 0, 0, 0)
+                quatd xformOp:orient = (1, 0, 0, 0)
                 double3 xformOp:translate = (0, 0, 0.04)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -160,7 +160,7 @@ def Xform "World"
                 )
                 {
                     float physics:mass = 0.17636396
-                    quatf xformOp:orient = (1, 0, 0, 0)
+                    quatd xformOp:orient = (1, 0, 0, 0)
                     double3 xformOp:translate = (0, 0, 0.1)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -169,7 +169,7 @@ def Xform "World"
                     )
                     {
                         float physics:mass = 0.0256621
-                        quatf xformOp:orient = (1, 0, 0, 0)
+                        quatd xformOp:orient = (1, 0, 0, 0)
                         double3 xformOp:translate = (0, 0, 0.1)
                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -178,7 +178,7 @@ def Xform "World"
                         )
                         {
                             float physics:mass = 0.031988166
-                            quatf xformOp:orient = (1, 0, 0, 0)
+                            quatd xformOp:orient = (1, 0, 0, 0)
                             double3 xformOp:translate = (0, 0, 0)
                             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -187,7 +187,7 @@ def Xform "World"
                             )
                             {
                                 float physics:mass = 0
-                                quatf xformOp:orient = (1, 0, 0, 0)
+                                quatd xformOp:orient = (1, 0, 0, 0)
                                 double3 xformOp:translate = (0, 0, 0)
                                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -196,7 +196,7 @@ def Xform "World"
                                 )
                                 {
                                     float physics:mass = 0.1209091
-                                    quatf xformOp:orient = (1, 0, 0, 0)
+                                    quatd xformOp:orient = (1, 0, 0, 0)
                                     double3 xformOp:translate = (0, 0, 0.06)
                                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -205,7 +205,7 @@ def Xform "World"
                                     )
                                     {
                                         float physics:mass = 0.0254574
-                                        quatf xformOp:orient = (1, 0, 0, 0)
+                                        quatd xformOp:orient = (1, 0, 0, 0)
                                         double3 xformOp:translate = (-0.009, 0, 0)
                                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -219,8 +219,8 @@ def Xform "World"
                                             custom string semantic:Semantics:params:semanticData = "gripper_finger"
                                             custom string semantic:Semantics:params:semanticType = "class"
                                             double size = 1
-                                            quatf xformOp:orient = (1, 0, 0, 0)
-                                            float3 xformOp:scale = (0.011, 0.021, 0.016)
+                                            quatd xformOp:orient = (1, 0, 0, 0)
+                                            double3 xformOp:scale = (0.011, 0.021, 0.016)
                                             double3 xformOp:translate = (0, 0, -0.014)
                                             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                         }
@@ -235,8 +235,8 @@ def Xform "World"
                                             custom string semantic:Semantics:params:semanticData = "gripper_finger"
                                             custom string semantic:Semantics:params:semanticType = "class"
                                             double size = 1
-                                            quatf xformOp:orient = (1, 0, 0, 0)
-                                            float3 xformOp:scale = (0.008, 0.019, 0.034)
+                                            quatd xformOp:orient = (1, 0, 0, 0)
+                                            double3 xformOp:scale = (0.008, 0.019, 0.034)
                                             double3 xformOp:translate = (0, 0, -0.003)
                                             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                         }
@@ -251,8 +251,8 @@ def Xform "World"
                                             custom string semantic:Semantics:params:semanticData = "gripper_pad"
                                             custom string semantic:Semantics:params:semanticType = "class"
                                             double size = 1
-                                            quatf xformOp:orient = (1, 0, 0, 0)
-                                            float3 xformOp:scale = (0.0035, 0.018, 0.022)
+                                            quatd xformOp:orient = (1, 0, 0, 0)
+                                            double3 xformOp:scale = (0.0035, 0.018, 0.022)
                                             double3 xformOp:translate = (0.0055, 0, 0.003)
                                             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                         }
@@ -263,7 +263,7 @@ def Xform "World"
                                     )
                                     {
                                         float physics:mass = 0.0254574
-                                        quatf xformOp:orient = (1, 0, 0, 0)
+                                        quatd xformOp:orient = (1, 0, 0, 0)
                                         double3 xformOp:translate = (0.009, 0, 0)
                                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -277,8 +277,8 @@ def Xform "World"
                                             custom string semantic:Semantics:params:semanticData = "gripper_finger"
                                             custom string semantic:Semantics:params:semanticType = "class"
                                             double size = 1
-                                            quatf xformOp:orient = (1, 0, 0, 0)
-                                            float3 xformOp:scale = (0.011, 0.021, 0.016)
+                                            quatd xformOp:orient = (1, 0, 0, 0)
+                                            double3 xformOp:scale = (0.011, 0.021, 0.016)
                                             double3 xformOp:translate = (0, 0, -0.014)
                                             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                         }
@@ -293,8 +293,8 @@ def Xform "World"
                                             custom string semantic:Semantics:params:semanticData = "gripper_finger"
                                             custom string semantic:Semantics:params:semanticType = "class"
                                             double size = 1
-                                            quatf xformOp:orient = (1, 0, 0, 0)
-                                            float3 xformOp:scale = (0.008, 0.019, 0.034)
+                                            quatd xformOp:orient = (1, 0, 0, 0)
+                                            double3 xformOp:scale = (0.008, 0.019, 0.034)
                                             double3 xformOp:translate = (0, 0, -0.003)
                                             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                         }
@@ -309,8 +309,8 @@ def Xform "World"
                                             custom string semantic:Semantics:params:semanticData = "gripper_pad"
                                             custom string semantic:Semantics:params:semanticType = "class"
                                             double size = 1
-                                            quatf xformOp:orient = (1, 0, 0, 0)
-                                            float3 xformOp:scale = (0.0035, 0.018, 0.022)
+                                            quatd xformOp:orient = (1, 0, 0, 0)
+                                            double3 xformOp:scale = (0.0035, 0.018, 0.022)
                                             double3 xformOp:translate = (-0.0055, 0, 0.003)
                                             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                         }
@@ -328,7 +328,7 @@ def Xform "World"
                                         double radius = 0.0175
                                         custom string semantic:Semantics:params:semanticData = "force_torque_sensor"
                                         custom string semantic:Semantics:params:semanticType = "class"
-                                        quatf xformOp:orient = (1, 0, 0, 0)
+                                        quatd xformOp:orient = (1, 0, 0, 0)
                                         double3 xformOp:translate = (0, 0, -0.058)
                                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
                                     }
@@ -345,7 +345,7 @@ def Xform "World"
                                         double radius = 0.0165
                                         custom string semantic:Semantics:params:semanticData = "tool_flange"
                                         custom string semantic:Semantics:params:semanticType = "class"
-                                        quatf xformOp:orient = (1, 0, 0, 0)
+                                        quatd xformOp:orient = (1, 0, 0, 0)
                                         double3 xformOp:translate = (0, 0, -0.05)
                                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
                                     }
@@ -360,8 +360,8 @@ def Xform "World"
                                         custom string semantic:Semantics:params:semanticData = "gripper_body"
                                         custom string semantic:Semantics:params:semanticType = "class"
                                         double size = 1
-                                        quatf xformOp:orient = (1, 0, 0, 0)
-                                        float3 xformOp:scale = (0.072, 0.028, 0.026)
+                                        quatd xformOp:orient = (1, 0, 0, 0)
+                                        double3 xformOp:scale = (0.072, 0.028, 0.026)
                                         double3 xformOp:translate = (0, 0, -0.037)
                                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                     }
@@ -376,8 +376,8 @@ def Xform "World"
                                         custom string semantic:Semantics:params:semanticData = "gripper_body"
                                         custom string semantic:Semantics:params:semanticType = "class"
                                         double size = 1
-                                        quatf xformOp:orient = (1, 0, 0, 0)
-                                        float3 xformOp:scale = (0.076, 0.009, 0.007)
+                                        quatd xformOp:orient = (1, 0, 0, 0)
+                                        double3 xformOp:scale = (0.076, 0.009, 0.007)
                                         double3 xformOp:translate = (0, 0, -0.023)
                                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                                     }
@@ -394,7 +394,7 @@ def Xform "World"
                                 double radius = 0.0165
                                 custom string semantic:Semantics:params:semanticData = "robot_link"
                                 custom string semantic:Semantics:params:semanticType = "class"
-                                quatf xformOp:orient = (1, 0, 0, 0)
+                                quatd xformOp:orient = (1, 0, 0, 0)
                                 double3 xformOp:translate = (0, 0, 0.018)
                                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
                             }
@@ -412,7 +412,7 @@ def Xform "World"
                             double radius = 0.0155
                             custom string semantic:Semantics:params:semanticData = "robot_link"
                             custom string semantic:Semantics:params:semanticType = "class"
-                            quatf xformOp:orient = (1, 0, 0, 0)
+                            quatd xformOp:orient = (1, 0, 0, 0)
                             double3 xformOp:translate = (0, 0, 0.008)
                             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
                         }
@@ -428,7 +428,7 @@ def Xform "World"
                         double radius = 0.021
                         custom string semantic:Semantics:params:semanticData = "robot_link"
                         custom string semantic:Semantics:params:semanticType = "class"
-                        quatf xformOp:orient = (1, 0, 0, 0)
+                        quatd xformOp:orient = (1, 0, 0, 0)
                         double3 xformOp:translate = (0, 0, 0)
                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
                     }
@@ -445,7 +445,7 @@ def Xform "World"
                         double radius = 0.0145
                         custom string semantic:Semantics:params:semanticData = "robot_link"
                         custom string semantic:Semantics:params:semanticType = "class"
-                        quatf xformOp:orient = (6.123234e-17, 1, 0, 0)
+                        quatd xformOp:orient = (6.123233995736766e-17, 1, 0, 0)
                         double3 xformOp:translate = (0, 0, 0.050499999999999996)
                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
                     }
@@ -461,7 +461,7 @@ def Xform "World"
                     double radius = 0.024
                     custom string semantic:Semantics:params:semanticData = "robot_link"
                     custom string semantic:Semantics:params:semanticType = "class"
-                    quatf xformOp:orient = (1, 0, 0, 0)
+                    quatd xformOp:orient = (1, 0, 0, 0)
                     double3 xformOp:translate = (0, 0, 0)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
                 }
@@ -478,7 +478,7 @@ def Xform "World"
                     double radius = 0.0165
                     custom string semantic:Semantics:params:semanticData = "robot_link"
                     custom string semantic:Semantics:params:semanticType = "class"
-                    quatf xformOp:orient = (6.123234e-17, 1, 0, 0)
+                    quatd xformOp:orient = (6.123233995736766e-17, 1, 0, 0)
                     double3 xformOp:translate = (0, 0, 0.053)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
                 }
@@ -496,7 +496,7 @@ def Xform "World"
                 double radius = 0.028
                 custom string semantic:Semantics:params:semanticData = "robot_base"
                 custom string semantic:Semantics:params:semanticType = "class"
-                quatf xformOp:orient = (1, 0, 0, 0)
+                quatd xformOp:orient = (1, 0, 0, 0)
                 double3 xformOp:translate = (0, 0, 0.02)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
             }
@@ -514,7 +514,7 @@ def Xform "World"
             double radius = 0.032
             custom string semantic:Semantics:params:semanticData = "robot_base"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (1, 0, 0, 0)
+            quatd xformOp:orient = (1, 0, 0, 0)
             double3 xformOp:translate = (0, 0, 0.025)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -525,7 +525,7 @@ def Xform "World"
     )
     {
         float physics:mass = 0.045
-        quatf xformOp:orient = (0.6903312, 0.6903312, -0.1531104, -0.1531104)
+        quatd xformOp:orient = (0.6903312302276701, 0.6903312302276701, -0.1531103934171404, -0.1531103934171404)
         double3 xformOp:translate = (0.15, -0.075, 0.0135)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -541,7 +541,7 @@ def Xform "World"
             double radius = 0.012
             custom string semantic:Semantics:params:semanticData = "battery_cell"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (1, 0, 0, 0)
+            quatd xformOp:orient = (1, 0, 0, 0)
             double3 xformOp:translate = (0, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -552,7 +552,7 @@ def Xform "World"
     )
     {
         float physics:mass = 0.01604468
-        quatf xformOp:orient = (1, 0, 0, 0)
+        quatd xformOp:orient = (1, 0, 0, 0)
         double3 xformOp:translate = (0.1, 0.1402, 0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -568,7 +568,7 @@ def Xform "World"
             double radius = 0.0065
             custom string semantic:Semantics:params:semanticData = "charger_dock"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (6.123234e-17, 1, 0, 0)
+            quatd xformOp:orient = (6.123233995736766e-17, 1, 0, 0)
             double3 xformOp:translate = (0, 0, 0.02085)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -579,7 +579,7 @@ def Xform "World"
     )
     {
         float physics:mass = 0.5037696
-        quatf xformOp:orient = (0.976264, -0.216584, 0, 0)
+        quatd xformOp:orient = (0.9762639869414931, -0.2165839971029725, 0, 0)
         double3 xformOp:translate = (0.1, 0.100149, 0.061748)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -593,8 +593,8 @@ def Xform "World"
             custom string semantic:Semantics:params:semanticData = "charger_dock"
             custom string semantic:Semantics:params:semanticType = "class"
             double size = 1
-            quatf xformOp:orient = (1, 0, 0, 0)
-            float3 xformOp:scale = (0.096, 0.104, 0.016)
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:scale = (0.096, 0.104, 0.016)
             double3 xformOp:translate = (0, 0, -0.012)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
         }
@@ -609,8 +609,8 @@ def Xform "World"
             custom string semantic:Semantics:params:semanticData = "charger_dock"
             custom string semantic:Semantics:params:semanticType = "class"
             double size = 1
-            quatf xformOp:orient = (1, 0, 0, 0)
-            float3 xformOp:scale = (0.06, 0.064, 0.006)
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:scale = (0.06, 0.064, 0.006)
             double3 xformOp:translate = (0, 0, -0.003)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
         }
@@ -625,8 +625,8 @@ def Xform "World"
             custom string semantic:Semantics:params:semanticData = "charger_dock"
             custom string semantic:Semantics:params:semanticType = "class"
             double size = 1
-            quatf xformOp:orient = (1, 0, 0, 0)
-            float3 xformOp:scale = (0.06, 0.005, 0.026)
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:scale = (0.06, 0.005, 0.026)
             double3 xformOp:translate = (0, -0.0345, 0.013)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
         }
@@ -641,8 +641,8 @@ def Xform "World"
             custom string semantic:Semantics:params:semanticData = "charger_dock"
             custom string semantic:Semantics:params:semanticType = "class"
             double size = 1
-            quatf xformOp:orient = (1, 0, 0, 0)
-            float3 xformOp:scale = (0.06, 0.005, 0.026)
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:scale = (0.06, 0.005, 0.026)
             double3 xformOp:translate = (0, 0.0345, 0.013)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
         }
@@ -657,8 +657,8 @@ def Xform "World"
             custom string semantic:Semantics:params:semanticData = "charger_dock"
             custom string semantic:Semantics:params:semanticType = "class"
             double size = 1
-            quatf xformOp:orient = (1, 0, 0, 0)
-            float3 xformOp:scale = (0.005, 0.064, 0.018)
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:scale = (0.005, 0.064, 0.018)
             double3 xformOp:translate = (-0.0325, 0, 0.009)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
         }
@@ -673,8 +673,8 @@ def Xform "World"
             custom string semantic:Semantics:params:semanticData = "charger_dock"
             custom string semantic:Semantics:params:semanticType = "class"
             double size = 1
-            quatf xformOp:orient = (1, 0, 0, 0)
-            float3 xformOp:scale = (0.005, 0.064, 0.018)
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:scale = (0.005, 0.064, 0.018)
             double3 xformOp:translate = (0.0325, 0, 0.009)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
         }
@@ -685,7 +685,7 @@ def Xform "World"
     )
     {
         float physics:mass = 0.072703995
-        quatf xformOp:orient = (1, 0, 0, 0)
+        quatd xformOp:orient = (1, 0, 0, 0)
         double3 xformOp:translate = (0.2, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -701,7 +701,7 @@ def Xform "World"
             double radius = 0.008
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (6.123234e-17, 1, 0, 0)
+            quatd xformOp:orient = (6.123233995736766e-17, 1, 0, 0)
             double3 xformOp:translate = (0, 0, 0.07)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -712,7 +712,7 @@ def Xform "World"
     )
     {
         float physics:mass = 0.08840498
-        quatf xformOp:orient = (1, 0, 0, 0)
+        quatd xformOp:orient = (1, 0, 0, 0)
         double3 xformOp:translate = (0.184, 0, 0.14)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
@@ -728,7 +728,7 @@ def Xform "World"
             double radius = 0.0095
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.70710677, 0, 0.70710677, 0)
+            quatd xformOp:orient = (0.7071067811865476, 0, 0.7071067811865475, 0)
             double3 xformOp:translate = (0, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -745,7 +745,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.13043033, -0.99145746, 0, 0)
+            quatd xformOp:orient = (0.1304303271298865, -0.9914574775373832, 0, 0)
             double3 xformOp:translate = (0, 0.028925, 0.00775)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -762,7 +762,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.38268343, -0.9238795, 0, 0)
+            quatd xformOp:orient = (0.38268343236508984, -0.9238795325112867, 0, 0)
             double3 xformOp:translate = (0, 0.021175, 0.021175)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -779,7 +779,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.60883814, -0.7932945, 0, 0)
+            quatd xformOp:orient = (0.6088381368388703, -0.7932944744107153, 0, 0)
             double3 xformOp:translate = (0, 0.00775, 0.028925)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -796,7 +796,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.7932945, -0.60883814, 0, 0)
+            quatd xformOp:orient = (0.7932944744107153, -0.6088381368388703, 0, 0)
             double3 xformOp:translate = (0, -0.00775, 0.028925)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -813,7 +813,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.9238795, -0.38268343, 0, 0)
+            quatd xformOp:orient = (0.9238795325112867, -0.3826834323650898, 0, 0)
             double3 xformOp:translate = (0, -0.021175, 0.021175)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -830,7 +830,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.99145746, -0.13043033, 0, 0)
+            quatd xformOp:orient = (0.9914574775373832, -0.13043032712988653, 0, 0)
             double3 xformOp:translate = (0, -0.028925, 0.00775)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -847,7 +847,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.99145746, 0.13043033, 0, -0)
+            quatd xformOp:orient = (0.9914574775373832, 0.13043032712988653, 0, -0)
             double3 xformOp:translate = (0, -0.028925, -0.00775)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -864,7 +864,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.9238795, 0.38268343, 0, -0)
+            quatd xformOp:orient = (0.9238795325112867, 0.3826834323650898, 0, -0)
             double3 xformOp:translate = (0, -0.021175, -0.021175)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -881,7 +881,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.7932945, 0.60883814, 0, -0)
+            quatd xformOp:orient = (0.7932944744107153, 0.6088381368388703, 0, -0)
             double3 xformOp:translate = (0, -0.00775, -0.028925)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -898,7 +898,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.60883814, 0.7932945, 0, -0)
+            quatd xformOp:orient = (0.6088381368388703, 0.7932944744107153, 0, -0)
             double3 xformOp:translate = (0, 0.00775, -0.028925)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -915,7 +915,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.38268343, 0.9238795, 0, -0)
+            quatd xformOp:orient = (0.38268343236508984, 0.9238795325112867, 0, -0)
             double3 xformOp:translate = (0, 0.021175, -0.021175)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -932,7 +932,7 @@ def Xform "World"
             double radius = 0.0055
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.13043033, 0.99145746, 0, -0)
+            quatd xformOp:orient = (0.1304303271298865, 0.9914574775373832, 0, -0)
             double3 xformOp:translate = (0, 0.028925, -0.00775)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -949,7 +949,7 @@ def Xform "World"
             double radius = 0.0032
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.70710677, 0.70710677, 0, -0)
+            quatd xformOp:orient = (0.7071067811865476, 0.7071067811865475, 0, -0)
             double3 xformOp:translate = (0, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -966,7 +966,7 @@ def Xform "World"
             double radius = 0.0032
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.25882518, 0.9659242, 0, -0)
+            quatd xformOp:orient = (0.25882517977513403, 0.9659241824876161, 0, -0)
             double3 xformOp:translate = (0, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -983,7 +983,7 @@ def Xform "World"
             double radius = 0.0032
             custom string semantic:Semantics:params:semanticData = "valve_wheel"
             custom string semantic:Semantics:params:semanticType = "class"
-            quatf xformOp:orient = (0.25882518, -0.9659242, 0, 0)
+            quatd xformOp:orient = (0.25882517977513403, -0.9659241824876161, 0, 0)
             double3 xformOp:translate = (0, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
         }
@@ -1001,7 +1001,7 @@ def Xform "World"
         color3f[] primvars:displayColor = [(0.18, 0.19, 0.21)]
         custom string semantic:Semantics:params:semanticData = "optical_bench"
         custom string semantic:Semantics:params:semanticType = "class"
-        quatf xformOp:orient = (1, 0, 0, 0)
+        quatd xformOp:orient = (1, 0, 0, 0)
         double3 xformOp:translate = (0, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
     }
@@ -1016,8 +1016,8 @@ def Xform "World"
         custom string semantic:Semantics:params:semanticData = "locating_pad"
         custom string semantic:Semantics:params:semanticType = "class"
         double size = 1
-        quatf xformOp:orient = (1, 0, 0, 0)
-        float3 xformOp:scale = (0.052, 0.052, 0.002)
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (0.052, 0.052, 0.002)
         double3 xformOp:translate = (0.15, -0.075, 0.001)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
     }
@@ -1032,8 +1032,8 @@ def Xform "World"
         custom string semantic:Semantics:params:semanticData = "locating_pad"
         custom string semantic:Semantics:params:semanticType = "class"
         double size = 1
-        quatf xformOp:orient = (1, 0, 0, 0)
-        float3 xformOp:scale = (0.052, 0.052, 0.002)
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (0.052, 0.052, 0.002)
         double3 xformOp:translate = (0.15, 0.075, 0.001)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
     }
