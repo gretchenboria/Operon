@@ -48,6 +48,16 @@ const gap2=await ev(`document.getElementById("phys-gap")?.textContent||""`);
 console.log(`  badge="${badge2}"  jaw gap="${gap2}"`);
 ok(/MuJoCo/.test(badge2),"switches back to MuJoCo");
 ok(/mm/.test(gap2),"solver resumes reporting");
+
+console.log("checking verified OpenUSD stage export in browser…");
+await ev(`document.querySelector('#schema-tabs button[data-s="usd"]').click()`);
+await sleep(500);
+const usdText=await ev(`document.getElementById("schema-preview")?.textContent||""`);
+ok(usdText.includes('def Xform "pedestal"') && usdText.includes('def PhysicsRevoluteJoint "yaw"') && usdText.includes('drive:angular:physics:targetPosition.timeSamples'),
+   "browser USD export contains verified 46-gprim stage + timeSampled PhysicsDriveAPI");
+const { writeFileSync } = await import("node:fs");
+writeFileSync("/tmp/browser_exported.usda", usdText, "utf8");
+
 const real=errs.filter(e=>!/favicon|ReadPixels|GL Driver/i.test(e));
 console.log(`  page errors: ${real.length}`); real.slice(0,5).forEach(e=>console.log("   ! "+e.split("\n")[0]));
 ok(real.length===0,"no errors across both mode switches");

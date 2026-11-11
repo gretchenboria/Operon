@@ -45,6 +45,7 @@ import base64
 import io
 import json
 import math
+import os
 import subprocess
 import sys
 import time
@@ -273,6 +274,191 @@ def add_scene_lighting(stage) -> None:
     rx.AddRotateXYZOp().Set(Gf.Vec3f(-62.0, 0.0, 52.0))
 
     print("[shadow-rtx] Authored 3-point lighting rig + dome.")
+
+
+def upgrade_materials_to_mdl(stage) -> int:
+    """
+    Attach an Omniverse RTX OmniPBR MDL shader to every material in /World/Looks
+    while preserving the portable UsdPreviewSurface shader on `outputs:surface`.
+
+    Why both:
+      - `outputs:surface` (UsdPreviewSurface) resolves in usdview, Storm, Blender,
+        and CPU test harnesses.
+      - `outputs:mdl:surface` (OmniPBR.mdl) resolves inside Omniverse RTX
+        (RayTracedLighting and PathTracing) with full microfacet anisotropy,
+        clearcoat, and physical IOR.
+    """
+    from pxr import Gf, Sdf, UsdShade  # type: ignore
+
+    looks = stage.GetPrimAtPath("/World/Looks")
+    if not looks or not looks.IsValid():
+        return 0
+
+    upgraded = 0
+    for mat_prim in looks.GetChildren():
+        if mat_prim.GetTypeName() != "Material":
+            continue
+        mat = UsdShade.Material(mat_prim)
+        preview_sh_prim = stage.GetPrimAtPath(f"{mat_prim.GetPath()}/Shader")
+        if not preview_sh_prim or not preview_sh_prim.IsValid():
+            continue
+        psh = UsdShade.Shader(preview_sh_prim)
+
+        def _get_in(name: str, default):
+            inp = psh.GetInput(name)
+            return inp.Get() if (inp and inp.Get() is not None) else default
+
+        rgb = _get_in("diffuseColor", Gf.Vec3f(0.6, 0.6, 0.6))
+        metal = float(_get_in("metallic", 0.0))
+        rough = float(_get_in("roughness", 0.35))
+        cc = float(_get_in("clearcoat", 0.0))
+        cc_rough = float(_get_in("clearcoatRoughness", 0.15))
+        ior = float(_get_in("ior", 1.5))
+
+        mdl_sh = UsdShade.Shader.Define(stage, f"{mat_prim.GetPath()}/MDLShader")
+        mdl_sh.CreateImplementationSourceAttr(UsdShade.Tokens.sourceAsset)
+        mdl_sh.SetSourceAsset(Sdf.AssetPath("OmniPBR.mdl"), "mdl")
+        mdl_sh.SetSourceAssetSubIdentifier("OmniPBR", "mdl")
+        mdl_sh.CreateInput("diffuse_color_constant", Sdf.ValueTypeNames.Color3f).Set(
+            Gf.Vec3f(float(rgb[0]), float(rgb[1]), float(rgb[2]))
+        )
+        mdl_sh.CreateInput("metallic_constant", Sdf.ValueTypeNames.Float).Set(metal)
+        mdl_sh.CreateInput("reflection_roughness_constant", Sdf.ValueTypeNames.Float).Set(rough)
+        mdl_sh.CreateInput("enable_coating", Sdf.ValueTypeNames.Bool).Set(bool(cc > 0.01))
+        mdl_sh.CreateInput("coating_level", Sdf.ValueTypeNames.Float).Set(cc)
+        mdl_sh.CreateInput("coating_roughness", Sdf.ValueTypeNames.Float).Set(cc_rough)
+        mdl_sh.CreateInput("ior_constant", Sdf.ValueTypeNames.Float).Set(ior)
+
+        mdl_out = mdl_sh.CreateOutput("out", Sdf.ValueTypeNames.Token)
+        mat.CreateSurfaceOutput("mdl").ConnectToSource(mdl_out)
+        upgraded += 1
+
+    print(f"[shadow-rtx] Upgraded {upgraded} /World/Looks materials with OmniPBR MDL shaders.")
+    return upgraded
+
+
+# Exact body prim paths and rotation axes in assets/operon_arm.usda (generated from
+# public/models/operon_station0.xml by sim/mjcf_to_usd.py).
+OPERON_ARM_JOINT_BODIES = [
+    ("yaw",         "/World/pedestal/base",                                                                            "Z"),
+    ("shoulder",    "/World/pedestal/base/upper_arm",                                                                  "Y"),
+    ("elbow",       "/World/pedestal/base/upper_arm/forearm",                                                          "Y"),
+    ("wrist_roll",  "/World/pedestal/base/upper_arm/forearm/wrist_roll_link",                                          "Z"),
+    ("wrist_pitch", "/World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link",                         "Y"),
+    ("tool_roll",   "/World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link",          "Z"),
+]
+OPERON_HAND_PATH = "/World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link/hand"
+
+
+def _axis_angle_quatd(axis: str, angle_rad: float):
+    """Double-precision Gf.Quatd for a rotation of angle_rad about X, Y, or Z."""
+    from pxr import Gf  # type: ignore
+
+    half = 0.5 * float(angle_rad)
+    c, s = math.cos(half), math.sin(half)
+    if axis == "X":
+        return Gf.Quatd(c, Gf.Vec3d(s, 0.0, 0.0))
+    if axis == "Y":
+        return Gf.Quatd(c, Gf.Vec3d(0.0, s, 0.0))
+    return Gf.Quatd(c, Gf.Vec3d(0.0, 0.0, s))
+
+
+def _set_double_orient(prim, quatd) -> None:
+    from pxr import UsdGeom  # type: ignore
+
+    xf = UsdGeom.Xformable(prim)
+    ops = {op.GetOpName(): op for op in xf.GetOrderedXformOps()}
+    if "xformOp:orient" in ops:
+        ops["xformOp:orient"].Set(quatd)
+    else:
+        xf.AddOrientOp(UsdGeom.XformOp.PrecisionDouble).Set(quatd)
+
+
+def _set_double_translate(prim, vec3) -> None:
+    from pxr import Gf, UsdGeom  # type: ignore
+
+    xf = UsdGeom.Xformable(prim)
+    ops = {op.GetOpName(): op for op in xf.GetOrderedXformOps()}
+    v = Gf.Vec3d(float(vec3[0]), float(vec3[1]), float(vec3[2]))
+    if "xformOp:translate" in ops:
+        ops["xformOp:translate"].Set(v)
+    else:
+        xf.AddTranslateOp(UsdGeom.XformOp.PrecisionDouble).Set(v)
+
+
+def articulate_operon_stage(
+    stage,
+    q6_rad,
+    closed: bool = False,
+    jaw_travel: float | None = None,
+    cell_pos=None,
+    cell_quat=None,
+    valve_rad: float | None = None,
+) -> None:
+    """
+    Articulate the verified MJCF-derived stage (`assets/operon_arm.usda`).
+
+    Updates both:
+      1. The hierarchical body Xform ops (`xformOp:orient` / `xformOp:translate`
+         in float64) so every gprim and sensor site (`forearm_imu`, `tcp`)
+         composes to the exact MuJoCo forward-kinematics pose (0.000 nm error).
+      2. The `UsdPhysics.DriveAPI` targetPosition attributes on `/World/Joints/*`
+         so PhysX articulation drives track the same configuration.
+    """
+    from pxr import Gf  # type: ignore
+
+    q = [float(x) for x in q6_rad[:6]] if len(q6_rad) >= 6 else [
+        float(q6_rad[0]) if len(q6_rad) > 0 else 0.0,
+        float(q6_rad[1]) if len(q6_rad) > 1 else 0.0,
+        float(q6_rad[2]) if len(q6_rad) > 2 else 0.0,
+        0.0,
+        float(q6_rad[3]) if len(q6_rad) > 3 else 0.0,
+        0.0,
+    ]
+
+    for idx, (jname, bpath, axis) in enumerate(OPERON_ARM_JOINT_BODIES):
+        bprim = stage.GetPrimAtPath(bpath)
+        if bprim and bprim.IsValid():
+            _set_double_orient(bprim, _axis_angle_quatd(axis, q[idx]))
+        jprim = stage.GetPrimAtPath(f"/World/Joints/{jname}")
+        if jprim and jprim.IsValid():
+            t_attr = jprim.GetAttribute("drive:angular:physics:targetPosition")
+            if t_attr and t_attr.IsValid():
+                t_attr.Set(float(math.degrees(q[idx])))
+
+    travel = float(jaw_travel) if jaw_travel is not None else (0.0 if closed else 0.022)
+    travel = max(0.0, min(0.022, travel))
+    fl_prim = stage.GetPrimAtPath(f"{OPERON_HAND_PATH}/finger_l")
+    if fl_prim and fl_prim.IsValid():
+        _set_double_translate(fl_prim, (-0.009 - travel, 0.0, 0.0))
+    fr_prim = stage.GetPrimAtPath(f"{OPERON_HAND_PATH}/finger_r")
+    if fr_prim and fr_prim.IsValid():
+        _set_double_translate(fr_prim, (0.009 + travel, 0.0, 0.0))
+
+    for jname, target_m in [("finger_l", -travel), ("finger_r", travel)]:
+        jprim = stage.GetPrimAtPath(f"/World/Joints/{jname}")
+        if jprim and jprim.IsValid():
+            t_attr = jprim.GetAttribute("drive:linear:physics:targetPosition")
+            if t_attr and t_attr.IsValid():
+                t_attr.Set(float(target_m))
+
+    if cell_pos is not None and len(cell_pos) >= 3:
+        cprim = stage.GetPrimAtPath("/World/cell")
+        if cprim and cprim.IsValid():
+            _set_double_translate(cprim, cell_pos)
+            if cell_quat is not None and len(cell_quat) >= 4:
+                _set_double_orient(
+                    cprim,
+                    Gf.Quatd(
+                        float(cell_quat[0]),
+                        Gf.Vec3d(float(cell_quat[1]), float(cell_quat[2]), float(cell_quat[3])),
+                    ),
+                )
+
+    if valve_rad is not None:
+        vprim = stage.GetPrimAtPath("/World/valve")
+        if vprim and vprim.IsValid():
+            _set_double_orient(vprim, _axis_angle_quatd("X", float(valve_rad)))
 
 
 def apply_semantic_label(prim, class_name: str) -> None:
@@ -731,45 +917,207 @@ def update_articulated_arm_usd(stage, side: str, y_off: float, q_rad, closed: bo
 
 
 def update_domain_randomization_usd(stage, state: dict) -> None:
-    """Live-bind Operon Studio's Domain Randomization sliders (light, angle, rough) to UsdLux and UsdShade."""
+    """Live-bind Operon Studio's Domain Randomization sliders (light, angle, rough) to UsdLux and UsdShade.
+
+    Targets the physical lighting rig at `/World/Lighting/{Key,Dome,Fill,Rim}`
+    created by `add_scene_lighting()` and the dual-shader materials at
+    `/World/Looks/{Steel,Carbon,Rubber,Copper,CellGold,PadBlue,PadGreen,Bench}`
+    (`Shader` UsdPreviewSurface + `MDLShader` OmniPBR).
+    """
     from pxr import Gf, Sdf, UsdGeom, UsdLux, UsdShade
 
     light_mult = float(state.get("light", 2.8))
     angle_deg = float(state.get("angle", 35.0))
     rough = max(0.04, min(0.95, float(state.get("rough", 0.22))))
 
-    key_prim = stage.GetPrimAtPath("/World/KeyLight")
-    if key_prim.IsValid():
-        UsdLux.DistantLight(key_prim).GetIntensityAttr().Set(light_mult * 1000.0)
-        UsdGeom.XformCommonAPI(key_prim).SetRotate(Gf.Vec3f(-45.0, angle_deg, 0.0))
+    for key_path in ("/World/Lighting/Key", "/World/KeyLight"):
+        key_prim = stage.GetPrimAtPath(key_path)
+        if key_prim.IsValid():
+            if key_prim.IsA(UsdLux.RectLight):
+                UsdLux.RectLight(key_prim).GetIntensityAttr().Set(float(light_mult * 285.0))
+            elif key_prim.IsA(UsdLux.DistantLight):
+                UsdLux.DistantLight(key_prim).GetIntensityAttr().Set(float(light_mult * 1000.0))
+            UsdGeom.XformCommonAPI(key_prim).SetRotate(Gf.Vec3f(-42.0, angle_deg, 0.0))
 
-    dome_prim = stage.GetPrimAtPath("/World/DomeLight")
-    if dome_prim.IsValid():
-        UsdLux.DomeLight(dome_prim).GetIntensityAttr().Set(350.0 + light_mult * 220.0)
+    for dome_path in ("/World/Lighting/Dome", "/World/DomeLight"):
+        dome_prim = stage.GetPrimAtPath(dome_path)
+        if dome_prim.IsValid():
+            UsdLux.DomeLight(dome_prim).GetIntensityAttr().Set(float(280.0 + light_mult * 150.0))
 
-    fill_prim = stage.GetPrimAtPath("/World/FillRectLight")
-    if fill_prim.IsValid():
-        UsdLux.RectLight(fill_prim).GetIntensityAttr().Set(240.0 + light_mult * 160.0)
+    for fill_path in ("/World/Lighting/Fill", "/World/FillRectLight"):
+        fill_prim = stage.GetPrimAtPath(fill_path)
+        if fill_prim.IsValid():
+            UsdLux.RectLight(fill_prim).GetIntensityAttr().Set(float(180.0 + light_mult * 115.0))
 
-    rim_prim = stage.GetPrimAtPath("/World/RimRectLight")
-    if rim_prim.IsValid():
-        UsdLux.RectLight(rim_prim).GetIntensityAttr().Set(300.0 + light_mult * 190.0)
+    for rim_path in ("/World/Lighting/Rim", "/World/RimRectLight"):
+        rim_prim = stage.GetPrimAtPath(rim_path)
+        if rim_prim.IsValid():
+            UsdLux.RectLight(rim_prim).GetIntensityAttr().Set(float(220.0 + light_mult * 135.0))
 
-    shader_targets = [
-        ("/World/Looks/Mat_ESD_OpticalBench/PBRShader", min(0.95, rough * 0.85 + 0.06)),
-        ("/World/Looks/Mat_IdealArm_AnodizedViolet/PBRShader", rough),
-        ("/World/Looks/Mat_RealArm_AnodizedCobalt/PBRShader", rough),
-        ("/World/Looks/Mat_BrushedSteel_Joints/PBRShader", max(0.06, rough * 0.75)),
-        ("/World/Looks/Mat_CarbonGripper/PBRShader", min(0.95, rough * 1.25)),
+    # Material roughness scaling relative to studio base roughness (default 0.22)
+    scale = rough / 0.22
+    look_roughness = [
+        ("Steel", max(0.04, min(0.95, 0.26 * scale))),
+        ("Carbon", max(0.04, min(0.95, 0.34 * scale))),
+        ("Rubber", max(0.20, min(0.98, 0.85 * (0.7 + 0.3 * scale)))),
+        ("Copper", max(0.04, min(0.90, 0.22 * scale))),
+        ("CellGold", max(0.04, min(0.90, 0.22 * scale))),
+        ("PadBlue", max(0.08, min(0.95, 0.45 * scale))),
+        ("PadGreen", max(0.08, min(0.95, 0.45 * scale))),
+        ("Bench", max(0.15, min(0.98, 0.78 * (0.65 + 0.35 * scale)))),
     ]
-    for sh_path, r_val in shader_targets:
-        sh_prim = stage.GetPrimAtPath(sh_path)
+    for mat_name, r_val in look_roughness:
+        # 1. UsdPreviewSurface shader
+        sh_prim = stage.GetPrimAtPath(f"/World/Looks/{mat_name}/Shader")
         if sh_prim.IsValid():
             sh = UsdShade.Shader(sh_prim)
-            r_in = sh.GetInput("roughness")
-            if not r_in:
-                r_in = sh.CreateInput("roughness", Sdf.ValueTypeNames.Float)
+            r_in = sh.GetInput("roughness") or sh.CreateInput("roughness", Sdf.ValueTypeNames.Float)
             r_in.Set(float(r_val))
+        # 2. OmniPBR MDL shader
+        mdl_prim = stage.GetPrimAtPath(f"/World/Looks/{mat_name}/MDLShader")
+        if mdl_prim.IsValid():
+            mdl = UsdShade.Shader(mdl_prim)
+            mr_in = mdl.GetInput("reflection_roughness_constant") or mdl.CreateInput(
+                "reflection_roughness_constant", Sdf.ValueTypeNames.Float
+            )
+            mr_in.Set(float(r_val))
+
+
+def write_sdg_bundle(
+    out_dir: Path,
+    frame_id: str,
+    state: dict,
+    aov_buffers: dict,
+    np,
+) -> dict:
+    """Write a Replicator Synthetic Data Generation (SDG) multi-AOV bundle to disk.
+
+    Produces:
+      - `<frame_id>_rgb.png` (or `.npy` fallback if PIL unavailable)
+      - `<frame_id>_depth.npy` (metric float32 camera distance in meters)
+      - `<frame_id>_normals.npy` (float32 unit surface normals)
+      - `<frame_id>_semantic.png` (colorized semantic segmentation mask)
+      - `<frame_id>_meta.json` (joint angles, domain randomization, semantics, camera pose)
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    files_written = []
+
+    try:
+        from PIL import Image
+    except ImportError:
+        Image = None
+
+    # 1. RGB beauty pass
+    rgb_raw = aov_buffers.get("rtx")
+    rgb_u8 = colorize_aov_buffer("rtx", rgb_raw, np)
+    if rgb_u8 is not None:
+        if Image is not None:
+            rgb_path = out_dir / f"{frame_id}_rgb.png"
+            Image.fromarray(rgb_u8).save(rgb_path, format="PNG")
+        else:
+            rgb_path = out_dir / f"{frame_id}_rgb.npy"
+            np.save(rgb_path, rgb_u8)
+        files_written.append(rgb_path.name)
+
+    # 2. Metric depth pass (float32 meters)
+    depth_raw = aov_buffers.get("depth")
+    if depth_raw is not None:
+        d_arr = np.asarray(depth_raw, dtype=np.float32)
+        depth_path = out_dir / f"{frame_id}_depth.npy"
+        np.save(depth_path, d_arr)
+        files_written.append(depth_path.name)
+
+    # 3. Surface normals pass (float32 XYZ)
+    norm_raw = aov_buffers.get("normal")
+    if norm_raw is not None:
+        n_arr = np.asarray(norm_raw, dtype=np.float32)
+        norm_path = out_dir / f"{frame_id}_normals.npy"
+        np.save(norm_path, n_arr)
+        files_written.append(norm_path.name)
+
+    # 4. Semantic segmentation pass
+    sem_raw = aov_buffers.get("semantic")
+    sem_u8 = colorize_aov_buffer("semantic", sem_raw, np)
+    if sem_u8 is not None:
+        if Image is not None:
+            sem_path = out_dir / f"{frame_id}_semantic.png"
+            Image.fromarray(sem_u8).save(sem_path, format="PNG")
+        else:
+            sem_path = out_dir / f"{frame_id}_semantic.npy"
+            np.save(sem_path, sem_u8)
+        files_written.append(sem_path.name)
+
+    # 5. Structured metadata JSON
+    meta = {
+        "schema": "operon.replicator.sdg.v1",
+        "frame_id": frame_id,
+        "timestamp": time.time(),
+        "render_mode": state.get("render_mode", "path"),
+        "rt_subframes": int(state.get("rt_subframes", 32)),
+        "q6_rad": [float(x) for x in state.get("q6", [0.0] * 6)],
+        "q4_rad": [float(x) for x in state.get("q4", [0.0] * 4)],
+        "gripper_closed": bool(state.get("closed", False)),
+        "jaw_travel_m": float(state.get("jaw_travel", 0.0)),
+        "domain_randomization": {
+            "light_ev": float(state.get("light", 2.8)),
+            "key_angle_deg": float(state.get("angle", 35.0)),
+            "roughness": float(state.get("rough", 0.22)),
+        },
+        "semantic_classes": {
+            "robot": ["/World/pedestal"],
+            "workpiece": ["/World/cell"],
+            "fixture": ["/World/pick_pad", "/World/place_pad", "/World/dock", "/World/valve_base"],
+            "ground": ["/World/bench"],
+        },
+        "files": files_written,
+    }
+    meta_path = out_dir / f"{frame_id}_meta.json"
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    files_written.append(meta_path.name)
+
+    return {
+        "frame_id": frame_id,
+        "local_dir": str(out_dir),
+        "files": files_written,
+        "meta": meta,
+    }
+
+
+def upload_sdg_to_gcs(local_dir: Path, frame_id: str, files: list[str], bucket_name: str, prefix: str = "operon-sdg") -> str:
+    """Upload an SDG frame bundle to `gs://<bucket_name>/<prefix>/<frame_id>/`."""
+    if not bucket_name:
+        return ""
+    bucket_clean = bucket_name.replace("gs://", "").strip("/")
+    dest_uri = f"gs://{bucket_clean}/{prefix.strip('/')}/{frame_id}"
+
+    # Try google-cloud-storage Python client first, then fall back to gcloud storage cp
+    try:
+        from google.cloud import storage  # type: ignore
+
+        client = storage.Client()
+        bucket = client.bucket(bucket_clean)
+        for fname in files:
+            fpath = Path(local_dir) / fname
+            if fpath.exists():
+                blob = bucket.blob(f"{prefix.strip('/')}/{frame_id}/{fname}")
+                blob.upload_from_filename(str(fpath))
+        return dest_uri
+    except Exception:
+        pass
+
+    try:
+        src_paths = [str(Path(local_dir) / f) for f in files if (Path(local_dir) / f).exists()]
+        if src_paths:
+            subprocess.check_call(
+                ["gcloud", "storage", "cp", *src_paths, f"{dest_uri}/"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return dest_uri
+    except Exception as exc:
+        print(f"[shadow-rtx] GCS upload warning ({dest_uri}): {exc}", file=sys.stderr)
+    return ""
 
 
 def colorize_aov_buffer(aov: str, data, np):
@@ -819,6 +1167,11 @@ def main() -> None:
                              "path = PathTracing for offline synthetic-data capture")
     parser.add_argument("--rt-subframes", type=int, default=32,
                         help="Accumulation subframes per frame in --render-mode path")
+    parser.add_argument("--sdg-dir", type=str, default="/tmp/operon-sdg",
+                        help="Local output directory for Replicator SDG frame bundles")
+    parser.add_argument("--gcs-bucket", type=str,
+                        default=os.environ.get("OPERON_GCS_BUCKET", "run-sources-gen-lang-client-0221638641-us-central1"),
+                        help="GCS bucket for uploading SDG frame bundles (empty disables upload)")
     parser.add_argument("--idle-exit-minutes", type=float, default=0.0,
                         help="Exit when no studio deck has been in the room for this long. "
                              "0 disables. REQUIRED on a cloud GPU: SkyPilot measures idleness "
@@ -853,13 +1206,11 @@ def main() -> None:
     print(f"[shadow-rtx] Isaac Sim up, renderer={renderer}")
 
     import numpy as np
-    from PIL import Image, ImageDraw
+    from PIL import Image
     import websockets
-
 
     import omni.replicator.core as rep  # type: ignore
     import omni.usd  # type: ignore
-    from pxr import Gf, UsdGeom
 
     # Isaac Sim 6.x namespaces. The legacy omni.isaac.* aliases are gone;
     # importing them here would mask a genuinely wrong container image.
@@ -889,6 +1240,7 @@ def main() -> None:
 
     promote_semantic_attributes(stage)
     add_scene_lighting(stage)
+    upgrade_materials_to_mdl(stage)
 
     # The IMU mounts on the forearm site exported by mjcf_to_usd.py, which is
     # the same site the analytic forearmSiteFK() uses in the studio.
@@ -922,7 +1274,16 @@ def main() -> None:
         "q4": [0.0, 0.35, 0.65, 0.0],
         "q6": [0.0, 0.35, 0.65, 0.0, 0.4, 0.0],
         "closed": False,
+        "jaw_travel": None,
+        "cell_pos": None,
+        "cell_quat": None,
+        "valve_rad": None,
         "aov": "rtx",
+        "render_mode": args.render_mode,
+        "rt_subframes": args.rt_subframes,
+        "sdg_capture_pending": False,
+        "sdg_count": 0,
+        "last_sdg_uri": "",
         "light": 2.8,
         "angle": 35.0,
         "rough": 0.22,
@@ -965,8 +1326,28 @@ def main() -> None:
                                         state["q6"] = [float(x) for x in msg["q6"][:6]]
                                     if "closed" in msg:
                                         state["closed"] = bool(msg["closed"])
+                                    if "jaw_travel" in msg and msg["jaw_travel"] is not None:
+                                        state["jaw_travel"] = float(msg["jaw_travel"])
+                                    if isinstance(msg.get("cell_pos"), list) and len(msg["cell_pos"]) == 3:
+                                        state["cell_pos"] = [float(x) for x in msg["cell_pos"]]
+                                    if isinstance(msg.get("cell_quat"), list) and len(msg["cell_quat"]) == 4:
+                                        state["cell_quat"] = [float(x) for x in msg["cell_quat"]]
+                                    if "valve_rad" in msg and msg["valve_rad"] is not None:
+                                        state["valve_rad"] = float(msg["valve_rad"])
                                     if msg.get("aov") in ("rtx", "depth", "normal", "semantic", "instance"):
                                         state["aov"] = msg["aov"]
+                                    if msg.get("render_mode") in ("rt", "path"):
+                                        new_rm = msg["render_mode"]
+                                        new_sf = int(msg.get("rt_subframes", state["rt_subframes"]))
+                                        if new_rm != state["render_mode"] or new_sf != state["rt_subframes"]:
+                                            state["render_mode"] = new_rm
+                                            state["rt_subframes"] = new_sf
+                                            configure_rtx_render_settings(
+                                                mode="PathTracing" if new_rm == "path" else "RayTracedLighting",
+                                                subframes=new_sf,
+                                            )
+                                    if msg.get("sdg_capture"):
+                                        state["sdg_capture_pending"] = True
                                     if "light" in msg and msg["light"] is not None:
                                         state["light"] = float(msg["light"])
                                     if "angle" in msg and msg["angle"] is not None:
@@ -982,28 +1363,30 @@ def main() -> None:
 
                     try:
                         while sim_app.is_running():
-                            # 1. Articulate both IdealArm (Left) and RealArm (Right) 6-DOF arms in USD
-                            q4_arr = np.array(state["q4"], dtype=float)
+                            # 1. Articulate the verified `/World/pedestal` 6-DOF robot stage
                             q6_arr = np.array(state["q6"], dtype=float)
-                            update_articulated_arm_usd(stage, "IdealArm", -0.115, q4_arr, state["closed"], np)
-                            update_articulated_arm_usd(stage, "RealArm", 0.115, q6_arr, state["closed"], np)
+                            articulate_operon_stage(
+                                stage,
+                                q6_arr,
+                                closed=state["closed"],
+                                jaw_travel=state["jaw_travel"],
+                                cell_pos=state["cell_pos"],
+                                cell_quat=state["cell_quat"],
+                                valve_rad=state["valve_rad"],
+                            )
 
-                            # 2. Update forearm watch_site pose from live teleop joints so PhysX IMU experiences real kinematics
+                            # 2. Compute analytical forearm site pose for fallback / cross-check
                             p_site, R_site = forearm_fk_rad(q6_arr, np)
-                            ws_prim = stage.GetPrimAtPath("/World/AbelArm/forearm_link/watch_site")
-                            if ws_prim.IsValid():
-                                q_site = quat_from_rot_matrix(R_site, np)
-                                set_xform_pose(
-                                    ws_prim,
-                                    (float(p_site[0]), float(p_site[1]) + 0.115, float(p_site[2])),
-                                    quat_wxyz=q_site,
-                                )
 
                             # 3. Live-bind Domain Randomization sliders (light, angle, rough) to UsdLux & UsdShade
                             update_domain_randomization_usd(stage, state)
 
-                            # 4. Step PhysX + RTX Renderer
-                            world.step(render=True)
+                            # 4. Step PhysX + RTX Renderer (with multi-subframe accumulation when PathTracing SDG capture runs)
+                            if state["sdg_capture_pending"] and state["render_mode"] == "path":
+                                for _ in range(max(1, min(64, int(state["rt_subframes"])))):
+                                    world.step(render=True)
+                            else:
+                                world.step(render=True)
 
                             # 5. Read PhysX IMUSensor (with analytical kinematic fallback while sensor buffer warms up)
                             frame = imu_sensor.get_current_frame()
@@ -1031,8 +1414,35 @@ def main() -> None:
                             else:
                                 gx, gy, gz = float(gyro_body[0]), float(gyro_body[1]), float(gyro_body[2])
 
+                            # 6. Optional Replicator SDG multi-AOV capture + GCS upload
+                            sdg_info = None
+                            if state["sdg_capture_pending"]:
+                                state["sdg_capture_pending"] = False
+                                state["sdg_count"] += 1
+                                fid = f"sdg_{int(time.time())}_{state['sdg_count']:04d}"
+                                all_aovs = {}
+                                for k, ann in annotators.items():
+                                    rb = ann.get_data()
+                                    if isinstance(rb, dict):
+                                        rb = rb.get("data")
+                                    all_aovs[k] = rb
+                                bundle = write_sdg_bundle(Path(args.sdg_dir), fid, state, all_aovs, np)
+                                gcs_uri = upload_sdg_to_gcs(
+                                    Path(args.sdg_dir),
+                                    fid,
+                                    bundle["files"],
+                                    args.gcs_bucket,
+                                    prefix=f"operon-sdg/{args.room.upper()}",
+                                )
+                                state["last_sdg_uri"] = gcs_uri or bundle["local_dir"]
+                                sdg_info = {
+                                    "frame_id": fid,
+                                    "files": bundle["files"],
+                                    "uri": state["last_sdg_uri"],
+                                }
+
                             now = time.perf_counter()
-                            if now - last_send >= min_interval:
+                            if now - last_send >= min_interval or sdg_info is not None:
                                 dt = now - last_send if last_send > 0 else min_interval
                                 last_send = now
                                 active_aov = state["aov"]
@@ -1051,6 +1461,8 @@ def main() -> None:
                                 payload = {
                                     "t": "isaac_frame",
                                     "aov": active_aov,
+                                    "render_mode": state["render_mode"],
+                                    "subframes": state["rt_subframes"],
                                     "jpg": jpg_b64,
                                     "fps": round(1.0 / max(1e-3, dt), 1),
                                     "imu": {
@@ -1062,6 +1474,8 @@ def main() -> None:
                                         "gz": round(gz, 4),
                                     },
                                 }
+                                if sdg_info is not None:
+                                    payload["sdg"] = sdg_info
                                 await ws.send(json.dumps(payload))
 
                             if idle_limit > 0 and (time.time() - last_cmd_at) > idle_limit:

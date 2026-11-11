@@ -21,6 +21,8 @@ __pycache__/
 # Local capture, never deploy
 *.mov
 *.mp4
+Screenshot*.png
+.venv-usd/
 
 # Dev-only: regression harnesses and docs are not needed at runtime
 test/

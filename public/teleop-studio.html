@@ -28,6 +28,9 @@
       --silver: #cbd5e1;
       --g-red: #f43f5e;
       --g-green: #38bdf8;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --muted: #8492ad;
       --cyan: #60a5fa;
       --coral: #e879f9;
       --sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -176,7 +179,7 @@
     .between { justify-content: space-between; }
 
     /* CARDS */
-    .step-card {
+    .step-card, .card {
       background: #121520;
       border: 1px solid var(--border);
       border-radius: 9px;
@@ -784,9 +787,10 @@
 
       <div class="row wrap" style="gap:5px;justify-content:flex-end">
         <!-- RIG COMPARISON SELECTOR -->
-        <div class="seg nv" id="rig-mode-bar" title="View Mode: Compare the Ideal Math Arm (Left) against the Real Servo Hardware Twin (Right), or view a Single 6-DOF Arm">
+        <div class="seg nv" id="rig-mode-bar" title="View Mode: Compare the Ideal Math Arm (Left) against the Real Servo Hardware Twin (Right), view a Single 6-DOF Arm, or compare 4-DOF vs 6-DOF reachability">
           <button class="sel" data-rm="6d_sim2real" title="Sim vs Real (2 Arms): Left arm runs instant ideal math; Right arm models real servo hardware delay (1 deg deadband + 150 ms smoothing)">Sim vs. Real (2 Arms)</button>
           <button data-rm="6d_single" title="Single 6-DOF Arm: Focus on one 6-DOF UR5e robot arm in the center of the bench">Single 6-DOF</button>
+          <button data-rm="4d_vs_6d" title="4-DOF vs 6-DOF Baseline: Left arm locked to 4-DOF planar constraint (roll=0, pitch=0); Right arm uses full 6-DOF spherical wrist">4D vs. 6D</button>
         </div>
 
         <!-- STATION SELECTOR -->
@@ -950,15 +954,20 @@
             <div class="glass-bar">
               <span class="sub-label" style="padding:0 5px" title="Switch between shaded camera view and depth/normal/segmentation buffers">View</span>
               <div class="seg nv" id="aov-bar">
-                <button class="sel" data-aov="rtx" title="PBR Lit: Physically-based metallic-roughness shading with soft shadows">PBR Lit</button>
-                <button data-aov="depth" title="Depth Z: Distance from camera in meters">Depth Z</button>
+                <button class="sel" data-aov="rtx" id="btn-aov-rtx" title="PBR (Local): WebGL2 metallic-roughness + clearcoat shading locally; upgrades to live Omniverse RTX when the bridge connects">PBR (Local)</button>
+                <button data-aov="depth" title="Depth Z: Metric camera-space distance normalized across the workbench (0.18m – 1.25m)">Depth Z</button>
                 <button data-aov="normal" title="Surface Normals: 3D surface direction mapped to RGB">Normals</button>
                 <button data-aov="semantic" title="Semantic Class ID: Color-coded by object type">Semantic</button>
                 <button data-aov="instance" title="Instance ID: Color-coded per individual part">Instance</button>
               </div>
             </div>
             <div class="glass-bar">
-              <button class="btn sm" id="btn-rtx-bridge" title="Shadow PC Omniverse RTX Bridge: Click to copy the Shadow PC launch command, or toggle between Live RTX Stream and Local WebGL when connected">RTX: Shadow Bridge</button>
+              <button class="btn sm" id="btn-rtx-bridge" title="Omniverse RTX Bridge: Click to copy the launch command, or toggle between Live RTX Stream and Local WebGL2 PBR when connected">RTX: Bridge Off</button>
+              <div class="seg" id="rtx-mode-bar" title="Omniverse Renderer Mode: Switch between real-time RayTracedLighting (20 fps) and multi-sample PathTracing (32 spp)">
+                <button class="sel" data-rmode="rt" title="RayTracedLighting: Real-time 20 fps direct + 1-bounce reflections">RT Live</button>
+                <button data-rmode="path" title="PathTracing: 32-subframe progressive Monte Carlo global illumination">Path Traced</button>
+              </div>
+              <button class="btn sm" id="btn-sdg-capture" title="Replicator SDG Capture: Save synchronized RGB + Depth + Normals + Semantic + JSON metadata bundle to GCS">SDG &rarr; GCS</button>
               <button class="btn sm on" id="btn-gizmo-toggle" title="Toggle 3D Yaw, Pitch, Roll Axis Gizmo on the grippers">3D Axes: ON</button>
               <button class="btn sm" id="btn-cam-reset" title="Reset camera orbit to close-up front isometric view">Reset Camera</button>
               <button class="btn sm nv" id="btn-expand-canvas" title="Cycle 3D Canvas Size: Standard -> Wide -> Fullscreen">Expand 3D</button>
@@ -1175,6 +1184,6 @@
     </div>
   </div>
 
-  <script type="module" src="./teleop-studio.js?v=24"></script>
+  <script type="module" src="./teleop-studio.js?v=25"></script>
 </body>
 </html>

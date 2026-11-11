@@ -534,6 +534,25 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Verified pxr-authored OpenUSD stage (generated from operon_station0.xml by sim/mjcf_to_usd.py)
+  if (url.pathname === "/assets/operon_arm.usda" || url.pathname === "/api/usd/stage") {
+    const usdPath = path.join(__dirname, "assets", "operon_arm.usda");
+    fs.stat(usdPath, (err, stat) => {
+      if (err || !stat.isFile()) {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("operon_arm.usda not found");
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Length": stat.size,
+        "Cache-Control": "no-cache"
+      });
+      fs.createReadStream(usdPath).pipe(res);
+    });
+    return;
+  }
+
   // Serve static files from ./public
   let relPath = decodeURIComponent(url.pathname);
   if (relPath === "/" || relPath === "") relPath = "/index.html";

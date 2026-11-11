@@ -14,7 +14,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { poseR, oriError, ik4, ik6, fk4, fk6, JOINTS, G, M } from "./demos/arms3d.js";
 import { onLive, send, qrSVG, phoneUrl, ROOM } from "./live.js";
-import { initPhysics } from "./mujoco-physics.js?v=24";
+import { initPhysics } from "./mujoco-physics.js?v=25";
 
 const D2R = Math.PI / 180;
 const R2D = 180 / Math.PI;
@@ -509,7 +509,7 @@ function freshArm() {
 // in place. A failure here is not fatal: physArmOn() simply stays false.
 (async () => {
   const t0 = performance.now();
-  const p = await initPhysics({ rigs: [4, 6], modelUrl: "/models/operon_station0.xml?v=24" });
+  const p = await initPhysics({ rigs: [4, 6], modelUrl: "/models/operon_station0.xml?v=25" });
   st.phys.available = p.available;
   st.phys.reason = p.reason;
   st.phys.arms = p.arms;
@@ -617,7 +617,33 @@ const MAT = {
 };
 
 const normalMat = new THREE.MeshNormalMaterial();
-const depthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.BasicDepthPacking });
+// Metric camera-space linear depth shader normalized across the workbench range [0.18m..1.25m]
+// with subtle 5 cm iso-depth contour bands so small Z changes are immediately legible.
+const depthMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uNear: { value: 0.18 },
+    uFar: { value: 1.25 }
+  },
+  vertexShader: `
+    varying float vViewZ;
+    void main() {
+      vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+      vViewZ = -mvPos.z;
+      gl_Position = projectionMatrix * mvPos;
+    }
+  `,
+  fragmentShader: `
+    uniform float uNear;
+    uniform float uFar;
+    varying float vViewZ;
+    void main() {
+      float norm = clamp((uFar - vViewZ) / (uFar - uNear), 0.0, 1.0);
+      float band = 0.96 + 0.04 * cos(vViewZ * 125.6637);
+      vec3 col = vec3(norm * band, norm * 0.92 * band, min(1.0, norm * 1.08 * band));
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `
+});
 
 // Tag every mesh with semantic & instance colors + rich hover metadata for Omniverse Replicator AOV passes
 const trackedObjects = []; // { label, semClass, instId, obj3d, color }
@@ -755,8 +781,10 @@ function makeGripper(ghost = false) {
     return ms;
   };
   // UR5e Built-in 6-Axis Force/Torque Sensor Ring + ISO 9409-1-50-4-M6 Tool Flange
-  const ftSensor = m(new THREE.CylinderGeometry(0.0175, 0.0175, 0.009, 36), MAT.copper);
+  const ftMat = ghost ? ghostMat : MAT.copper.clone();
+  const ftSensor = m(new THREE.CylinderGeometry(0.0175, 0.0175, 0.009, 36), ftMat);
   ftSensor.rotation.x = Math.PI / 2; ftSensor.position.z = -0.058; g.add(ftSensor);
+  if (!ghost) g.userData.ftMat = ftMat;
   const flange = m(new THREE.CylinderGeometry(0.016, 0.0165, 0.008, 36), MAT.steel);
   flange.rotation.x = Math.PI / 2; flange.position.z = -0.050; g.add(flange);
 
@@ -1088,6 +1116,11 @@ function updateRig(dof, fk, props) {
   poseObj(r.grip, fk.tip, fk.R);
   r.grip.userData.setOpen(props.open);
   r.grip.userData.lastOpen = props.open;
+  if (r.grip.userData.ftMat) {
+    const fLoad = Math.min(1, (props.contactForceN || 0) / 8.0);
+    r.grip.userData.ftMat.emissive.setRGB(0.22 * fLoad, 0.72 * fLoad, 0.98 * fLoad);
+    r.grip.userData.ftMat.emissiveIntensity = fLoad > 0.04 ? 0.35 + fLoad * 1.15 : 0.0;
+  }
   if (r.gizmo) {
     r.gizmo.visible = st.showGizmos && st.aov === "rtx";
     poseObj(r.gizmo, fk.tip, fk.R);
@@ -1479,6 +1512,16 @@ function renderPilots() {
   }));
 }
 
+function syncRtxAovLabel() {
+  const isLiveRtx = !!(st.isaacConnected && st.isaacViewEnabled);
+  const rtxBtn = $("btn-aov-rtx") || document.querySelector('#aov-bar button[data-aov="rtx"]');
+  if (rtxBtn) {
+    rtxBtn.textContent = isLiveRtx
+      ? (st.rtxRenderMode === "path" ? "RTX Path" : "RTX Lit")
+      : "PBR (Local)";
+  }
+}
+
 onLive((m) => {
   if (m.t === "isaac_status") {
     st.isaacConnected = !!m.connected;
@@ -1487,12 +1530,13 @@ onLive((m) => {
       if ($("rtx-stream-overlay")) $("rtx-stream-overlay").classList.add("hide");
       if ($("btn-rtx-bridge")) {
         $("btn-rtx-bridge").className = "btn sm";
-        $("btn-rtx-bridge").textContent = "RTX: Shadow Bridge";
+        $("btn-rtx-bridge").textContent = "RTX: Bridge Off";
       }
     } else if ($("btn-rtx-bridge")) {
       $("btn-rtx-bridge").className = "btn sm on";
-      $("btn-rtx-bridge").textContent = "RTX: Shadow LIVE";
+      $("btn-rtx-bridge").textContent = "RTX: Bridge LIVE";
     }
+    syncRtxAovLabel();
     return;
   }
   if (m.t === "isaac_frame") {
@@ -1500,6 +1544,10 @@ onLive((m) => {
     st.isaacLastFrameMs = performance.now();
     if (st.isaacViewEnabled === undefined) st.isaacViewEnabled = true;
     if (m.imu) st.isaacImu = m.imu;
+    if (m.render_mode) st.rtxRenderMode = m.render_mode;
+    if (m.sdg && $("watch-status")) {
+      $("watch-status").textContent = `Replicator SDG saved -> ${m.sdg.uri} (${(m.sdg.files || []).length} files)`;
+    }
     const overlay = $("rtx-stream-overlay");
     if (overlay && m.jpg && st.isaacViewEnabled) {
       overlay.src = `data:image/jpeg;base64,${m.jpg}`;
@@ -1507,10 +1555,12 @@ onLive((m) => {
     }
     if ($("btn-rtx-bridge")) {
       $("btn-rtx-bridge").className = st.isaacViewEnabled ? "btn sm on" : "btn sm";
+      const modeTag = st.rtxRenderMode === "path" ? "Path" : "RT";
       $("btn-rtx-bridge").textContent = st.isaacViewEnabled
-        ? `RTX: LIVE (${m.fps || 20}fps)`
-        : "RTX: Paused (WebGL)";
+        ? `RTX ${modeTag}: LIVE (${m.fps || 20}fps)`
+        : "RTX: Paused (Local PBR)";
     }
+    syncRtxAovLabel();
     return;
   }
   if (m.t === "status") {
@@ -1912,7 +1962,7 @@ function runPoseSequence(steps, done) {
  * the cell out of the jaws, so it lifts, re-orients IN PLACE, traverses ABOVE
  * the dock, and only then descends.
  */
-function runPhysicalDockInsertion() {
+function runPhysicalDockInsertion(attempt = 1) {
   const DOCK = ST[1].tgtR;
   const along = (r) => [CHARGER_SLOT_P[0] + CHARGER_NZ[0] * r,
                         CHARGER_SLOT_P[1] + CHARGER_NZ[1] * r,
@@ -1921,12 +1971,24 @@ function runPhysicalDockInsertion() {
   const STAND = along(0.034);
   const OVER = [STAND[0], STAND[1], 0.155];
 
+  // If retrying after a stripped carry or if the cell rolled off the pick zone,
+  // place it cleanly back on the pick pad before re-running the grasp.
+  const prInit = st.phys.readR;
+  if (prInit) {
+    const dPickInit = Math.hypot(prInit.cellP[0] - PICK_P[0], prInit.cellP[1] - PICK_P[1]);
+    if (attempt > 1 || dPickInit > 0.065) {
+      for (const d of [4, 6]) st.phys.arms[d]?.resetCell();
+    }
+  }
+
   const cell0 = st.phys.readR ? st.phys.readR.cellP.slice() : [PICK_P[0], PICK_P[1], 0.0135];
   const gy0 = physCellGraspYaw(st.phys.readR, -25);
   st.tween = null;
   st.holdCrowd = performance.now() + 20000;
   setClosed(false, false);
-  if ($("watch-status")) $("watch-status").textContent = "Approaching cell\u2026";
+  if ($("watch-status")) {
+    $("watch-status").textContent = attempt > 1 ? `Retrying dock insertion (attempt ${attempt}/3)\u2026` : "Approaching cell\u2026";
+  }
 
   // Phase 1: get above the cell, THEN re-read its pose. Reading once up front
   // is not safe -- right after a station change the cell may still be
@@ -1951,14 +2013,14 @@ function runPhysicalDockInsertion() {
     // Clamp, then VERIFY the pads actually took the cell before committing to
     // the carry. Without this the sequence happily carries nothing to the
     // dock and reports "aligned in slot" with the cell still on the pad.
-    const clampThen = (attempt, after) => {
+    const clampThen = (clampTry, after) => {
       physWaitArrival(graspP, 0.004, 3000, () => {
         setClosed(true, false);
-        if ($("watch-status")) $("watch-status").textContent = attempt > 1 ? "Re-clamping cell\u2026" : "Clamping cell";
+        if ($("watch-status")) $("watch-status").textContent = clampTry > 1 ? "Re-clamping cell\u2026" : "Clamping cell";
         later(480, () => {
           const r = st.phys.readR;
           if (r && r.held) { after(); return; }
-          if (attempt >= 3) {
+          if (clampTry >= 3) {
             if ($("watch-status")) $("watch-status").textContent = "Could not get a grip on the cell";
             st.cmdR = null;
             return;
@@ -1974,7 +2036,7 @@ function runPhysicalDockInsertion() {
           showCmd(st.cmd);
           later(420, () => {
             st.cmd.z = graspP[2]; showCmd(st.cmd);
-            clampThen(attempt + 1, after);
+            clampThen(clampTry + 1, after);
           });
         });
       });
@@ -1999,7 +2061,20 @@ function runPhysicalDockInsertion() {
         steps.push({ R: DOCK, grip: false, ms: 560, status: "Releasing into cradle" });
         for (let k = 1; k <= 4; k++) steps.push({ p: along(0.012 + 0.015 * k), R: DOCK, ms: 200 });
         steps.push({ p: along(0.080), R: DOCK, ms: 560, status: "Cell docked \u2014 retained by the cradle" });
-        runPoseSequence(steps);
+        runPoseSequence(steps, () => {
+          later(350, () => {
+            const rf = st.phys.readR;
+            if (!rf || st.station !== 1) return;
+            const dSlot = Math.hypot(
+              rf.cellP[0] - CHARGER_SLOT_P[0],
+              rf.cellP[1] - CHARGER_SLOT_P[1],
+              rf.cellP[2] - CHARGER_SLOT_P[2]
+            );
+            if (dSlot >= 0.032 && attempt < 3) {
+              runPhysicalDockInsertion(attempt + 1);
+            }
+          });
+        });
       });
     });
   });
@@ -2148,9 +2223,7 @@ function runPickAndPlaceCycle() {
     )
   );
 }
-if ($("btn-pick-place")) $("btn-pick-place").onclick = runPickAndPlaceCycle;
-
-$("btn-auto").onclick = () => {
+function runActiveStationDemo() {
   const s = ST[st.station];
   if (s.id === "battery") {
     runPickAndPlaceCycle();
@@ -2166,7 +2239,9 @@ $("btn-auto").onclick = () => {
     setClosed(false);
     tweenTo(s.yprGrip, s.p, 1100, () => later(300, () => { setClosed(true); later(400, () => tweenTo(s.ypr, s.p, 1300)); }));
   }
-};
+}
+if ($("btn-pick-place")) $("btn-pick-place").onclick = runActiveStationDemo;
+$("btn-auto").onclick = runActiveStationDemo;
 
 // Firmware Quintic Sweep (executes exact 5th-order polynomial segments from config/trajectories/*.yaml)
 async function startQuinticSweep() {
@@ -2464,20 +2539,70 @@ if ($("btn-rtx-bridge")) {
       const overlay = $("rtx-stream-overlay");
       if (overlay) overlay.classList.toggle("hide", !st.isaacViewEnabled);
       $("btn-rtx-bridge").className = st.isaacViewEnabled ? "btn sm on" : "btn sm";
-      $("btn-rtx-bridge").textContent = st.isaacViewEnabled ? "RTX: Shadow LIVE" : "RTX: Paused (WebGL)";
+      $("btn-rtx-bridge").textContent = st.isaacViewEnabled ? "RTX: Bridge LIVE" : "RTX: Paused (Local PBR)";
+      syncRtxAovLabel();
     } else {
       const wsProto = location.protocol === "https:" ? "wss" : "ws";
       const cmd = `python sim/shadow_rtx_bridge.py --server ${wsProto}://${location.host} --room ${ROOM}`;
       navigator.clipboard?.writeText(cmd);
-      $("btn-rtx-bridge").textContent = "Copied Shadow Command";
+      $("btn-rtx-bridge").textContent = "Copied Bridge Command";
       if ($("watch-status")) {
         $("watch-status").textContent = `Copied: ${cmd}`;
       }
       setTimeout(() => {
         if (!st.isaacConnected && $("btn-rtx-bridge")) {
-          $("btn-rtx-bridge").textContent = "RTX: Shadow Bridge";
+          $("btn-rtx-bridge").textContent = "RTX: Bridge Off";
         }
       }, 2200);
+    }
+  };
+}
+if ($("rtx-mode-bar")) {
+  $("rtx-mode-bar").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    $("rtx-mode-bar").querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
+    st.rtxRenderMode = b.dataset.rmode || "rt";
+    st.rtxSubframes = st.rtxRenderMode === "path" ? 32 : 1;
+    syncRtxAovLabel();
+    if (st.isaacConnected) {
+      send({
+        t: "isaac_cmd",
+        render_mode: st.rtxRenderMode,
+        rt_subframes: st.rtxSubframes,
+        aov: st.aov
+      });
+    }
+    if ($("watch-status")) {
+      $("watch-status").textContent = st.rtxRenderMode === "path"
+        ? "Omniverse Renderer -> PathTracing (32 spp accumulation)"
+        : "Omniverse Renderer -> RayTracedLighting (20 fps real-time)";
+    }
+  }));
+}
+if ($("btn-sdg-capture")) {
+  $("btn-sdg-capture").onclick = () => {
+    if (st.isaacConnected) {
+      send({
+        t: "isaac_cmd",
+        sdg_capture: true,
+        render_mode: st.rtxRenderMode || "path",
+        rt_subframes: st.rtxSubframes || 32,
+        q6: st.q6Real.map(v => +v.toFixed(4)),
+        closed: st.closed,
+        aov: st.aov
+      });
+      if ($("watch-status")) {
+        $("watch-status").textContent = "Triggered Omniverse Replicator SDG multi-AOV capture -> GCS";
+      }
+    } else {
+      // Offline / local mode: export synchronized RGB PNG + COCO BBox + OpenUSD stage snapshot
+      const ts = Date.now();
+      const a = document.createElement("a");
+      a.href = cv.toDataURL("image/png");
+      a.download = `operon_sdg_${st.aov}_${ts}.png`;
+      a.click();
+      if ($("watch-status")) {
+        $("watch-status").textContent = "Saved local SDG viewport pass (connect RTX Bridge for multi-AOV GCS upload)";
+      }
     }
   };
 }
@@ -2634,253 +2759,120 @@ function downloadText(filename, text, mime = "application/json") {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+// Pre-fetch the verified pxr-authored OpenUSD stage (generated from operon_station0.xml by sim/mjcf_to_usd.py)
+fetch("/assets/operon_arm.usda", { cache: "no-store" })
+  .then(r => (r.ok ? r.text() : ""))
+  .then(txt => { if (txt && txt.startsWith("#usda 1.0")) st.verifiedUsdBase = txt; })
+  .catch(() => {});
+
 function buildOpenUSD(stepObj, epList) {
   const samples = epList.length ? epList : [stepObj];
   const roughVal = +(parseFloat($("dr-rough")?.value ?? "0.22")).toFixed(3);
   const lightMult = +(parseFloat($("dr-light")?.value ?? "2.8")).toFixed(2);
   const aziDeg = +(parseFloat($("dr-azi")?.value ?? "35")).toFixed(1);
   const benchRough = Math.min(0.95, +(roughVal * 0.85 + 0.06).toFixed(3));
-  const q6SimSamples = samples.map((s, i) => {
-    const arr = s.observation.q6_sim_rad || s.observation.q6_rad || [0, 0, 0, 0, 0, 0];
-    return `        ${i}: (${arr.map(v => (v * R2D).toFixed(2)).join(", ")})`;
+  const rtxModeToken = st.rtxRenderMode === "path" ? "PathTracing" : "RayTracedLighting";
+
+  const jointNames = ["yaw", "shoulder", "elbow", "wrist_roll", "wrist_pitch", "tool_roll"];
+  const jointTimeSamples = {};
+  for (let j = 0; j < 6; j++) {
+    jointTimeSamples[jointNames[j]] = samples.map((s, idx) => {
+      const arr = s?.observation?.q6_real_rad || s?.observation?.q6_sim_rad || [0, 0, 0, 0, 0, 0];
+      return `                ${idx}: ${((arr[j] || 0) * R2D).toFixed(3)}`;
+    }).join(",\n");
+  }
+  const jawLTimeSamples = samples.map((s, idx) => {
+    const gapM = s?.physics?.jaw_gap_mm !== undefined ? s.physics.jaw_gap_mm / 1000 : (s?.observation?.gripper_closed ? 0.018 : 0.062);
+    const travel = Math.max(0, Math.min(0.022, (gapM - 0.018) * 0.5));
+    return `                ${idx}: ${(-travel).toFixed(5)}`;
   }).join(",\n");
-  const q6RealSamples = samples.map((s, i) => {
-    const arr = s.observation.q6_real_rad || s.observation.q6_rad || [0, 0, 0, 0, 0, 0];
-    return `        ${i}: (${arr.map(v => (v * R2D).toFixed(2)).join(", ")})`;
+  const jawRTimeSamples = samples.map((s, idx) => {
+    const gapM = s?.physics?.jaw_gap_mm !== undefined ? s.physics.jaw_gap_mm / 1000 : (s?.observation?.gripper_closed ? 0.018 : 0.062);
+    const travel = Math.max(0, Math.min(0.022, (gapM - 0.018) * 0.5));
+    return `                ${idx}: ${travel.toFixed(5)}`;
   }).join(",\n");
-  const imuSamples = samples.slice(-15).map((s, i) => `        ${i}: (${s.observation.forearm_imu.sim_acc_ms2.join(", ")})`).join(",\n");
-  return `#usda 1.0
-(
-    defaultPrim = "World"
-    endTimeCode = ${Math.max(0, samples.length - 1)}
-    metersPerUnit = 1.0
-    startTimeCode = 0
-    timeCodesPerSecond = 30
-    upAxis = "Z"
-    doc = "Exported from Operon 6-DOF Sim-to-Real Kinematic & Inertial Calibration Workbench"
-    customLayerData = {
-        dictionary renderSettings = {
-             token "rtx:rendermode" = "RayTracedLighting"
-             int "rtx:post:dlss:execMode" = 1
-             bool "rtx:reflections:enabled" = 1
-             double "rtx:reflections:maxRoughness" = 0.65
-             bool "rtx:translucency:enabled" = 1
-             bool "rtx:indirectDiffuse:enabled" = 1
-             bool "rtx:ambientOcclusion:enabled" = 1
-             bool "rtx:directLighting:sampledLighting:enabled" = 1
-             int "rtx:post:tonemap:op" = 6
-        }
-    }
-)
 
-def Xform "World"
-{
-    def PhysicsScene "PhysicsScene"
+  const lightingBlock = `
+    def Scope "Lighting"
     {
-        vector3f physics:gravityDirection = (0, 0, -1)
-        float physics:gravityMagnitude = 9.80665
-    }
-
-    def Scope "Looks"
-    {
-        def Material "Mat_ESD_OpticalBench"
+        def DomeLight "Dome"
         {
-            token outputs:surface.connect = </World/Looks/Mat_ESD_OpticalBench/PBRShader.outputs:surface>
-            def Shader "PBRShader"
-            {
-                uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor = (0.06, 0.075, 0.11)
-                float inputs:metallic = 0.25
-                float inputs:roughness = ${benchRough}
-                float inputs:clearcoat = 0.45
-                float inputs:clearcoatRoughness = 0.18
-                float inputs:ior = 1.5
-                token outputs:surface
-            }
+            color3f inputs:color = (0.78, 0.84, 0.96)
+            float inputs:intensity = ${(280 + lightMult * 150).toFixed(1)}
         }
 
-        def Material "Mat_IdealArm_AnodizedViolet"
+        def RectLight "Key"
         {
-            token outputs:surface.connect = </World/Looks/Mat_IdealArm_AnodizedViolet/PBRShader.outputs:surface>
-            def Shader "PBRShader"
-            {
-                uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor = (0.55, 0.36, 0.96)
-                float inputs:metallic = 0.78
-                float inputs:roughness = ${roughVal}
-                float inputs:clearcoat = 0.35
-                float inputs:clearcoatRoughness = 0.12
-                float inputs:ior = 1.5
-                token outputs:surface
-            }
+            color3f inputs:color = (0.99, 0.96, 0.91)
+            float inputs:height = 0.55
+            float inputs:intensity = ${(lightMult * 285).toFixed(1)}
+            float inputs:width = 0.65
+            float3 xformOp:rotateXYZ = (-42, ${aziDeg}, 0)
+            double3 xformOp:translate = (0.45, -0.35, 0.65)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
         }
 
-        def Material "Mat_RealArm_AnodizedCobalt"
+        def RectLight "Fill"
         {
-            token outputs:surface.connect = </World/Looks/Mat_RealArm_AnodizedCobalt/PBRShader.outputs:surface>
-            def Shader "PBRShader"
-            {
-                uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor = (0.23, 0.51, 0.96)
-                float inputs:metallic = 0.82
-                float inputs:roughness = ${roughVal}
-                float inputs:clearcoat = 0.40
-                float inputs:clearcoatRoughness = 0.10
-                float inputs:ior = 1.5
-                token outputs:surface
-            }
+            color3f inputs:color = (0.58, 0.74, 0.98)
+            float inputs:height = 0.5
+            float inputs:intensity = ${(180 + lightMult * 115).toFixed(1)}
+            float inputs:width = 0.6
+            float3 xformOp:rotateXYZ = (-30, 50, 0)
+            double3 xformOp:translate = (-0.4, 0.45, 0.45)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
         }
 
-        def Material "Mat_BrushedSteel_Joints"
+        def RectLight "Rim"
         {
-            token outputs:surface.connect = </World/Looks/Mat_BrushedSteel_Joints/PBRShader.outputs:surface>
-            def Shader "PBRShader"
-            {
-                uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor = (0.72, 0.76, 0.82)
-                float inputs:metallic = 0.92
-                float inputs:roughness = 0.18
-                float inputs:clearcoat = 0.50
-                token outputs:surface
-            }
-        }
-
-        def Material "Mat_CarbonGripper"
-        {
-            token outputs:surface.connect = </World/Looks/Mat_CarbonGripper/PBRShader.outputs:surface>
-            def Shader "PBRShader"
-            {
-                uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor = (0.10, 0.12, 0.16)
-                float inputs:metallic = 0.35
-                float inputs:roughness = 0.38
-                float inputs:clearcoat = 0.25
-                token outputs:surface
-            }
-        }
-
-        def Material "Mat_BatteryCell_21700"
-        {
-            token outputs:surface.connect = </World/Looks/Mat_BatteryCell_21700/PBRShader.outputs:surface>
-            def Shader "PBRShader"
-            {
-                uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor = (0.14, 0.48, 0.96)
-                float inputs:metallic = 0.68
-                float inputs:roughness = 0.16
-                float inputs:clearcoat = 0.85
-                token outputs:surface
-            }
-        }
-
-        def Material "Mat_ChargerDock"
-        {
-            token outputs:surface.connect = </World/Looks/Mat_ChargerDock/PBRShader.outputs:surface>
-            def Shader "PBRShader"
-            {
-                uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor = (0.16, 0.20, 0.28)
-                color3f inputs:emissiveColor = (0.04, 0.14, 0.32)
-                float inputs:metallic = 0.62
-                float inputs:roughness = 0.26
-                float inputs:clearcoat = 0.55
-                token outputs:surface
-            }
-        }
-
-        def Material "Mat_ValveWheel"
-        {
-            token outputs:surface.connect = </World/Looks/Mat_ValveWheel/PBRShader.outputs:surface>
-            def Shader "PBRShader"
-            {
-                uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor = (0.62, 0.42, 0.98)
-                color3f inputs:emissiveColor = (0.10, 0.05, 0.22)
-                float inputs:metallic = 0.74
-                float inputs:roughness = 0.20
-                float inputs:clearcoat = 0.65
-                token outputs:surface
-            }
-        }
-    }
-
-    def DomeLight "DomeLight"
-    {
-        color3f inputs:color = (0.78, 0.84, 0.96)
-        float inputs:intensity = ${(350 + lightMult * 220).toFixed(1)}
-    }
-
-    def DistantLight "KeyLight"
-    {
-        float inputs:angle = 1.2
-        color3f inputs:color = (0.98, 0.98, 1.0)
-        float inputs:intensity = ${(lightMult * 1000).toFixed(1)}
-        float3 xformOp:rotateXYZ = (-45, ${aziDeg}, 0)
-        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
-    }
-
-    def RectLight "FillRectLight"
-    {
-        color3f inputs:color = (0.52, 0.74, 1.0)
-        float inputs:height = 0.45
-        float inputs:intensity = ${(240 + lightMult * 160).toFixed(1)}
-        float inputs:width = 0.55
-    }
-
-    def RectLight "RimRectLight"
-    {
-        color3f inputs:color = (0.68, 0.48, 1.0)
-        float inputs:height = 0.40
-        float inputs:intensity = ${(300 + lightMult * 190).toFixed(1)}
-        float inputs:width = 0.50
-    }
-
-    def Cube "Bench" (
-        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
-    )
-    {
-        rel material:binding = </World/Looks/Mat_ESD_OpticalBench>
-        double size = 1.0
-        double3 xformOp:translate = (0.08, 0, -0.02)
-        float3 xformOp:scale = (0.62, 0.72, 0.04)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
-    }
-
-    def ArticulationRoot "ur5e_sim_6dof" (
-        prepend apiSchemas = ["PhysicsArticulationRootAPI", "MaterialBindingAPI"]
-    )
-    {
-        rel material:binding = </World/Looks/Mat_IdealArm_AnodizedViolet>
-        token[] dofNames = ["yaw", "shoulder", "elbow", "wrist_roll", "wrist_pitch", "tool_roll"]
-        double[] drive:jointPositions.timeSamples = {
-${q6SimSamples}
-        }
-    }
-
-    def ArticulationRoot "ur5e_real_twin_6dof" (
-        prepend apiSchemas = ["PhysicsArticulationRootAPI", "MaterialBindingAPI"]
-    )
-    {
-        rel material:binding = </World/Looks/Mat_RealArm_AnodizedCobalt>
-        token[] dofNames = ["yaw", "shoulder", "elbow", "wrist_roll", "wrist_pitch", "tool_roll"]
-        double[] drive:jointPositions.timeSamples = {
-${q6RealSamples}
-        }
-
-        def Xform "forearm_link"
-        {
-            def IsaacImuSensor "forearm_imu" (
-                doc = "Apple Watch Forearm Mount Site (abel_sim2real contract)"
-            )
-            {
-                float3 sensor:linearAcceleration.timeSamples = {
-${imuSamples}
-                }
-            }
+            color3f inputs:color = (0.78, 0.62, 1.0)
+            float inputs:height = 0.45
+            float inputs:intensity = ${(220 + lightMult * 135).toFixed(1)}
+            float inputs:width = 0.5
+            float3 xformOp:rotateXYZ = (-145, -20, 0)
+            double3 xformOp:translate = (-0.35, -0.45, 0.55)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
         }
     }
 }
 `;
+
+  if (st.verifiedUsdBase) {
+    let stageTxt = st.verifiedUsdBase.replace(
+      'upAxis = "Z"\n)',
+      `startTimeCode = 0\n    endTimeCode = ${Math.max(0, samples.length - 1)}\n    timeCodesPerSecond = 30\n    upAxis = "Z"\n    customLayerData = {\n        dictionary renderSettings = {\n            token "rtx:rendermode" = "${rtxModeToken}"\n            int "rtx:post:dlss:execMode" = 2\n            bool "rtx:reflections:enabled" = 1\n            bool "rtx:ambientOcclusion:enabled" = 1\n            bool "rtx:directLighting:sampledLighting:enabled" = 1\n        }\n    }\n)`
+    );
+    // In-place update of Steel & Bench shader roughness
+    stageTxt = stageTxt.replace(
+      /(def Material "Steel"[\s\S]*?float inputs:roughness = )[0-9.]+/,
+      `$1${roughVal}`
+    );
+    stageTxt = stageTxt.replace(
+      /(def Material "Bench"[\s\S]*?float inputs:roughness = )[0-9.]+/,
+      `$1${benchRough}`
+    );
+    // In-place injection of UsdPhysics.DriveAPI timeSamples on each revolute & prismatic joint
+    for (const jn of jointNames) {
+      const re = new RegExp(`(def PhysicsRevoluteJoint "${jn}"[\\s\\S]*?)float drive:angular:physics:targetPosition = 0`);
+      stageTxt = stageTxt.replace(
+        re,
+        `$1float drive:angular:physics:targetPosition.timeSamples = {\n${jointTimeSamples[jn]}\n            }`
+      );
+    }
+    stageTxt = stageTxt.replace(
+      /(def PhysicsPrismaticJoint "finger_l"[\s\S]*?)float drive:linear:physics:targetPosition = 0/,
+      `$1float drive:linear:physics:targetPosition.timeSamples = {\n${jawLTimeSamples}\n            }`
+    );
+    stageTxt = stageTxt.replace(
+      /(def PhysicsPrismaticJoint "finger_r"[\s\S]*?)float drive:linear:physics:targetPosition = 0/,
+      `$1float drive:linear:physics:targetPosition.timeSamples = {\n${jawRTimeSamples}\n            }`
+    );
+    const lastBrace = stageTxt.lastIndexOf("}");
+    if (lastBrace !== -1) {
+      return stageTxt.slice(0, lastBrace) + lightingBlock;
+    }
+  }
+  return `#usda 1.0\n(\n    defaultPrim = "World"\n    metersPerUnit = 1\n    upAxis = "Z"\n)\n\ndef Xform "World"\n{\n${lightingBlock}`;
 }
 
 $("exp-lerobot").onclick = () => requireLicense("LeRobot Episode (.jsonl) Export", () => {
@@ -3463,12 +3455,18 @@ function tick(now) {
 
   if (st.isaacConnected && (now - (st.lastIsaacCmdMs || 0) >= 50)) {
     st.lastIsaacCmdMs = now;
+    const pr = st.phys.readR;
     send({
       t: "isaac_cmd",
       q4: st.q4.map(v => +v.toFixed(4)),
-      q6: st.q6Real.map(v => +v.toFixed(4)),
+      q6: (pr ? pr.q : st.q6Real).map(v => +v.toFixed(4)),
       closed: st.closed,
+      jaw_travel: pr ? +((Math.max(0, pr.jawGapMm - 18) * 0.0005).toFixed(5)) : (st.closed ? 0.0 : 0.022),
+      cell_pos: pr ? pr.cellP.map(v => +v.toFixed(5)) : st.arm[6].battP,
+      valve_rad: pr ? +pr.valveRad.toFixed(4) : +(st.arm[6].valve * D2R).toFixed(4),
       aov: st.aov,
+      render_mode: st.rtxRenderMode || "rt",
+      rt_subframes: st.rtxSubframes || 32,
       light: parseFloat($("dr-light")?.value ?? "2.8"),
       angle: parseFloat($("dr-azi")?.value ?? "35"),
       rough: parseFloat($("dr-rough")?.value ?? "0.22")
@@ -3545,6 +3543,7 @@ function tick(now) {
     const open = pr ? pr.open : st.openVis;
     return {
       station: st.station, open, aligned: v.aligned,
+      contactForceN: pr ? (pr.tcpForceN + pr.gripForceN) : 0,
       target: { p: tgt.p, R: tgt.R, open: a.held ? 0 : 1 },
       watchSite: watchSiteObj,
       // physPose, when present, is the cell's own rigid-body state: it is

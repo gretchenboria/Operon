@@ -154,6 +154,46 @@ def main() -> int:
     check(0.05 < size[2] < 0.60, f"arm height {size[2]:.3f} m is desk-scale, not metres-off")
     check(all(s > 0.01 for s in size), "no degenerate/zero-extent axis")
 
+    print("\n[6] dynamic 6-DOF articulation (articulate_operon_stage vs MuJoCo across workspace)")
+    sys.path.insert(0, str(REPO / "sim"))
+    import shadow_rtx_bridge as bridge  # noqa: E402
+
+    test_poses = [
+        ([0.35, 0.52, -0.48, 0.25, -0.60, 0.40], False, 0.002),
+        ([-0.62, 0.85, 0.42, -0.50, 0.75, -0.80], True, 0.0145),
+        ([0.00, 1.05, 0.90, 0.00, -0.35, 0.00], False, 0.006),
+    ]
+    dyn_worst_pos = 0.0
+    dyn_worst_rot = 0.0
+    for q6, closed, jaw_t in test_poses:
+        # 1. Articulate MuJoCo (reset to model.qpos0 so free-joint cell keeps its rest pose)
+        mujoco.mj_resetData(model, data)
+        for idx in range(6):
+            data.qpos[idx] = q6[idx]
+        data.qpos[6] = -jaw_t
+        data.qpos[7] = jaw_t
+        mujoco.mj_forward(model, data)
+
+        # 2. Articulate OpenUSD stage via shadow_rtx_bridge.articulate_operon_stage
+        bridge.articulate_operon_stage(stage, q6, closed=closed, jaw_travel=jaw_t)
+        cache.Clear()
+
+        for gi in range(model.ngeom):
+            nm = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, gi)
+            prim = by_name.get(nm) if nm else None
+            if prim is None:
+                continue
+            upos, urot = usd_world_xform(cache, prim)
+            mpos = np.asarray(data.geom_xpos[gi], dtype=float)
+            mrot = np.asarray(data.geom_xmat[gi], dtype=float).reshape(3, 3)
+            dyn_worst_pos = max(dyn_worst_pos, float(np.linalg.norm(upos - mpos)))
+            dyn_worst_rot = max(dyn_worst_rot, float(np.max(np.abs(urot - mrot))))
+
+    print(f"    dynamic worst position error : {dyn_worst_pos * 1e9:.3f} nm")
+    print(f"    dynamic worst rotation error : {dyn_worst_rot:.3e}")
+    check(dyn_worst_pos < TOL_POS, f"articulated geoms match MuJoCo within {TOL_POS * 1e9:.0f} nm across 6-DOF poses")
+    check(dyn_worst_rot < TOL_ROT, f"articulated orientations match MuJoCo within {TOL_ROT:.0e}")
+
     print(f"\n{'ASSET VERIFIED AGAINST MUJOCO' if not fails else f'{len(fails)} CHECK(S) FAILED'}")
     return 0 if not fails else 1
 

@@ -102,11 +102,21 @@ Spot L4, with **auto-teardown enforced in the tooling rather than left to the op
   - `add_scene_lighting(stage)` — dome + 3-point rig. The generated stage is geometry and physics only; MJCF has no lighting model worth translating, so lights are authored where the renderer actually is.
 - `mjcf_to_usd.py` now exports MuJoCo **sites** as Xforms (6 of them). Without this there is no prim for the IMU sensor to mount on.
 
-### Still TODO — Phases 3 (rest), 4, 5
+### DONE — Phases 3, 4, 5 & UX / Rendering Upgrades (commit HEAD, `?v=25`)
 
-3. Relabel the WebGL viewport "PBR (local)" in the studio so "RTX" only lights up on a real Isaac frame, and surface the rt/path toggle next to the AOV buttons.
-4. **Replicator SDG to GCS**, not VM disk — a spot VM can vanish. Drive randomisation from the `light`/`angle`/`rough` values the studio already sends in `isaac_cmd`.
-5. **Real USD export** from `stage.Export()`, replacing `buildOpenUSD()`. Promote the semantic custom attributes authored by `mjcf_to_usd.py` to a real Kit `SemanticsAPI` on import.
+- **Phase 3 (Viewport & Render Mode Controls):**
+  - Default AOV button is now honestly labelled **`PBR (Local)`** (`#btn-aov-rtx`) and switches to **`RTX Lit` / `RTX Path`** only when a live `isaac_frame` stream arrives over the WebSocket.
+  - Added `#rtx-mode-bar` (**`RT Live`** vs **`Path Traced`**) and `#btn-sdg-capture` (**`SDG -> GCS`**) in `.vp-dock-top`, streaming `render_mode`, `rt_subframes`, `jaw_travel`, `cell_pos`, and `valve_rad` to `shadow_rtx_bridge.py`.
+  - Upgraded the local `Depth Z` AOV (`depthMat`) from a low-contrast `0.04..3.5 m` `MeshDepthMaterial` to a metric camera-space GLSL `ShaderMaterial` normalized across the workbench (`0.18..1.25 m`) with 5 cm iso-depth contours.
+  - Added live contact-force emissive feedback on both arms' ATI 6-axis F/T sensor rings (`r.grip.userData.ftMat`) driven by MuJoCo's `tcpForceN + gripForceN`.
+  - Fixed the unstyled `.card` on Card 1b (`Contact Physics`) and defined `--muted`, `--green`, `--amber` in `:root`; restored the `4D vs. 6D` button in `#rig-mode-bar`; made `Auto Demo` (`#btn-pick-place`) dispatch to the active station (`0`, `1`, or `2`).
+- **Phase 4 (Replicator SDG to GCS & Dual-Shader MDL):**
+  - `sim/shadow_rtx_bridge.py` now calls `upgrade_materials_to_mdl(stage)` (binding `OmniPBR.mdl` shaders to `outputs:mdl:surface` alongside `UsdPreviewSurface`), `articulate_operon_stage(stage, ...)` (driving `/World/pedestal` in float64 to 0.000 nm agreement with MuJoCo across dynamic 6-DOF poses), `update_domain_randomization_usd(stage, state)` (driving `/World/Lighting/{Key,Dome,Fill,Rim}` and `/World/Looks/*/{Shader,MDLShader}`), and `write_sdg_bundle()` + `upload_sdg_to_gcs()` (saving multi-AOV RGB/depth/normals/semantic/metadata bundles to `gs://run-sources-gen-lang-client-0221638641-us-central1/operon-sdg/...`).
+- **Phase 5 (Real OpenUSD Export Verified by `pxr`):**
+  - `sim/mjcf_to_usd.py` now authors `UsdPreviewSurface` `clearcoat`, `clearcoatRoughness`, and `ior` on all 8 materials and `UsdPhysics.DriveAPI` (`stiffness`, `damping`, `maxForce`, `targetPosition`) on all 8 actuated joints, exporting via `stage.Export()`.
+  - `server.mjs` serves `/assets/operon_arm.usda`; `buildOpenUSD()` in `public/teleop-studio.js` layers live `UsdLux` lighting, `UsdShade` roughness, and time-sampled `UsdPhysics.DriveAPI` joint targets onto the real 46-gprim stage (verified by `pxr` in `test/physics/browser_fallback.mjs`).
+- **Station 1 Dock Insertion Retry:**
+  - Added cradle seating verification + automatic retry (`attempt = 1..3`) with pick-pad cell reset in `runPhysicalDockInsertion(attempt = 1)`.
 
 ---
 

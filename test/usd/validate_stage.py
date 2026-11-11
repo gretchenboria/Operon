@@ -154,6 +154,75 @@ def main() -> int:
             bound.add(str(b.GetPath()))
     check(len(bound) >= 4, f"materials are BOUND to geometry ({len(bound)} distinct in use)")
 
+    print("\n[9] PBR clearcoat + IOR inputs on UsdPreviewSurface shaders")
+    pbr_ok = True
+    for mp in mats:
+        sh_prim = stage.GetPrimAtPath(f"{mp.GetPath()}/Shader")
+        sh = UsdShade.Shader(sh_prim)
+        cc = sh.GetInput("clearcoat").Get() if sh.GetInput("clearcoat") else None
+        ccr = sh.GetInput("clearcoatRoughness").Get() if sh.GetInput("clearcoatRoughness") else None
+        ior = sh.GetInput("ior").Get() if sh.GetInput("ior") else None
+        if cc is None or ccr is None or ior is None or ior < 1.0:
+            pbr_ok = False
+    check(pbr_ok, "all 8 materials author clearcoat, clearcoatRoughness, and physical IOR >= 1.0")
+
+    print("\n[10] UsdPhysics.DriveAPI authored on actuated joints")
+    actuated_joints = [
+        ("yaw", "angular", 90.0),
+        ("shoulder", "angular", 150.0),
+        ("elbow", "angular", 95.0),
+        ("wrist_roll", "angular", 60.0),
+        ("wrist_pitch", "angular", 60.0),
+        ("tool_roll", "angular", 40.0),
+        ("finger_l", "linear", 1800.0),
+        ("finger_r", "linear", 1800.0),
+    ]
+    drives_ok = True
+    for jname, drive_type, want_kp in actuated_joints:
+        jp = stage.GetPrimAtPath(f"/World/Joints/{jname}")
+        drive = UsdPhysics.DriveAPI.Get(jp, drive_type)
+        kp_val = drive.GetStiffnessAttr().Get() if drive else None
+        kv_val = drive.GetDampingAttr().Get() if drive else None
+        mf_val = drive.GetMaxForceAttr().Get() if drive else None
+        if kp_val is None or abs(float(kp_val) - want_kp) > 1e-3 or kv_val is None or mf_val is None:
+            drives_ok = False
+    check(drives_ok, "all 8 actuated joints carry UsdPhysics.DriveAPI with MJCF stiffness/damping/maxForce")
+
+    print("\n[11] shadow_rtx_bridge USD stage pipeline (MDL, lighting, domain randomization, SDG)")
+    sys.path.insert(0, str(REPO / "sim"))
+    import shadow_rtx_bridge as bridge  # noqa: E402
+    import tempfile
+
+    imu_site = bridge.find_site(stage, "forearm_imu")
+    check(imu_site == "/World/pedestal/base/upper_arm/forearm/forearm_imu",
+          f"find_site locates forearm_imu ({imu_site})")
+    bridge.promote_semantic_attributes(stage)
+    bridge.add_scene_lighting(stage)
+    mdl_count = bridge.upgrade_materials_to_mdl(stage)
+    check(mdl_count == len(mats), f"upgrade_materials_to_mdl attaches OmniPBR MDL to all {mdl_count} materials")
+    bridge.update_domain_randomization_usd(stage, {"light": 3.4, "angle": 48.0, "rough": 0.31})
+    key_prim = stage.GetPrimAtPath("/World/Lighting/Key")
+    check(key_prim.IsValid(), "add_scene_lighting + update_domain_randomization_usd author /World/Lighting/Key")
+    steel_mdl = UsdShade.Shader(stage.GetPrimAtPath("/World/Looks/Steel/MDLShader"))
+    check(steel_mdl.GetInput("reflection_roughness_constant").Get() is not None,
+          "update_domain_randomization_usd updates both UsdPreviewSurface and OmniPBR MDL roughness")
+
+    with tempfile.TemporaryDirectory() as tmpd:
+        fake_aovs = {
+            "rtx": np.zeros((16, 24, 3), dtype=np.uint8),
+            "depth": np.full((16, 24), 0.52, dtype=np.float32),
+            "normal": np.zeros((16, 24, 3), dtype=np.float32),
+            "semantic": np.ones((16, 24), dtype=np.int32),
+        }
+        bundle = bridge.write_sdg_bundle(
+            Path(tmpd),
+            "test_frame_0001",
+            {"q6": [0.1, 0.2, 0.3, 0.0, 0.1, 0.0], "closed": True, "render_mode": "path", "rt_subframes": 32},
+            fake_aovs,
+            np,
+        )
+        check(len(bundle["files"]) == 5, f"write_sdg_bundle writes all 5 AOV + metadata files ({bundle['files']})")
+
     print(f"\n{'ALL USD CHECKS PASSED' if not fails else f'{len(fails)} CHECK(S) FAILED'}")
     return 0 if not fails else 1
 

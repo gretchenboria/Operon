@@ -109,31 +109,35 @@ def author_materials(stage, root: str) -> dict:
     """
     UsdPreviewSurface materials, which every USD renderer understands.
 
-    The RTX-specific MDL (OmniPBR) upgrade is applied on top of these inside
-    Kit by sim/shadow_rtx_bridge.py, where the MDL shader nodes actually
-    resolve. Authoring MDL here would produce bindings that fail to resolve in
-    usdview, Blender or Hydra Storm, so preview surface is the correct
-    portable base layer.
+    Authors physically-based metallic/roughness, clearcoat lobe, specular tint,
+    and index of refraction (IOR) for each workcell material. The RTX-specific
+    MDL (OmniPBR) shader graph is layered alongside these inside Kit by
+    sim/shadow_rtx_bridge.py:upgrade_materials_to_mdl(), where MDL nodes
+    resolve natively while preserving UsdPreviewSurface for usdview/Storm.
     """
     looks = UsdGeom.Scope.Define(stage, f"{root}/Looks")
+    # (rgb, metallic, roughness, clearcoat, clearcoat_roughness, ior)
     palette = {
-        "Steel":     ((0.62, 0.64, 0.68), 0.85, 0.35),
-        "Carbon":    ((0.14, 0.15, 0.17), 0.30, 0.55),
-        "Rubber":    ((0.12, 0.12, 0.14), 0.00, 0.90),
-        "Copper":    ((0.72, 0.45, 0.20), 0.95, 0.28),
-        "CellGold":  ((0.80, 0.72, 0.22), 0.80, 0.30),
-        "PadBlue":   ((0.20, 0.42, 0.78), 0.10, 0.45),
-        "PadGreen":  ((0.18, 0.62, 0.36), 0.10, 0.45),
-        "Bench":     ((0.18, 0.19, 0.21), 0.25, 0.65),
+        "Steel":     ((0.62, 0.64, 0.68), 0.88, 0.28, 0.35, 0.14, 2.50),
+        "Carbon":    ((0.14, 0.15, 0.17), 0.30, 0.42, 0.55, 0.16, 1.55),
+        "Rubber":    ((0.12, 0.12, 0.14), 0.00, 0.88, 0.00, 0.50, 1.52),
+        "Copper":    ((0.72, 0.45, 0.20), 0.95, 0.24, 0.45, 0.10, 1.80),
+        "CellGold":  ((0.80, 0.72, 0.22), 0.80, 0.22, 0.85, 0.08, 1.58),
+        "PadBlue":   ((0.20, 0.42, 0.78), 0.35, 0.32, 0.60, 0.12, 1.52),
+        "PadGreen":  ((0.18, 0.62, 0.36), 0.35, 0.32, 0.60, 0.12, 1.52),
+        "Bench":     ((0.18, 0.19, 0.21), 0.25, 0.58, 0.30, 0.22, 1.50),
     }
     mats = {}
-    for name, (rgb, metal, rough) in palette.items():
+    for name, (rgb, metal, rough, cc, cc_rough, ior) in palette.items():
         mat = UsdShade.Material.Define(stage, f"{looks.GetPath()}/{name}")
         sh = UsdShade.Shader.Define(stage, f"{mat.GetPath()}/Shader")
         sh.CreateIdAttr("UsdPreviewSurface")
         sh.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set(Gf.Vec3f(*rgb))
-        sh.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(metal)
-        sh.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(rough)
+        sh.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(float(metal))
+        sh.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(float(rough))
+        sh.CreateInput("clearcoat", Sdf.ValueTypeNames.Float).Set(float(cc))
+        sh.CreateInput("clearcoatRoughness", Sdf.ValueTypeNames.Float).Set(float(cc_rough))
+        sh.CreateInput("ior", Sdf.ValueTypeNames.Float).Set(float(ior))
         mat.CreateSurfaceOutput().ConnectToSource(sh.ConnectableAPI(), "surface")
         mats[name] = mat
     return mats
@@ -295,6 +299,32 @@ def add_joint(stage, model, ji: int, body_paths: dict, root: str):
             lo, hi = np.degrees(lo), np.degrees(hi)
         j.CreateLowerLimitAttr(float(lo))
         j.CreateUpperLimitAttr(float(hi))
+
+    # Attach UsdPhysics.DriveAPI when the joint is driven by a position actuator
+    # (or coupled to one, e.g. finger_l coupled to finger_r) so SingleArticulation
+    # in Isaac Sim has physical stiffness, damping, and maxForce on the stage.
+    drive_type = "angular" if kind == "revolute" else "linear"
+    for ai in range(model.nu):
+        if int(model.actuator_trnid[ai, 0]) == ji:
+            kp = float(model.actuator_gainprm[ai, 0])
+            kv = float(-model.actuator_biasprm[ai, 2]) + float(model.dof_damping[model.jnt_dofadr[ji]])
+            max_frc = float(max(abs(model.actuator_forcerange[ai, 0]), abs(model.actuator_forcerange[ai, 1])))
+            drive = UsdPhysics.DriveAPI.Apply(j.GetPrim(), drive_type)
+            drive.CreateTypeAttr("force")
+            drive.CreateStiffnessAttr(kp)
+            drive.CreateDampingAttr(max(0.1, kv))
+            if max_frc > 0:
+                drive.CreateMaxForceAttr(max_frc)
+            drive.CreateTargetPositionAttr(0.0)
+            break
+    else:
+        if name == "finger_l":
+            drive = UsdPhysics.DriveAPI.Apply(j.GetPrim(), "linear")
+            drive.CreateTypeAttr("force")
+            drive.CreateStiffnessAttr(1800.0)
+            drive.CreateDampingAttr(18.0)
+            drive.CreateMaxForceAttr(18.0)
+            drive.CreateTargetPositionAttr(0.0)
     return j
 
 
@@ -363,6 +393,7 @@ def convert(mjcf_path: Path, out_path: Path, up_axis: str = "Z") -> Usd.Stage:
             break
 
     stage.GetRootLayer().Save()
+    stage.Export(str(out_path))
     return stage
 
 

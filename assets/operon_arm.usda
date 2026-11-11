@@ -1,6 +1,8 @@
 #usda 1.0
 (
     defaultPrim = "World"
+    doc = """Generated from Composed Stage of root layer /Users/dr.gretchenboria/Operon/assets/operon_arm.usda
+"""
     metersPerUnit = 1
     upAxis = "Z"
 )
@@ -22,9 +24,12 @@ def Xform "World"
             def Shader "Shader"
             {
                 uniform token info:id = "UsdPreviewSurface"
+                float inputs:clearcoat = 0.35
+                float inputs:clearcoatRoughness = 0.14
                 color3f inputs:diffuseColor = (0.62, 0.64, 0.68)
-                float inputs:metallic = 0.85
-                float inputs:roughness = 0.35
+                float inputs:ior = 2.5
+                float inputs:metallic = 0.88
+                float inputs:roughness = 0.28
                 token outputs:surface
             }
         }
@@ -36,9 +41,12 @@ def Xform "World"
             def Shader "Shader"
             {
                 uniform token info:id = "UsdPreviewSurface"
+                float inputs:clearcoat = 0.55
+                float inputs:clearcoatRoughness = 0.16
                 color3f inputs:diffuseColor = (0.14, 0.15, 0.17)
+                float inputs:ior = 1.55
                 float inputs:metallic = 0.3
-                float inputs:roughness = 0.55
+                float inputs:roughness = 0.42
                 token outputs:surface
             }
         }
@@ -50,9 +58,12 @@ def Xform "World"
             def Shader "Shader"
             {
                 uniform token info:id = "UsdPreviewSurface"
+                float inputs:clearcoat = 0
+                float inputs:clearcoatRoughness = 0.5
                 color3f inputs:diffuseColor = (0.12, 0.12, 0.14)
+                float inputs:ior = 1.52
                 float inputs:metallic = 0
-                float inputs:roughness = 0.9
+                float inputs:roughness = 0.88
                 token outputs:surface
             }
         }
@@ -64,9 +75,12 @@ def Xform "World"
             def Shader "Shader"
             {
                 uniform token info:id = "UsdPreviewSurface"
+                float inputs:clearcoat = 0.45
+                float inputs:clearcoatRoughness = 0.1
                 color3f inputs:diffuseColor = (0.72, 0.45, 0.2)
+                float inputs:ior = 1.8
                 float inputs:metallic = 0.95
-                float inputs:roughness = 0.28
+                float inputs:roughness = 0.24
                 token outputs:surface
             }
         }
@@ -78,9 +92,12 @@ def Xform "World"
             def Shader "Shader"
             {
                 uniform token info:id = "UsdPreviewSurface"
+                float inputs:clearcoat = 0.85
+                float inputs:clearcoatRoughness = 0.08
                 color3f inputs:diffuseColor = (0.8, 0.72, 0.22)
+                float inputs:ior = 1.58
                 float inputs:metallic = 0.8
-                float inputs:roughness = 0.3
+                float inputs:roughness = 0.22
                 token outputs:surface
             }
         }
@@ -92,9 +109,12 @@ def Xform "World"
             def Shader "Shader"
             {
                 uniform token info:id = "UsdPreviewSurface"
+                float inputs:clearcoat = 0.6
+                float inputs:clearcoatRoughness = 0.12
                 color3f inputs:diffuseColor = (0.2, 0.42, 0.78)
-                float inputs:metallic = 0.1
-                float inputs:roughness = 0.45
+                float inputs:ior = 1.52
+                float inputs:metallic = 0.35
+                float inputs:roughness = 0.32
                 token outputs:surface
             }
         }
@@ -106,9 +126,12 @@ def Xform "World"
             def Shader "Shader"
             {
                 uniform token info:id = "UsdPreviewSurface"
+                float inputs:clearcoat = 0.6
+                float inputs:clearcoatRoughness = 0.12
                 color3f inputs:diffuseColor = (0.18, 0.62, 0.36)
-                float inputs:metallic = 0.1
-                float inputs:roughness = 0.45
+                float inputs:ior = 1.52
+                float inputs:metallic = 0.35
+                float inputs:roughness = 0.32
                 token outputs:surface
             }
         }
@@ -120,16 +143,19 @@ def Xform "World"
             def Shader "Shader"
             {
                 uniform token info:id = "UsdPreviewSurface"
+                float inputs:clearcoat = 0.3
+                float inputs:clearcoatRoughness = 0.22
                 color3f inputs:diffuseColor = (0.18, 0.19, 0.21)
+                float inputs:ior = 1.5
                 float inputs:metallic = 0.25
-                float inputs:roughness = 0.65
+                float inputs:roughness = 0.58
                 token outputs:surface
             }
         }
     }
 
     def Xform "pedestal" (
-        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsArticulationRootAPI"]
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsArticulationRootAPI"]
     )
     {
         float physics:mass = 0.64339817
@@ -138,7 +164,7 @@ def Xform "World"
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
         def Xform "base" (
-            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+            apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
         )
         {
             float physics:mass = 0.16748458
@@ -147,7 +173,7 @@ def Xform "World"
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
             def Xform "upper_arm" (
-                prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
             )
             {
                 float physics:mass = 0.2496567
@@ -156,7 +182,7 @@ def Xform "World"
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
                 def Xform "forearm" (
-                    prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                    apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
                 )
                 {
                     float physics:mass = 0.17636396
@@ -165,7 +191,7 @@ def Xform "World"
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
                     def Xform "wrist_roll_link" (
-                        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
                     )
                     {
                         float physics:mass = 0.0256621
@@ -174,7 +200,7 @@ def Xform "World"
                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
                         def Xform "wrist_pitch_link" (
-                            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                            apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
                         )
                         {
                             float physics:mass = 0.031988166
@@ -183,7 +209,7 @@ def Xform "World"
                             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
                             def Xform "tool_roll_link" (
-                                prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                                apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
                             )
                             {
                                 float physics:mass = 0
@@ -192,7 +218,7 @@ def Xform "World"
                                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
                                 def Xform "hand" (
-                                    prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                                    apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
                                 )
                                 {
                                     float physics:mass = 0.1209091
@@ -201,7 +227,7 @@ def Xform "World"
                                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
                                     def Xform "finger_l" (
-                                        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                                        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
                                     )
                                     {
                                         float physics:mass = 0.0254574
@@ -210,7 +236,7 @@ def Xform "World"
                                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
                                         def Cube "finger_l_base" (
-                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                                         )
                                         {
                                             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -226,7 +252,7 @@ def Xform "World"
                                         }
 
                                         def Cube "finger_l_arm" (
-                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                                         )
                                         {
                                             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -242,7 +268,7 @@ def Xform "World"
                                         }
 
                                         def Cube "pad_l" (
-                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                                         )
                                         {
                                             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -267,7 +293,7 @@ def Xform "World"
                                     }
 
                                     def Xform "finger_r" (
-                                        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                                        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
                                     )
                                     {
                                         float physics:mass = 0.0254574
@@ -276,7 +302,7 @@ def Xform "World"
                                         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
                                         def Cube "finger_r_base" (
-                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                                         )
                                         {
                                             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -292,7 +318,7 @@ def Xform "World"
                                         }
 
                                         def Cube "finger_r_arm" (
-                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                                         )
                                         {
                                             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -308,7 +334,7 @@ def Xform "World"
                                         }
 
                                         def Cube "pad_r" (
-                                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                                         )
                                         {
                                             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -333,7 +359,7 @@ def Xform "World"
                                     }
 
                                     def Cylinder "ft_ring_g" (
-                                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                        apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                                     )
                                     {
                                         uniform token axis = "Z"
@@ -350,7 +376,7 @@ def Xform "World"
                                     }
 
                                     def Cylinder "flange_g" (
-                                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                        apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                                     )
                                     {
                                         uniform token axis = "Z"
@@ -367,7 +393,7 @@ def Xform "World"
                                     }
 
                                     def Cube "grip_body_g" (
-                                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                        apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                                     )
                                     {
                                         float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -383,7 +409,7 @@ def Xform "World"
                                     }
 
                                     def Cube "grip_rail_g" (
-                                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                        apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                                     )
                                     {
                                         float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -409,7 +435,7 @@ def Xform "World"
                             }
 
                             def Sphere "wrist_pitch_g" (
-                                prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                                apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                             )
                             {
                                 float3[] extent = [(-0.0165, -0.0165, -0.0165), (0.0165, 0.0165, 0.0165)]
@@ -425,7 +451,7 @@ def Xform "World"
                         }
 
                         def Cylinder "wrist_roll_g" (
-                            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                         )
                         {
                             uniform token axis = "Z"
@@ -443,7 +469,7 @@ def Xform "World"
                     }
 
                     def Sphere "elbow_g" (
-                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                        apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                     )
                     {
                         float3[] extent = [(-0.021, -0.021, -0.021), (0.021, 0.021, 0.021)]
@@ -458,7 +484,7 @@ def Xform "World"
                     }
 
                     def Capsule "forearm_g" (
-                        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                        apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                     )
                     {
                         uniform token axis = "Z"
@@ -484,7 +510,7 @@ def Xform "World"
                 }
 
                 def Sphere "shoulder_g" (
-                    prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                    apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                 )
                 {
                     float3[] extent = [(-0.024, -0.024, -0.024), (0.024, 0.024, 0.024)]
@@ -499,7 +525,7 @@ def Xform "World"
                 }
 
                 def Capsule "upper_arm_g" (
-                    prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                    apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
                 )
                 {
                     uniform token axis = "Z"
@@ -517,7 +543,7 @@ def Xform "World"
             }
 
             def Cylinder "base_g" (
-                prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+                apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
             )
             {
                 uniform token axis = "Z"
@@ -535,7 +561,7 @@ def Xform "World"
         }
 
         def Cylinder "pedestal_g" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -553,7 +579,7 @@ def Xform "World"
     }
 
     def Xform "cell" (
-        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
     )
     {
         float physics:mass = 0.045
@@ -562,7 +588,7 @@ def Xform "World"
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
         def Cylinder "cell_g" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -580,7 +606,7 @@ def Xform "World"
     }
 
     def Xform "charger_mount" (
-        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
     )
     {
         float physics:mass = 0.01604468
@@ -589,7 +615,7 @@ def Xform "World"
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
         def Capsule "charger_stand" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -607,7 +633,7 @@ def Xform "World"
     }
 
     def Xform "charger" (
-        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
     )
     {
         float physics:mass = 0.5037696
@@ -616,7 +642,7 @@ def Xform "World"
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
         def Cube "charger_panel" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -632,7 +658,7 @@ def Xform "World"
         }
 
         def Cube "charger_floor" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -648,7 +674,7 @@ def Xform "World"
         }
 
         def Cube "charger_end_n" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -664,7 +690,7 @@ def Xform "World"
         }
 
         def Cube "charger_end_p" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -680,7 +706,7 @@ def Xform "World"
         }
 
         def Cube "charger_rail_n" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -696,7 +722,7 @@ def Xform "World"
         }
 
         def Cube "charger_rail_p" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -721,7 +747,7 @@ def Xform "World"
     }
 
     def Xform "valve_mount" (
-        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
     )
     {
         float physics:mass = 0.072703995
@@ -730,7 +756,7 @@ def Xform "World"
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
         def Capsule "valve_post" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -748,7 +774,7 @@ def Xform "World"
     }
 
     def Xform "valve" (
-        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
     )
     {
         float physics:mass = 0.08840498
@@ -757,7 +783,7 @@ def Xform "World"
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
         def Cylinder "valve_hub" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -774,7 +800,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_0" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -791,7 +817,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_1" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -808,7 +834,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_2" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -825,7 +851,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_3" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -842,7 +868,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_4" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -859,7 +885,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_5" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -876,7 +902,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_6" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -893,7 +919,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_7" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -910,7 +936,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_8" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -927,7 +953,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_9" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -944,7 +970,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_10" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -961,7 +987,7 @@ def Xform "World"
         }
 
         def Capsule "valve_rim_11" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -978,7 +1004,7 @@ def Xform "World"
         }
 
         def Capsule "valve_spoke_0" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -995,7 +1021,7 @@ def Xform "World"
         }
 
         def Capsule "valve_spoke_1" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -1012,7 +1038,7 @@ def Xform "World"
         }
 
         def Capsule "valve_spoke_2" (
-            prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+            apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
         )
         {
             uniform token axis = "Z"
@@ -1038,7 +1064,7 @@ def Xform "World"
     }
 
     def Mesh "table" (
-        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
     )
     {
         float3[] extent = [(-1, -1, 0), (1, 1, 0)]
@@ -1055,7 +1081,7 @@ def Xform "World"
     }
 
     def Cube "pick_pad" (
-        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
     )
     {
         float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -1071,7 +1097,7 @@ def Xform "World"
     }
 
     def Cube "drop_pad" (
-        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+        apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
     )
     {
         float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
@@ -1088,8 +1114,15 @@ def Xform "World"
 
     def Scope "Joints"
     {
-        def PhysicsRevoluteJoint "yaw"
+        def PhysicsRevoluteJoint "yaw" (
+            apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
         {
+            float drive:angular:physics:damping = 9.2
+            float drive:angular:physics:maxForce = 28
+            float drive:angular:physics:stiffness = 90
+            float drive:angular:physics:targetPosition = 0
+            uniform token drive:angular:physics:type = "force"
             uniform token physics:axis = "Z"
             rel physics:body0 = </World/pedestal>
             rel physics:body1 = </World/pedestal/base>
@@ -1099,8 +1132,15 @@ def Xform "World"
             float physics:upperLimit = 180
         }
 
-        def PhysicsRevoluteJoint "shoulder"
+        def PhysicsRevoluteJoint "shoulder" (
+            apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
         {
+            float drive:angular:physics:damping = 13.4
+            float drive:angular:physics:maxForce = 42
+            float drive:angular:physics:stiffness = 150
+            float drive:angular:physics:targetPosition = 0
+            uniform token drive:angular:physics:type = "force"
             uniform token physics:axis = "Y"
             rel physics:body0 = </World/pedestal/base>
             rel physics:body1 = </World/pedestal/base/upper_arm>
@@ -1110,8 +1150,15 @@ def Xform "World"
             float physics:upperLimit = 120
         }
 
-        def PhysicsRevoluteJoint "elbow"
+        def PhysicsRevoluteJoint "elbow" (
+            apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
         {
+            float drive:angular:physics:damping = 9.4
+            float drive:angular:physics:maxForce = 30
+            float drive:angular:physics:stiffness = 95
+            float drive:angular:physics:targetPosition = 0
+            uniform token drive:angular:physics:type = "force"
             uniform token physics:axis = "Y"
             rel physics:body0 = </World/pedestal/base/upper_arm>
             rel physics:body1 = </World/pedestal/base/upper_arm/forearm>
@@ -1121,8 +1168,15 @@ def Xform "World"
             float physics:upperLimit = 150
         }
 
-        def PhysicsRevoluteJoint "wrist_roll"
+        def PhysicsRevoluteJoint "wrist_roll" (
+            apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
         {
+            float drive:angular:physics:damping = 4.9
+            float drive:angular:physics:maxForce = 14
+            float drive:angular:physics:stiffness = 60
+            float drive:angular:physics:targetPosition = 0
+            uniform token drive:angular:physics:type = "force"
             uniform token physics:axis = "Z"
             rel physics:body0 = </World/pedestal/base/upper_arm/forearm>
             rel physics:body1 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link>
@@ -1132,8 +1186,15 @@ def Xform "World"
             float physics:upperLimit = 180
         }
 
-        def PhysicsRevoluteJoint "wrist_pitch"
+        def PhysicsRevoluteJoint "wrist_pitch" (
+            apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
         {
+            float drive:angular:physics:damping = 4.8
+            float drive:angular:physics:maxForce = 14
+            float drive:angular:physics:stiffness = 60
+            float drive:angular:physics:targetPosition = 0
+            uniform token drive:angular:physics:type = "force"
             uniform token physics:axis = "Y"
             rel physics:body0 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link>
             rel physics:body1 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link>
@@ -1143,8 +1204,15 @@ def Xform "World"
             float physics:upperLimit = 150
         }
 
-        def PhysicsRevoluteJoint "tool_roll"
+        def PhysicsRevoluteJoint "tool_roll" (
+            apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
         {
+            float drive:angular:physics:damping = 3.2
+            float drive:angular:physics:maxForce = 10
+            float drive:angular:physics:stiffness = 40
+            float drive:angular:physics:targetPosition = 0
+            uniform token drive:angular:physics:type = "force"
             uniform token physics:axis = "Z"
             rel physics:body0 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link>
             rel physics:body1 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link>
@@ -1154,8 +1222,15 @@ def Xform "World"
             float physics:upperLimit = 180
         }
 
-        def PhysicsPrismaticJoint "finger_l"
+        def PhysicsPrismaticJoint "finger_l" (
+            apiSchemas = ["PhysicsDriveAPI:linear"]
+        )
         {
+            float drive:linear:physics:damping = 18
+            float drive:linear:physics:maxForce = 18
+            float drive:linear:physics:stiffness = 1800
+            float drive:linear:physics:targetPosition = 0
+            uniform token drive:linear:physics:type = "force"
             uniform token physics:axis = "X"
             rel physics:body0 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link/hand>
             rel physics:body1 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link/hand/finger_l>
@@ -1165,8 +1240,15 @@ def Xform "World"
             float physics:upperLimit = 0
         }
 
-        def PhysicsPrismaticJoint "finger_r"
+        def PhysicsPrismaticJoint "finger_r" (
+            apiSchemas = ["PhysicsDriveAPI:linear"]
+        )
         {
+            float drive:linear:physics:damping = 34
+            float drive:linear:physics:maxForce = 85
+            float drive:linear:physics:stiffness = 1800
+            float drive:linear:physics:targetPosition = 0
+            uniform token drive:linear:physics:type = "force"
             uniform token physics:axis = "X"
             rel physics:body0 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link/hand>
             rel physics:body1 = </World/pedestal/base/upper_arm/forearm/wrist_roll_link/wrist_pitch_link/tool_roll_link/hand/finger_r>

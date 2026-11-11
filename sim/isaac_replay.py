@@ -69,44 +69,33 @@ GRAVITY = 9.80665  # m/s^2, standard gravity (world up = +Z)
 # ---------------------------------------------------------------------------
 # Prim-path / kinematics configuration.
 #
-# These are ALL placeholders until the URDF -> USD import exists
-# (`ros2_ws/src/arm_description/urdf/abel_arm.urdf.xacro` -> `abel_arm.usd`).
-# Every value tagged TODO must be reconciled with the generated USD/URDF.
+# Reconciled with `assets/operon_arm.usda` (generated from
+# `public/models/operon_station0.xml` by `sim/mjcf_to_usd.py` and verified to
+# 0.000 nm against MuJoCo in `test/usd/verify_against_mujoco.py`).
 # CLI flags override the prim-path entries; link lengths / FK signs are here.
 # ---------------------------------------------------------------------------
 CONFIG = {
     # --- Isaac prim paths (override via CLI) ------------------------------
-    # TODO(USD): articulation root prim of the imported arm.
-    "articulation_root": "/World/abel_arm",
-    # TODO(USD): the 4 joint prim *names* (DOF names), in servo order 0..3.
-    #            These must match the <joint name=...> in the URDF/xacro.
-    "joint_names": ["base", "shoulder", "elbow", "gripper"],
-    # TODO(USD): prim path of the IMU sensor to CREATE. Make it a child of the
-    #            forearm link / watch-mount site so it inherits that pose.
-    "imu_prim_path": "/World/abel_arm/forearm_link/forearm_imu",
+    "articulation_root": "/World/pedestal",
+    # The 4 joint prim names in servo order 0..3 matching `assets/operon_arm.usda`
+    "joint_names": ["yaw", "shoulder", "elbow", "finger_r"],
+    # Prim path of the IMU sensor created as a child of the forearm_imu site
+    "imu_prim_path": "/World/pedestal/base/upper_arm/forearm/forearm_imu/imu_sensor",
 
-    # --- servo-degrees -> URDF-radians mapping ----------------------------
+    # --- servo-degrees -> USD-radians mapping -----------------------------
     # The YAML/firmware speak servo degrees with 90 deg = mechanical home/centre.
-    # The URDF almost certainly defines joint zero at its own neutral, which may
-    # differ in offset and sign. q_urdf = radians(sign*servo_deg + offset_deg).
-    # TODO(URDF): set per-joint offset/sign. A very common convention is
-    #             offset_deg=-90 (so 90deg servo -> 0 rad URDF); left at 0 here
-    #             because the URDF is not authored yet -- DO NOT assume.
-    "joint_offset_deg": [0.0, 0.0, 0.0, 0.0],
+    # `assets/operon_arm.usda` defines joint zero at upright neutral, so
+    # offset_deg = -90 maps 90 deg servo -> 0 rad USD.
+    "joint_offset_deg": [-90.0, -90.0, -90.0, -90.0],
     "joint_sign":       [1.0, 1.0, 1.0, 1.0],
 
-    # --- analytic FK link geometry (meters) -------------------------------
-    # Reasonable small-desktop-arm defaults. TODO(URDF): replace with the link
-    # origins/lengths from abel_arm.urdf.xacro so the analytic predictor matches
-    # the Isaac model and the real arm.
-    "base_height":    0.05,   # world floor -> shoulder pitch axis
-    "upper_arm_len":  0.10,   # shoulder axis -> elbow axis
-    "forearm_len":    0.10,   # elbow axis -> watch/IMU site on the forearm
+    # --- analytic FK link geometry (meters, matching operon_station0.xml) --
+    "base_height":    0.090,  # world floor -> shoulder pitch axis (pedestal 0.055 + base 0.035)
+    "upper_arm_len":  0.100,  # shoulder axis -> elbow axis
+    "forearm_len":    0.100,  # elbow axis -> watch/IMU site on the forearm
 
     # --- analytic FK joint axes -------------------------------------------
     # base  : yaw about world +Z. shoulder/elbow : pitch about the (yawed) Y.
-    # Signs let us flip a joint's rotation sense to match the URDF without
-    # rederiving the math. TODO(URDF): confirm axes & signs against the joints.
     "base_yaw_sign":       1.0,
     "shoulder_pitch_sign": 1.0,
     "elbow_pitch_sign":    1.0,
@@ -402,8 +391,8 @@ def build_parser():
                     "(Isaac Sim, or --analytic numpy predictor).")
     p.add_argument("--traj", type=Path, default=_DEFAULT_TRAJ,
                    help="trajectory YAML (default: imu_calibration.yaml)")
-    p.add_argument("--usd", type=Path, default=Path("abel_arm.usd"),
-                   help="arm USD stage (Isaac mode only)")
+    p.add_argument("--usd", type=Path, default=_REPO_ROOT / "assets" / "operon_arm.usda",
+                   help="arm USD stage (default: assets/operon_arm.usda)")
     p.add_argument("--out", type=Path, default=Path("outputs/sim_imu.csv"),
                    help="output IMU CSV (default: outputs/sim_imu.csv)")
     p.add_argument("--dt", type=float, default=0.005,
