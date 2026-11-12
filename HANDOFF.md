@@ -1,6 +1,6 @@
-# Operon — Agent Handoff Document (`HANDOFF.md`)
+# Operon — Engineering Handoff Document (`HANDOFF.md`)
 
-**Last Updated:** 2026-11-10 PST
+**Last Updated:** 2026-11-12 PST
 **Author / Owner:** Gretchen Boria, PhD
 **Workspace:** `/Users/dr.gretchenboria/Operon`
 **GitHub Repository:** `https://github.com/gretchenboria/Operon.git` (`main`)
@@ -316,11 +316,4 @@ Adjust the `targetY` (`/30`) and `targetZ` (`/28`) divisors and `kp` (14.5) in `
 - Contact hardness: `solref`/`solimp` on the relevant geom class. The elliptic friction cone with `impratio=10` is what makes grasping work at all — the default pyramidal cone lets the cell shear out from between the pads.
 
 ### ⚠ Always bump the cache version
-`?v=NN` in **both** `public/index.html` and `public/teleop-studio.html`, plus the `mujoco-physics.js` and model-URL query strings inside `teleop-studio.js`. Currently `?v=24`. Stale cached JS has bitten this project repeatedly.
-
----
-
-## 8. Subagents spawned in earlier sessions
-
-1. **`omniverse-rtx-materials-expert`** (`53f3c564-453d-4065-9f06-761a825a6b40`) — Omniverse RTX & OpenUSD materials. Upgraded `sim/shadow_rtx_bridge.py` with a `/World/Looks` `UsdPreviewSurface` library, 3-point `UsdLux` lighting, `carb.settings` `/rtx/*` configuration, and 6-DOF dual-arm USD articulation.
-2. **`wrist-tendon-imu-expert`** (`4bd7ab2e-fa9d-4227-b8cd-b04339106a51`) — biomechanical wrist/tendon IMU teleop. Found the two root causes of persistent auto-grasping: Watch WebKit caching old `phone.js` across deploys, and `da3D` measuring gravity-vector rotation rather than true linear acceleration.
+`?v=NN` in **both** `public/index.html` and `public/teleop-studio.html`, plus the `mujoco-physics.js` and model-URL query strings inside `teleop-studio.js`. Currently `?v=25`. Stale cached JS has bitten this project repeatedly.
