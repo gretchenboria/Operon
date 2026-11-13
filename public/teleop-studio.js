@@ -1330,9 +1330,16 @@ function computeBBoxes() {
 function armTarget(dof) {
   const a = st.arm[dof], s = ST[st.station];
   if (s.id === "battery") {
-    if (a.held) {
+    const pr = dof === 4 ? st.phys.readL : st.phys.readR;
+    const holding = physCellOn() && pr ? pr.held : a.held;
+    if (holding) {
       if (a.dest === "pick") return { p: PICK_P, R: PICK_R, ypr: [-25, 0, 0] };
       return { p: PLACE_P, R: PLACE_R, ypr: [25, 0, 0] };
+    }
+    if (physCellOn() && pr) {
+      const cp = pr.cellP;
+      const gy = physCellGraspYaw(pr, cp[1] > 0.02 ? 25 : -25);
+      return { p: [cp[0], cp[1], cp[2] + PHYS_GRASP_H], R: poseR(gy, 0, 0), ypr: [gy, 0, 0] };
     }
     const bp = [a.battP[0], a.battP[1], 0.032];
     return { p: bp, R: a.battR, ypr: [Math.round(Math.atan2(a.battP[1], a.battP[0]) / D2R), 0, 0] };
@@ -1585,22 +1592,23 @@ onLive((m) => {
     const p = phones.get(m.from), v = m.v || {};
     const num = (x, lo, hi, d) => Number.isFinite(+x) ? Math.max(lo, Math.min(hi, +x)) : d;
     p.g = v.g ? 1 : 0;
-    // Initialize lastGrabSeq on first packet from a device so connecting never fires a false grab
+    // Initialize lastGrabSeq on first regular telemetry packet; if the very first packet is an explicit
+    // grabToggle tap (e.g. after WebSocket auto-reconnect), allow it to fire immediately!
     if (p.lastGrabSeq === undefined) {
-      p.lastGrabSeq = Number.isFinite(+v.grabSeq) ? +v.grabSeq : 0;
+      p.lastGrabSeq = (Number.isFinite(+v.grabSeq) && !v.grabToggle) ? +v.grabSeq : 0;
     }
     const seqTriggered = Number.isFinite(+v.grabSeq) && +v.grabSeq > 0 && +v.grabSeq !== p.lastGrabSeq;
     if (Number.isFinite(+v.grabSeq)) p.lastGrabSeq = +v.grabSeq;
 
-    // Rotation-invariant studio-side verification: only allow IMU grasp if aDelta > 1.65 m/s^2 or explicit Button tap
+    // Rotation-invariant studio-side verification: allow explicit Button/Watch taps or IMU tendon impulses
     const hasImu = v.ax !== undefined || v.ay !== undefined || v.az !== undefined;
     const aMag = hasImu ? Math.hypot(+v.ax || 0, +v.ay || 0, +v.az || G0) : G0;
     const gMag = Math.hypot(+v.gx || 0, +v.gy || 0, +v.gz || 0);
     const aDelta = Math.abs(aMag - G0);
     const nowP = performance.now();
-    if (hasImu && aDelta > 1.65 && gMag < 1.95) p.lastClenchMs = nowP;
-    const isExplicitBtn = typeof v.gesture === "string" && (v.gesture.startsWith("Button") || v.gesture.startsWith("Tendon"));
-    const verifiedGesture = isExplicitBtn || !hasImu || ((nowP - (p.lastClenchMs || 0)) < 400);
+    if (hasImu && aDelta > 1.35 && gMag < 2.25) p.lastClenchMs = nowP;
+    const isExplicitBtn = Boolean(v.grabToggle) || (typeof v.gesture === "string" && (v.gesture.startsWith("Button") || v.gesture.startsWith("Tendon") || v.gesture.startsWith("Watch")));
+    const verifiedGesture = isExplicitBtn || !hasImu || ((nowP - (p.lastClenchMs || 0)) < 650);
 
     if ((seqTriggered || v.grabToggle) && verifiedGesture && (!st.pilot || st.pilot === m.from)) {
       if (v.gesture) st.lastGestureBanner = v.gesture;
@@ -1752,46 +1760,122 @@ function triggerSmartGraspOrRelease(gestureLabel) {
   if (nowMs - (st.lastSmartGrabMs || 0) < 380) return;
   st.lastSmartGrabMs = nowMs;
   const s = ST[st.station];
-  const isHolding = st.arm[6].held || st.arm[4].held;
+  const isHolding = st.arm[6].held || st.arm[4].held || !!(st.phys.readR && st.phys.readR.held) || !!(st.phys.readL && st.phys.readL.held);
   const liveTilt = crowdPose() !== null;
 
-  // ── MuJoCo Station 0: the solver decides, so there is nothing to gate ──
-  // The old dxy < 0.068 m test existed only to stop the kinematic proximity
-  // snap from magnetising the cell into the jaws. With real pad friction,
-  // clamping in empty air simply closes on nothing, which is the honest
-  // outcome, so the gate is gone and the jaws always obey the gesture.
+  // ── MuJoCo Station 0: physical contact grasp & release ──
   if (s.id === "battery" && physCellOn()) {
-    if (st.closed) {
-      setClosed(false, false);
-      if ($("watch-status")) {
-        $("watch-status").textContent = isHolding
-          ? "Jaws opened -> cell dropping under gravity"
-          : "Jaws opened";
-      }
-      return;
-    }
-    if (liveTilt) {
-      // Clamp in place: never hijack the arm away from the user's live tilt.
-      setClosed(true, false);
-      if ($("watch-status")) $("watch-status").textContent = "Clamping -> friction decides the grasp";
-      return;
-    }
-    // Scripted pick: approach, descend onto the cell's upper half, let the
-    // contact settle, THEN clamp, then lift. An instant clamp would close on
-    // air because the arm is still travelling.
     const pr = st.phys.readR;
-    const cp = pr ? pr.cellP : st.arm[6].battP;
-    const graspYaw = physCellGraspYaw(pr, cp[1] > 0.02 ? 25 : -25);
+    const cp = pr ? pr.cellP.slice() : st.arm[6].battP.slice();
     const zGrasp = cp[2] + PHYS_GRASP_H;
+
+    // 1. If already holding the cell:
+    if (isHolding) {
+      if (liveTilt) {
+        // Under live Watch/Phone steering: if near the target pad (or pick pad),
+        // gently seat and release; otherwise open jaws in place so the cell drops under gravity.
+        const destP = st.arm[6].dest === "pick" ? PICK_P : PLACE_P;
+        const dDest = Math.hypot(st.cmd.x - destP[0], st.cmd.y - destP[1]);
+        if (dDest < 0.085) {
+          const destYaw = st.arm[6].dest === "pick" ? -25 : 25;
+          const seatP = [destP[0], destP[1], zGrasp];
+          const seq = (st.graspSeqId = (st.graspSeqId || 0) + 1);
+          st.holdCrowd = performance.now() + 1800;
+          tweenTo([destYaw, 0, 0], seatP, 360, () => {
+            if (st.graspSeqId !== seq) return;
+            physWaitArrival(seatP, 0.005, 1400, () => {
+              if (st.graspSeqId !== seq) return;
+              setClosed(false, false);
+              if ($("watch-status")) $("watch-status").textContent = "Cell released onto Target Pad!";
+              later(320, () => {
+                if (st.graspSeqId !== seq) return;
+                tweenTo([destYaw, 0, 0], [destP[0], destP[1], zGrasp + 0.080], 380);
+              });
+            });
+          });
+          return;
+        }
+        st.graspSeqId = (st.graspSeqId || 0) + 1;
+        setClosed(false, false);
+        if ($("watch-status")) $("watch-status").textContent = "Jaws opened -> cell dropping under gravity";
+        return;
+      }
+      // Without live tilt (clicking Grasp/Release or Spacebar after picking up):
+      // carry the physically grasped cell to the target pad, lower, release, and lift!
+      const seq = (st.graspSeqId = (st.graspSeqId || 0) + 1);
+      const destP = st.arm[6].dest === "pick" ? PICK_P : PLACE_P;
+      const destYaw = st.arm[6].dest === "pick" ? -25 : 25;
+      const placeP = [destP[0], destP[1], 0.0135 + PHYS_GRASP_H];
+      const overPlace = [placeP[0], placeP[1], placeP[2] + 0.085];
+      st.holdCrowd = performance.now() + 4200;
+      if ($("watch-status")) $("watch-status").textContent = "Carrying cell to Target Pad -> release";
+      tweenTo([destYaw, 0, 0], overPlace, 560, () => {
+        if (st.graspSeqId !== seq) return;
+        tweenTo([destYaw, 0, 0], placeP, 480, () => {
+          if (st.graspSeqId !== seq) return;
+          physWaitArrival(placeP, 0.0045, 2200, () => {
+            if (st.graspSeqId !== seq) return;
+            setClosed(false, false);
+            if ($("watch-status")) $("watch-status").textContent = "Cell placed on Target Pad!";
+            later(380, () => {
+              if (st.graspSeqId !== seq) return;
+              tweenTo([destYaw, 0, 0], overPlace, 420);
+            });
+          });
+        });
+      });
+      return;
+    }
+
+    // 2. If jaws were closed in empty air (not holding the cell) and user is NOT near the cell, open them:
+    const dxyToCell = Math.hypot(st.cmd.x - cp[0], st.cmd.y - cp[1]);
+    if (st.closed && liveTilt && dxyToCell > 0.085) {
+      st.graspSeqId = (st.graspSeqId || 0) + 1;
+      setClosed(false, false);
+      if ($("watch-status")) $("watch-status").textContent = "Jaws opened";
+      return;
+    }
+
+    // 3. Not holding the cell -> Execute physical approach, descend to grasp height, clamp, and lift!
+    // Works identically whether triggered by Studio button, Spacebar, or Watch/Phone GRASP while near the cell
+    // (even if the user hasn't lowered Z with the Digital Crown).
+    const seq = (st.graspSeqId = (st.graspSeqId || 0) + 1);
+    setClosed(false, false);
+    const graspYaw = physCellGraspYaw(pr, cp[1] > 0.02 ? 25 : -25);
     const graspP = [cp[0], cp[1], zGrasp];
-    tweenTo([graspYaw, 0, 0], [cp[0], cp[1], zGrasp + 0.055], 320, () =>
-      tweenTo([graspYaw, 0, 0], graspP, 420, () =>
-        physWaitArrival(graspP, 0.0035, 2200, () => {
-          setClosed(true, false);
-          later(380, () => tweenTo([graspYaw, 0, 0], [cp[0], cp[1], zGrasp + 0.095], 520));
-        })));
-    st.holdCrowd = performance.now() + 4200;
+    const overCell = [cp[0], cp[1], zGrasp + 0.075];
+    st.holdCrowd = performance.now() + 4500;
     if ($("watch-status")) $("watch-status").textContent = "Approaching cell -> clamp -> lift";
+    tweenTo([graspYaw, 0, 0], overCell, 520, () => {
+      if (st.graspSeqId !== seq) return;
+      tweenTo([graspYaw, 0, 0], graspP, 520, () => {
+        if (st.graspSeqId !== seq) return;
+        physWaitArrival(graspP, 0.0035, 2200, () => {
+          if (st.graspSeqId !== seq) return;
+          setClosed(true, false);
+          for (const d of [4, 6]) st.arm[d].dest = cp[1] > 0.02 ? "pick" : "place";
+          later(380, () => {
+            if (st.graspSeqId !== seq) return;
+            if ($("watch-status")) {
+              $("watch-status").textContent = liveTilt
+                ? "Cell grasped -> Steer to Target Pad & Release"
+                : "Cell grasped -> Click Release (or Space) to place on Target Pad";
+            }
+            tweenTo([graspYaw, 0, 0], overCell, 560);
+          });
+        });
+      });
+    });
+    return;
+  }
+
+  // ── MuJoCo Station 1 (Charger Dock) & Station 2 (Valve Turn) ──
+  if (s.id === "charger" && physCellOn()) {
+    runPhysicalDockInsertion();
+    return;
+  }
+  if (s.id === "valve" && physValveOn()) {
+    runPhysicalValveTurn();
     return;
   }
 

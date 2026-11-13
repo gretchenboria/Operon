@@ -439,10 +439,10 @@ function onMotion(e) {
     : 0;
   const isWristStill = gMag < 0.09 && aDelta < 0.45;
 
-  // Rotation-Invariant Forearm Tendon Impulse Detector (|hypot(ax,ay,az) - 9.80665| > 1.75 m/s^2):
+  // Rotation-Invariant Forearm Tendon Impulse Detector (|hypot(ax,ay,az) - 9.80665| > 1.38 m/s^2 or uaMag > 1.35 m/s^2):
   // - Pure wrist tilting only rotates the gravity vector without changing its 3D norm (aDelta < 0.35 m/s^2).
-  // - Only a deliberate physical hand/tendon clench or release produces aDelta > 1.75 m/s^2 while gMag < 1.90 rad/s.
-  if (now - lastGrabActionMs > 950 && aDelta > 1.75 && gMag < 1.90) {
+  // - A deliberate physical hand/tendon clench or double-pinch produces aDelta > 1.38 m/s^2 while gMag < 2.20 rad/s.
+  if (now - lastGrabActionMs > 820 && (aDelta > 1.38 || uaMag > 1.35 || da3D > 1.85) && gMag < 2.20) {
     squeezeProgress = 0;
     triggerWatchGraspToggle(pose.g ? "Tendon Release" : "Tendon Grasp");
   }
